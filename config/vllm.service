@@ -1,0 +1,19 @@
+[Unit]
+Description=vLLM OpenAI-compatible server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ajmeese7
+Group=ajmeese7
+WorkingDirectory=/home/ajmeese7
+Environment=HF_HOME=/home/ajmeese7/.cache/huggingface
+ExecStart=/home/ajmeese7/.venvs/vllm/bin/vllm serve --config /etc/vllm/config.yaml
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
