@@ -170,6 +170,33 @@ This means you can clone the repo on different machines and the right config is 
 
 > **Native Linux users:** Skip this section. Your service starts on boot like any other systemd service.
 
+### LAN Access (mirrored networking)
+
+By default, WSL2 runs behind NAT — the server is only reachable from the Windows host, not from other machines on your network. To fix this, enable mirrored networking.
+
+Edit (or create) `%USERPROFILE%\.wslconfig` on the Windows side:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+Then restart WSL from PowerShell:
+
+```powershell
+wsl --shutdown
+```
+
+After restarting, WSL shares the Windows host's network interfaces. Other machines on the LAN can connect directly to the host's IP on port 8000.
+
+You also need to allow inbound traffic on the port. From an **elevated PowerShell** (Run as Administrator):
+
+```powershell
+New-NetFirewallRule -DisplayName "llama-server" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+```
+
+### Auto-shutdown behavior
+
 WSL2 is not a traditional always-on server. Even with systemd, the WSL VM can shut down automatically when Windows detects no active file handles or processes using it. This means:
 
 - **The service starts when WSL starts**, but WSL itself may not be running after a reboot.
