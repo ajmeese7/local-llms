@@ -166,6 +166,40 @@ This means you can clone the repo on different machines and the right config is 
 3. Update `MODEL`, `HF_REPO`, `HF_FILE`, and `ALIAS`
 4. Restart: `sudo systemctl restart llama-server`
 
+## Usage
+
+### Built-in Web UI
+
+`llama-server` includes a chat interface — just open the server URL in your browser:
+
+```
+http://localhost:8000
+```
+
+### API (curl)
+
+The server exposes an [OpenAI-compatible API](https://platform.openai.com/docs/api-reference/chat). Send chat completions with curl:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer <your-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen3.5-27B",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### Compatible Applications
+
+Any tool that supports the OpenAI API format can connect by pointing it at `http://<your-ip>:8000/v1` and providing your API key. Some examples:
+
+| Application | Type | Notes |
+|---|---|---|
+| [Open WebUI](https://github.com/open-webui/open-webui) | Self-hosted web chat | Full-featured ChatGPT-like UI |
+| [Chatbox](https://chatboxai.app/) | Desktop app | Simple, cross-platform |
+| [Continue](https://continue.dev/) | VS Code / JetBrains extension | AI coding assistant |
+
 ## WSL2 Caveats
 
 > **Native Linux users:** Skip this section. Your service starts on boot like any other systemd service.
