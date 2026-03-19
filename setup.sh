@@ -6,9 +6,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$HOME/.venvs/vllm"
-CONFIG_SRC="$SCRIPT_DIR/config/vllm.yaml"
-SERVICE_SRC="$SCRIPT_DIR/config/vllm.service"
-CONFIG_DEST="/etc/vllm/config.yaml"
+CONFIG_DIR="$SCRIPT_DIR/config"
+SERVICE_SRC="$CONFIG_DIR/vllm.service"
+LAUNCHER_SRC="$CONFIG_DIR/vllm-launcher.sh"
+DEST_DIR="/etc/vllm"
 SERVICE_DEST="/etc/systemd/system/vllm.service"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,24 +111,44 @@ fi
 
 echo ""
 
-# ── Step 4: Copy config file ────────────────────────────────────────────────
+# ── Step 4: Copy config files & launcher ────────────────────────────────────
 
-if [ -f "$CONFIG_DEST" ]; then
-    ok "Config already exists at $CONFIG_DEST"
-    if confirm "Overwrite $CONFIG_DEST with the template from this repo?"; then
-        sudo mkdir -p /etc/vllm
-        sudo cp "$CONFIG_SRC" "$CONFIG_DEST"
-        ok "Config overwritten"
+# Detect GPU to show which config will be used
+detected_gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+if echo "$detected_gpu" | grep -qi "5090"; then
+    matched_config="rtx-5090.yaml"
+elif echo "$detected_gpu" | grep -qi "5060"; then
+    matched_config="rtx-5060.yaml"
+else
+    matched_config=""
+fi
+
+if [ -n "$matched_config" ]; then
+    info "GPU '$detected_gpu' matches config: $matched_config"
+else
+    warn "No config matches GPU '$detected_gpu'. You may need to add one to config/ and update vllm-launcher.sh."
+fi
+
+config_files=("$CONFIG_DIR"/rtx-*.yaml)
+if [ ${#config_files[@]} -eq 0 ]; then
+    err "No GPU config files (config/rtx-*.yaml) found in repo."
+    exit 1
+fi
+
+if confirm "Copy GPU configs and launcher to $DEST_DIR? (${#config_files[@]} config file(s))"; then
+    sudo mkdir -p "$DEST_DIR"
+    for f in "${config_files[@]}"; do
+        sudo cp "$f" "$DEST_DIR/"
+        ok "Copied $(basename "$f")"
+    done
+    sudo cp "$LAUNCHER_SRC" "$DEST_DIR/vllm-launcher.sh"
+    sudo chmod +x "$DEST_DIR/vllm-launcher.sh"
+    ok "Copied launcher script"
+    if [ -n "$matched_config" ]; then
+        warn "Edit $DEST_DIR/$matched_config to set your API key before starting the service."
     fi
 else
-    if confirm "Copy vLLM config to $CONFIG_DEST?"; then
-        sudo mkdir -p /etc/vllm
-        sudo cp "$CONFIG_SRC" "$CONFIG_DEST"
-        ok "Config installed"
-        warn "Edit $CONFIG_DEST to set your model and API key before starting the service."
-    else
-        warn "Skipping config copy."
-    fi
+    warn "Skipping config copy."
 fi
 
 echo ""
@@ -169,8 +190,12 @@ if systemctl is-active --quiet vllm; then
     ok "vLLM service is running"
     info "Waiting for the API to become available (model loading can take a while)..."
 
-    api_key=$(grep -oP '(?<=api-key:\s")[^"]+' "$CONFIG_DEST" 2>/dev/null || echo "change-this-key")
-    port=$(grep -oP '(?<=port:\s)\d+' "$CONFIG_DEST" 2>/dev/null || echo "8000")
+    active_config=""
+    if [ -n "${matched_config:-}" ] && [ -f "$DEST_DIR/$matched_config" ]; then
+        active_config="$DEST_DIR/$matched_config"
+    fi
+    api_key=$(grep -oP '(?<=api-key:\s")[^"]+' "$active_config" 2>/dev/null || echo "change-this-key")
+    port=$(grep -oP '(?<=port:\s)\d+' "$active_config" 2>/dev/null || echo "8000")
 
     attempts=0
     max_attempts=60
@@ -202,4 +227,4 @@ info "Setup complete. Useful commands:"
 echo "  systemctl status vllm          # check service status"
 echo "  journalctl -u vllm -f          # follow live logs"
 echo "  sudo systemctl restart vllm    # restart after config changes"
-echo "  sudo nano $CONFIG_DEST         # edit config"
+echo "  sudo nano $DEST_DIR/${matched_config:-rtx-XXXX.yaml}  # edit config"

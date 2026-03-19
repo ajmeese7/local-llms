@@ -1,37 +1,28 @@
-# vLLM Server Configuration
-# Copy to /etc/vllm/config.yaml and edit before starting the service.
+# vLLM config for NVIDIA RTX 5060 Ti (16GB VRAM)
 # Docs: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html
 
 # ── Model ────────────────────────────────────────────────────────────────────
 # HuggingFace model ID or local path. Downloaded automatically on first start.
-# Examples: Qwen/Qwen3-30B-A3B, meta-llama/Llama-3.1-8B-Instruct
-model: "Qwen/Qwen3-30B-A3B"
+# With 16GB VRAM, models up to ~14B parameters fit well.
+model: "huihui-ai/Huihui-Qwen3.5-9B-abliterated"
 
 # ── Network ──────────────────────────────────────────────────────────────────
-# 0.0.0.0 = accessible from Windows host and LAN.
-# Use 127.0.0.1 to restrict to WSL-only access.
 host: "0.0.0.0"
 port: 8000
 
 # ── Authentication ───────────────────────────────────────────────────────────
-# API key required for all requests (sent as "Authorization: Bearer <key>").
-# Change this to something unique before starting the service.
 api-key: "change-this-key"
 
 # ── GPU / Memory ─────────────────────────────────────────────────────────────
-# Fraction of GPU VRAM vLLM may use. 0.90 leaves headroom for the OS/display.
+# 0.90 is fine — vLLM handles the budget internally.
 gpu-memory-utilization: 0.90
 
-# Maximum context length in tokens. 32768 fits comfortably in 32GB VRAM for
-# most 7-30B models. Reduce if you hit OOM; increase if the model supports it
-# and VRAM allows.
-max-model-len: 32768
+# 16GB VRAM fits 16384 comfortably for most 7-14B models.
+# Increase to 32768 if the model supports it; reduce if you hit OOM.
+max-model-len: 16384
 
 # ── Generation ───────────────────────────────────────────────────────────────
-# "vllm" = use vLLM built-in defaults instead of the model repo's
-# generation_config.json, which can silently override temperature/top_p/etc.
 generation-config: "vllm"
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-# Set to "debug" for verbose output, "warning" to reduce noise.
 uvicorn-log-level: "info"
