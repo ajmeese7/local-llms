@@ -1,18 +1,18 @@
 # local-llms
 
-Run a local LLM as a persistent systemd service on WSL2 using [vLLM](https://docs.vllm.ai/). This repo contains everything needed to set up an OpenAI-compatible API server backed by your NVIDIA GPU.
+Run a local LLM as a persistent systemd service using [llama.cpp](https://github.com/ggerganov/llama.cpp), compiled from source with CUDA. Works on native Linux and WSL2. This repo contains everything needed to set up an OpenAI-compatible API server backed by your NVIDIA GPU.
 
 ## Prerequisites
 
 | Requirement | Notes |
 |---|---|
-| WSL2 with systemd enabled | `systemd=true` in `/etc/wsl.conf` — see [Enable systemd](#enable-systemd) |
+| Linux with systemd | Native Linux or WSL2 with `systemd=true` — see [WSL2 note](#enable-systemd-wsl2-only) |
 | NVIDIA GPU with drivers installed on Windows | `nvidia-smi` must work inside WSL |
-| Python 3.10+ | Ships with Ubuntu 22.04+ |
+| Build tools | `sudo apt install build-essential cmake git nvidia-cuda-toolkit` |
 
-### Enable systemd
+### Enable systemd (WSL2 only)
 
-If systemd isn't already enabled, add this to `/etc/wsl.conf`:
+Native Linux distros run systemd by default — skip this section. For WSL2, if systemd isn't already enabled, add this to `/etc/wsl.conf`:
 
 ```ini
 [boot]
@@ -38,60 +38,82 @@ ps -p 1 -o comm=
 git clone https://github.com/ajmeese7/local-llms.git
 cd local-llms
 
-# Edit the config for your GPU and set your API key
-nano config/rtx-5090.yaml  # or rtx-5060.yaml
+# Review the config for your GPU and set your API key
+#   RTX 5090 (32GB)    → config/rtx-5090.conf
+#   RTX 5060 Ti (16GB) → config/rtx-5060.conf
+nano config/rtx-5090.conf
 
 # Run the interactive setup
 ./setup.sh
 ```
 
-The setup script auto-detects your GPU and walks through each step with `y/n` prompts: creating a venv, installing vLLM, copying the right config files, and enabling the systemd service.
+The setup script auto-detects your GPU and walks through each step with `y/n` prompts: building llama.cpp from source with CUDA, downloading the model, copying config files, and enabling the systemd service. The same repo works on both machines — no local changes needed.
 
 ## Manual Setup
 
 If you prefer to run each step yourself:
 
-### 1. Create a virtual environment
+### 1. Install build dependencies
 
 ```bash
-python3 -m venv ~/.venvs/vllm
+sudo apt install build-essential cmake git nvidia-cuda-toolkit
 ```
 
-### 2. Install vLLM
+### 2. Build llama.cpp with CUDA
 
 ```bash
-~/.venvs/vllm/bin/pip install vllm
+git clone https://github.com/ggerganov/llama.cpp.git ~/.local/share/llama.cpp
+cd ~/.local/share/llama.cpp
+cmake -B build -DGGML_CUDA=ON \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+  -DCMAKE_CUDA_HOST_COMPILER=gcc-12
+cmake --build build --config Release -j4
 ```
 
-### 3. Copy config files and launcher
+### 3. Download a model
 
 ```bash
-sudo mkdir -p /etc/vllm
-sudo cp config/rtx-*.yaml /etc/vllm/
-sudo cp config/vllm-launcher.sh /etc/vllm/
-sudo chmod +x /etc/vllm/vllm-launcher.sh
+mkdir -p ~/models
+# RTX 5090 — 27B Q4_K_M (16.5GB)
+curl -L --progress-bar \
+  https://huggingface.co/Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF/resolve/main/Qwen3.5-27B.Q4_K_M.gguf \
+  -o ~/models/Qwen3.5-27B.Q4_K_M.gguf
+
+# RTX 5060 Ti — 9B Q4_K_M
+curl -L --progress-bar \
+  https://huggingface.co/huihui-ai/Huihui-Qwen3.5-9B-abliterated-GGUF/resolve/main/huihui-qwen3.5-9b-abliterated-q4_k_m.gguf \
+  -o ~/models/Qwen3.5-9B.Q4_K_M.gguf
+```
+
+### 4. Copy config files and launcher
+
+```bash
+sudo mkdir -p /etc/llama-server
+sudo cp config/rtx-*.conf /etc/llama-server/
+sudo cp config/llama-launcher.sh /etc/llama-server/
+sudo chmod +x /etc/llama-server/llama-launcher.sh
 
 # Edit the config for your GPU
-sudo nano /etc/vllm/rtx-5090.yaml  # or rtx-5060.yaml
+sudo nano /etc/llama-server/rtx-5090.conf  # or rtx-5060.conf
 ```
 
-### 4. Install the systemd service
+### 5. Install the systemd service
 
 ```bash
-sudo cp config/vllm.service /etc/systemd/system/vllm.service
+sudo cp config/llama-server.service /etc/systemd/system/llama-server.service
 ```
 
-### 5. Enable and start
+### 6. Enable and start
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now vllm
+sudo systemctl enable --now llama-server
 ```
 
-### 6. Verify
+### 7. Verify
 
 ```bash
-systemctl status vllm
+systemctl status llama-server
 curl http://127.0.0.1:8000/v1/models -H "Authorization: Bearer change-this-key"
 ```
 
@@ -99,59 +121,64 @@ curl http://127.0.0.1:8000/v1/models -H "Authorization: Bearer change-this-key"
 
 ### How GPU detection works
 
-The systemd service runs [`config/vllm-launcher.sh`](config/vllm-launcher.sh), which:
+The systemd service runs [`config/llama-launcher.sh`](config/llama-launcher.sh), which:
 
 1. Queries `nvidia-smi` for the GPU name
-2. Matches it to a config file (e.g. `5090` → `rtx-5090.yaml`)
-3. Launches vLLM with that config
+2. Matches it to a config file (e.g. `5090` → `rtx-5090.conf`)
+3. Sources the config and launches `llama-server` with the right flags
 
 This means you can clone the repo on different machines and the right config is used automatically.
 
 ### Per-GPU config files
 
-| GPU | Config | VRAM | Default Model |
-|---|---|---|---|
-| RTX 5090 | [`config/rtx-5090.yaml`](config/rtx-5090.yaml) | 32GB | `Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF` |
-| RTX 5060 Ti | [`config/rtx-5060.yaml`](config/rtx-5060.yaml) | 16GB | `huihui-ai/Huihui-Qwen3.5-9B-abliterated` |
+| GPU | Config | VRAM | Default Model | Quant |
+|---|---|---|---|---|
+| RTX 5090 | [`config/rtx-5090.conf`](config/rtx-5090.conf) | 32GB | Qwen3.5-27B | Q4_K_M (16.5GB) |
+| RTX 5060 Ti | [`config/rtx-5060.conf`](config/rtx-5060.conf) | 16GB | Qwen3.5-9B | Q4_K_M |
 
 ### Adding a new GPU
 
-1. Copy an existing config: `cp config/rtx-5090.yaml config/rtx-XXXX.yaml`
-2. Adjust `model`, `max-model-len`, etc. for the new GPU's VRAM
-3. Add a matching clause in `config/vllm-launcher.sh`
-4. Re-run `./setup.sh` (or manually copy to `/etc/vllm/`)
+1. Copy an existing config: `cp config/rtx-5090.conf config/rtx-XXXX.conf`
+2. Adjust model path, context length, etc. for the new GPU's VRAM
+3. Add a matching clause in `config/llama-launcher.sh`
+4. Re-run `./setup.sh` (or manually copy to `/etc/llama-server/`)
 
 ### Config options
 
-| Option | Description |
+| Variable | Description |
 |---|---|
-| `model` | HuggingFace model ID or local path. Downloaded automatically on first use. |
-| `host` | Bind address. `0.0.0.0` = accessible from Windows and LAN. |
-| `port` | API port (default `8000`). |
-| `api-key` | Required for all API requests. Change before starting. |
-| `gpu-memory-utilization` | Fraction of VRAM vLLM may use. `0.90` leaves headroom for OS/display. |
-| `max-model-len` | Maximum context length in tokens. Reduce if you hit OOM. |
-| `generation-config` | `"vllm"` = use vLLM defaults instead of the model repo's `generation_config.json`. |
-| `uvicorn-log-level` | Log verbosity: `debug`, `info`, `warning`, `error`. |
+| `MODEL` | Path to the GGUF model file. |
+| `HF_REPO` / `HF_FILE` | HuggingFace repo and filename for downloading. |
+| `ALIAS` | Model name reported by the API. |
+| `HOST` | Bind address. `0.0.0.0` = accessible from Windows and LAN. |
+| `PORT` | API port (default `8000`). |
+| `API_KEY` | Required for all API requests. |
+| `GPU_LAYERS` | Layers to offload to GPU. `99` = all. |
+| `CONTEXT_LENGTH` | Max context in tokens. Larger = more VRAM for KV cache. |
+| `PARALLEL_SLOTS` | Concurrent request slots. `1` = single user. |
+| `FLASH_ATTENTION` | `on` for faster inference and lower memory usage. |
+| `CACHE_TYPE_K` / `CACHE_TYPE_V` | KV cache quantization: `f16`, `q8_0`, or `q4_0`. Lower = less VRAM, more context. |
 
 ### Changing Models
 
-1. Edit the config for your GPU: `sudo nano /etc/vllm/rtx-5090.yaml`
-2. Restart the service: `sudo systemctl restart vllm`
+1. Download the new GGUF file to `~/models/`
+2. Edit the config: `sudo nano /etc/llama-server/rtx-5090.conf`
+3. Update `MODEL`, `HF_REPO`, `HF_FILE`, and `ALIAS`
+4. Restart: `sudo systemctl restart llama-server`
 
-The new model downloads automatically on startup. Monitor progress with `journalctl -u vllm -f`.
+## WSL2 Caveats
 
-## WSL Caveats
+> **Native Linux users:** Skip this section. Your service starts on boot like any other systemd service.
 
 WSL2 is not a traditional always-on server. Even with systemd, the WSL VM can shut down automatically when Windows detects no active file handles or processes using it. This means:
 
-- **The vLLM service starts when WSL starts**, but WSL itself may not be running after a reboot.
+- **The service starts when WSL starts**, but WSL itself may not be running after a reboot.
 - **WSL can idle-shutdown** if no terminal or Windows process is keeping it alive.
 - After `wsl --shutdown` or a Windows reboot, the service won't start until WSL is launched again.
 
 ### Auto-Start on Windows Login
 
-To have vLLM available after every Windows login, set up automatic WSL startup.
+To have the LLM server available after every Windows login, set up automatic WSL startup.
 
 **Option A: Windows Scheduled Task (recommended)**
 
@@ -163,7 +190,7 @@ To have vLLM available after every Windows login, set up automatic WSL startup.
    - **Arguments:** `-d Ubuntu`
 3. Under "Conditions", uncheck "Start only if on AC power"
 
-Since the vLLM service is enabled, systemd starts it automatically when the distro boots.
+Since the service is enabled, systemd starts it automatically when the distro boots.
 
 **Option B: WSL boot command**
 
@@ -172,105 +199,118 @@ Add to `/etc/wsl.conf`:
 ```ini
 [boot]
 systemd=true
-command=systemctl start vllm
+command=systemctl start llama-server
 ```
-
-This is less necessary if the service is already `enable`d, but serves as a belt-and-suspenders approach.
 
 ## Useful Commands
 
 ```bash
 # Service management
-systemctl status vllm              # check if running
-sudo systemctl restart vllm        # restart (e.g. after config change)
-sudo systemctl stop vllm           # stop the server
-sudo systemctl start vllm          # start the server
+systemctl status llama-server              # check if running
+sudo systemctl restart llama-server        # restart (e.g. after config change)
+sudo systemctl stop llama-server           # stop the server
+sudo systemctl start llama-server          # start the server
 
 # Logs
-journalctl -u vllm -f              # follow live logs
-journalctl -u vllm --since "5m ago" # recent logs
+journalctl -u llama-server -f              # follow live logs
+journalctl -u llama-server --since "5m ago" # recent logs
 
 # Test the API
 curl http://127.0.0.1:8000/v1/models \
   -H "Authorization: Bearer change-this-key"
 
 # Edit config (use your GPU's config file)
-sudo nano /etc/vllm/rtx-5090.yaml
+sudo nano /etc/llama-server/rtx-5090.conf  # or rtx-5060.conf
+
+# Update llama.cpp
+cd ~/.local/share/llama.cpp && git pull
+cmake --build build --config Release -j4
+sudo systemctl restart llama-server
 ```
 
 ## Model Recommendations
 
 ### RTX 5090 (32GB VRAM)
 
-Dense models up to ~30B parameters (FP16/BF16) fit. MoE models can be larger since only a fraction of parameters are active per token.
+With Q4_K_M quantization, models up to ~70B params fit. Q8_0 fits up to ~30B.
 
-| Model | Parameters | Notes |
-|---|---|---|
-| `Qwen/Qwen3-30B-A3B` | 30B (3B active) | MoE — excellent quality-to-VRAM ratio |
-| `mistralai/Mistral-Small-24B-Instruct-2501` | 24B | Strong reasoning |
-| `Qwen/Qwen2.5-Coder-32B-Instruct` | 32B | Best open coding model, tight fit |
-| `deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct` | 16B (2.4B active) | MoE, great for code |
+| Model | Quant | Size | Notes |
+|---|---|---|---|
+| Qwen3.5-27B | Q4_K_M | 16.5GB | MoE, excellent quality, leaves room for 131k context |
+| Qwen3.5-27B | Q8_0 | 28.6GB | Higher quality, shorter context |
+| Llama-3.1-70B | Q4_K_M | ~40GB | Won't fully fit — needs CPU offload for some layers |
 
 ### RTX 5060 Ti (16GB VRAM)
 
-Dense models up to ~14B parameters fit well. Smaller models leave room for longer context.
+With Q4_K_M, models up to ~14B fit comfortably.
 
-| Model | Parameters | Notes |
-|---|---|---|
-| `huihui-ai/Huihui-Qwen3.5-9B-abliterated` | 9B | Uncensored, good general-purpose |
-| `Qwen/Qwen2.5-14B-Instruct` | 14B | High quality, tight fit at 16GB |
-| `meta-llama/Llama-3.1-8B-Instruct` | 8B | Fast, high quality, fits easily |
-| `Qwen/Qwen2.5-Coder-7B-Instruct` | 7B | Solid coding model with room to spare |
+| Model | Quant | Size | Notes |
+|---|---|---|---|
+| Qwen3.5-9B | Q4_K_M | ~5.5GB | Great quality, lots of room for context |
+| Qwen2.5-14B | Q4_K_M | ~8.5GB | Larger model, shorter context |
+| Llama-3.1-8B | Q4_K_M | ~4.9GB | Fast, high quality |
 
-> **Tip:** If a model doesn't fit, try reducing `max-model-len` in the config before switching to a smaller model.
+> **Tip:** If you run out of VRAM, reduce `CONTEXT_LENGTH` in the config before switching to a smaller model. The KV cache quantization (`q4_0`) also helps significantly.
 
 ## Troubleshooting
 
 ### CUDA / GPU not found
 
 ```
-RuntimeError: No CUDA GPUs are available
+ggml_cuda_init: no CUDA devices found
 ```
 
 - Ensure NVIDIA drivers are installed **on the Windows host** (not inside WSL)
 - Run `nvidia-smi` inside WSL — if it fails, restart WSL: `wsl --shutdown` from PowerShell
-- Check that your WSL version supports GPU passthrough: `wsl --version`
+- Make sure llama.cpp was built with `-DGGML_CUDA=ON`
 
 ### Out of memory (OOM)
 
 ```
-torch.cuda.OutOfMemoryError: CUDA out of memory
+CUDA error: out of memory
 ```
 
-- Reduce `max-model-len` in the config (e.g. `16384` or `8192`)
-- Reduce `gpu-memory-utilization` (e.g. `0.85`)
+- Reduce `CONTEXT_LENGTH` in the config (e.g. `32768` or `16384`)
+- Use a smaller quantization (Q4_K_M instead of Q8_0)
 - Use a smaller model
 - Close other GPU-intensive applications on Windows
 
 ### Port already in use
 
 ```
-OSError: [Errno 98] Address already in use
+bind: Address already in use
 ```
 
 - Another process is using port 8000. Find it: `ss -tlnp | grep 8000`
-- Change the `port:` value in the config, or stop the conflicting process
+- Change `PORT` in the config, or stop the conflicting process
 
 ### Service fails to start
 
 ```bash
 # Check what went wrong
-systemctl status vllm
-journalctl -u vllm --no-pager -n 50
+systemctl status llama-server
+journalctl -u llama-server --no-pager -n 50
 ```
 
 Common causes:
-- Config syntax error — validate YAML: `python3 -c "import yaml; yaml.safe_load(open('/etc/vllm/rtx-5090.yaml'))"`
-- venv missing or broken — recreate: `python3 -m venv ~/.venvs/vllm --clear`
-- Model not found — check the model ID is correct on [HuggingFace](https://huggingface.co/models)
+- Model file not found — check that `MODEL` path in the config is correct
+- llama-server not built — run `setup.sh` or build manually
+- Config syntax error — configs are shell scripts, check for typos
 
-### Model download hangs or fails
+### Build fails
 
-- Check network connectivity and HuggingFace availability
-- For gated models (e.g. Llama), log in first: `~/.venvs/vllm/bin/huggingface-cli login`
-- Set `HF_HOME` if you want to use a non-default cache directory
+```bash
+# Missing CUDA toolkit
+sudo apt install nvidia-cuda-toolkit
+
+# Missing build tools
+sudo apt install build-essential cmake
+
+# Rebuild from scratch
+cd ~/.local/share/llama.cpp
+rm -rf build
+cmake -B build -DGGML_CUDA=ON \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+  -DCMAKE_CUDA_HOST_COMPILER=gcc-12
+cmake --build build --config Release -j4
+```
