@@ -213,7 +213,10 @@ Edit (or create) `%USERPROFILE%\.wslconfig` on the Windows side:
 ```ini
 [wsl2]
 networkingMode=mirrored
+vmIdleTimeout=-1
 ```
+
+`vmIdleTimeout=-1` prevents WSL from automatically shutting down the VM when it thinks it's idle (see [Auto-shutdown behavior](#auto-shutdown-behavior)).
 
 Then restart WSL from PowerShell:
 
@@ -231,11 +234,17 @@ New-NetFirewallRule -DisplayName "llama-server" -Direction Inbound -Protocol TCP
 
 ### Auto-shutdown behavior
 
-WSL2 is not a traditional always-on server. Even with systemd, the WSL VM can shut down automatically when Windows detects no active file handles or processes using it. This means:
+WSL2 can shut down automatically when Windows detects no active file handles or processes using it. Setting `vmIdleTimeout=-1` in `.wslconfig` (shown above) helps, but [may not be sufficient on its own](https://blog.lecoteauverdoyant.co.uk/articles/wsl-keep-alive.html).
 
-- **The service starts when WSL starts**, but WSL itself may not be running after a reboot.
-- **WSL can idle-shutdown** if no terminal or Windows process is keeping it alive.
-- After `wsl --shutdown` or a Windows reboot, the service won't start until WSL is launched again.
+For a more reliable keep-alive, create a startup script that maintains a persistent WSL process:
+
+1. Open the Windows Startup folder: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
+2. Create a file named `wslstart.cmd` with this content:
+   ```cmd
+   @start /b wsl --exec dbus-launch true
+   ```
+
+This launches a background `dbus` process inside WSL on login, which keeps the VM alive without a visible window.
 
 ### Auto-Start on Windows Login
 
