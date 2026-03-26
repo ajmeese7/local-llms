@@ -61,11 +61,50 @@ for cmd in cmake git gcc g++; do
     fi
 done
 
-# CUDA toolkit
-if dpkg -l nvidia-cuda-toolkit &>/dev/null; then
-    ok "nvidia-cuda-toolkit installed"
+# nvcc compiler & CUDA toolkit version
+if command -v nvcc &>/dev/null; then
+    nvcc_path="$(command -v nvcc)"
+    cuda_version=$(nvcc --version | grep -oP 'release \K[0-9]+\.[0-9]+')
+    ok "nvcc found at $nvcc_path (CUDA $cuda_version)"
+
+    # Blackwell (RTX 50 series) requires CUDA 12.8+
+    cuda_major="${cuda_version%%.*}"
+    cuda_minor="${cuda_version##*.}"
+    if echo "$gpu_name" | grep -qP '(RTX\s*)?50[0-9]{2}'; then
+        if [ "$cuda_major" -lt 12 ] || { [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -lt 8 ]; }; then
+            err "CUDA $cuda_version is too old for $gpu_name (Blackwell). CUDA 12.8+ required."
+            err "The Ubuntu nvidia-cuda-toolkit package is outdated. Install from NVIDIA's repo instead:"
+            err "  https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=24.04&target_type=deb_network"
+            err "After installing, ensure the new nvcc is first in PATH (e.g. /usr/local/cuda/bin/nvcc)."
+            errors=$((errors + 1))
+        fi
+    fi
+
+    # Driver/toolkit CUDA version compatibility check
+    # If toolkit version > driver's supported CUDA version, GPU calls will hang the system
+    driver_cuda_version=$(nvidia-smi 2>/dev/null | grep -oP 'CUDA Version: \K[0-9]+\.[0-9]+' || true)
+    if [ -n "$driver_cuda_version" ]; then
+        driver_cuda_major="${driver_cuda_version%%.*}"
+        driver_cuda_minor="${driver_cuda_version##*.}"
+        if [ "$cuda_major" -gt "$driver_cuda_major" ] || \
+           { [ "$cuda_major" -eq "$driver_cuda_major" ] && [ "$cuda_minor" -gt "$driver_cuda_minor" ]; }; then
+            err "CUDA toolkit ($cuda_version) is NEWER than the driver supports ($driver_cuda_version)."
+            err "This mismatch will cause a hard system freeze when building GPU code."
+            err "Downgrade the CUDA toolkit to match your driver ($driver_cuda_version):"
+            err "  1. Download the matching toolkit runfile from https://developer.nvidia.com/cuda-toolkit-archive"
+            err "  2. Install toolkit only:  sudo sh cuda_*_linux.run --toolkit --silent --override"
+            err "  3. Update symlink:        sudo ln -sfn /usr/local/cuda-$driver_cuda_version /usr/local/cuda"
+            err "  WARNING: Do NOT try to upgrade the driver instead — the DKMS build will freeze the system."
+            errors=$((errors + 1))
+        else
+            ok "CUDA toolkit ($cuda_version) is compatible with driver (supports up to $driver_cuda_version)"
+        fi
+    else
+        warn "Could not detect driver CUDA version from nvidia-smi. Skipping compatibility check."
+    fi
 else
-    err "nvidia-cuda-toolkit not found. Install with: sudo apt install nvidia-cuda-toolkit"
+    err "nvcc not found in PATH. Install CUDA toolkit from:"
+    err "  https://developer.nvidia.com/cuda-downloads"
     errors=$((errors + 1))
 fi
 
@@ -104,11 +143,16 @@ if [ -x "$LLAMA_DIR/build/bin/llama-server" ]; then
     if confirm "Rebuild llama.cpp from source? (pull latest and recompile)"; then
         info "Pulling latest llama.cpp..."
         cd "$LLAMA_DIR" && git pull
+        info "Cleaning old build directory..."
+        rm -rf build
         info "Building with CUDA support (this may take a few minutes)..."
+        nvcc_path="$(command -v nvcc)"
         cmake -B build -DGGML_CUDA=ON \
-            -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+            -DCMAKE_C_COMPILER=gcc-12 \
+            -DCMAKE_CXX_COMPILER=g++-12 \
+            -DCMAKE_CUDA_COMPILER="$nvcc_path" \
             -DCMAKE_CUDA_HOST_COMPILER=gcc-12
-        cmake --build build --config Release -j4
+        cmake --build build --config Release -j1
         ok "llama.cpp rebuilt"
     fi
 else
@@ -122,11 +166,16 @@ else
             git clone https://github.com/ggerganov/llama.cpp.git "$LLAMA_DIR"
         fi
         cd "$LLAMA_DIR"
+        info "Cleaning old build directory..."
+        rm -rf build
         info "Building with CUDA support..."
+        nvcc_path="$(command -v nvcc)"
         cmake -B build -DGGML_CUDA=ON \
-            -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+            -DCMAKE_C_COMPILER=gcc-12 \
+            -DCMAKE_CXX_COMPILER=g++-12 \
+            -DCMAKE_CUDA_COMPILER="$nvcc_path" \
             -DCMAKE_CUDA_HOST_COMPILER=gcc-12
-        cmake --build build --config Release -j4
+        cmake --build build --config Release -j1
         ok "llama.cpp built"
     else
         warn "Skipping llama.cpp build. The service will fail without it."

@@ -8,7 +8,38 @@ Run a local LLM as a persistent systemd service using [llama.cpp](https://github
 |---|---|
 | Linux with systemd | Native Linux or WSL2 with `systemd=true` — see [WSL2 note](#enable-systemd-wsl2-only) |
 | NVIDIA GPU with drivers installed on Windows | `nvidia-smi` must work inside WSL |
-| Build tools | `sudo apt install build-essential cmake git nvidia-cuda-toolkit` |
+| Build tools | `sudo apt install build-essential cmake git` |
+| CUDA toolkit | See [CUDA toolkit installation](#cuda-toolkit-installation) |
+
+### CUDA toolkit installation
+
+**RTX 50 series (Blackwell) requires CUDA 12.8+.** The Ubuntu `nvidia-cuda-toolkit` package only provides CUDA 12.0, which is too old. Install from NVIDIA's official repo instead:
+
+```bash
+# Remove the outdated apt package if installed
+sudo apt remove nvidia-cuda-toolkit
+
+# Add NVIDIA's package repo (Ubuntu 24.04)
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+sudo apt install cuda-toolkit
+```
+
+Then add the CUDA binaries to your PATH (add to `~/.bashrc`):
+
+```bash
+export PATH=/usr/local/cuda/bin:$PATH
+```
+
+Verify with:
+
+```bash
+nvcc --version
+# Should show CUDA 12.8 or newer
+```
+
+> **Older GPUs (RTX 40 series and below):** The apt package (`sudo apt install nvidia-cuda-toolkit`) may work, but the NVIDIA repo version is recommended for all GPUs.
 
 ### Enable systemd (WSL2 only)
 
@@ -56,8 +87,10 @@ If you prefer to run each step yourself:
 ### 1. Install build dependencies
 
 ```bash
-sudo apt install build-essential cmake git nvidia-cuda-toolkit
+sudo apt install build-essential cmake git
 ```
+
+Install the CUDA toolkit following the [CUDA toolkit installation](#cuda-toolkit-installation) instructions above.
 
 ### 2. Build llama.cpp with CUDA
 
@@ -65,7 +98,7 @@ sudo apt install build-essential cmake git nvidia-cuda-toolkit
 git clone https://github.com/ggerganov/llama.cpp.git ~/.local/share/llama.cpp
 cd ~/.local/share/llama.cpp
 cmake -B build -DGGML_CUDA=ON \
-  -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+  -DCMAKE_CUDA_COMPILER="$(command -v nvcc)" \
   -DCMAKE_CUDA_HOST_COMPILER=gcc-12
 cmake --build build --config Release -j4
 ```
@@ -324,6 +357,46 @@ With Q4_K_M, models up to ~14B fit comfortably.
 
 ## Troubleshooting
 
+### CUDA toolkit / driver version mismatch (system freeze)
+
+If `setup.sh` reports the CUDA toolkit is newer than the driver supports, or if building llama.cpp causes a **hard system freeze**, the CUDA toolkit version is higher than the driver's supported CUDA version. For example, toolkit 13.2 with a driver that only supports 13.1. This causes the GPU to hang at the kernel level, freezing the entire machine.
+
+Check the versions:
+
+```bash
+# Driver's max supported CUDA version
+nvidia-smi | grep "CUDA Version"
+
+# Installed toolkit version
+nvcc --version
+```
+
+The toolkit version must be **less than or equal to** the driver's CUDA version. If not, **downgrade the toolkit** (do NOT try to upgrade the driver — the DKMS kernel module build will hit the same freeze):
+
+```bash
+# 1. Download the matching CUDA toolkit from NVIDIA
+#    Go to https://developer.nvidia.com/cuda-toolkit-archive
+#    Select your OS/arch and download the runfile installer
+#    Example for CUDA 13.1:
+wget https://developer.download.nvidia.com/compute/cuda/13.1.0/local_installers/cuda_13.1.0_590.44.01_linux.run
+
+# 2. Install ONLY the toolkit (skip the driver component)
+sudo sh cuda_13.1.0_590.44.01_linux.run --toolkit --silent --override
+
+# 3. Point the cuda symlink at the new version
+sudo ln -sfn /usr/local/cuda-13.1 /usr/local/cuda
+
+# 4. Verify
+nvcc --version          # should show the downgraded version
+nvidia-smi              # CUDA Version here should be >= nvcc version
+```
+
+> **Warning:** Do not attempt to fix this by upgrading the NVIDIA driver via `apt`. The driver install compiles kernel modules (DKMS), which invokes the GPU and triggers the same freeze. Downgrading the toolkit is the safe fix — it only copies files to `/usr/local/cuda-*` without touching the driver.
+
+### Recovering from a broken NVIDIA driver install
+
+See [DRIVER-RECOVERY.md](docs/DRIVER-RECOVERY.md) for full recovery instructions, including how to restore the driver from cached packages and boot into a compatible kernel.
+
 ### CUDA / GPU not found
 
 ```
@@ -370,17 +443,17 @@ Common causes:
 ### Build fails
 
 ```bash
-# Missing CUDA toolkit
-sudo apt install nvidia-cuda-toolkit
-
 # Missing build tools
 sudo apt install build-essential cmake
+
+# Missing or outdated CUDA toolkit — see Prerequisites section
+nvcc --version  # must be 12.8+ for RTX 50 series
 
 # Rebuild from scratch
 cd ~/.local/share/llama.cpp
 rm -rf build
 cmake -B build -DGGML_CUDA=ON \
-  -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+  -DCMAKE_CUDA_COMPILER="$(command -v nvcc)" \
   -DCMAKE_CUDA_HOST_COMPILER=gcc-12
 cmake --build build --config Release -j4
 ```
