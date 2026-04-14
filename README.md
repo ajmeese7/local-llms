@@ -116,6 +116,16 @@ curl -L --progress-bar \
 curl -L --progress-bar \
   https://huggingface.co/huihui-ai/Huihui-Qwen3.5-9B-abliterated-GGUF/resolve/main/huihui-qwen3.5-9b-abliterated-q4_k_m.gguf \
   -o ~/models/Qwen3.5-9B.Q4_K_M.gguf
+
+# Optional RTX 5090 experiment — Gemma 4 26B-A4B PRISM-DQ (text-only)
+curl -L --progress-bar \
+  https://huggingface.co/Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF/resolve/main/mythos-26b-a4b-prism-pro-dq.gguf \
+  -o ~/models/mythos-26b-a4b-prism-pro-dq.gguf
+
+# Optional multimodal projector for MYTHOS (only needed for image/video use)
+curl -L --progress-bar \
+  https://huggingface.co/Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF/resolve/main/mmproj-mythos-26b-a4b-prism-pro.gguf \
+  -o ~/models/mmproj-mythos-26b-a4b-prism-pro.gguf
 ```
 
 ### 4. Copy config files and launcher
@@ -198,6 +208,62 @@ This means you can clone the repo on different machines and the right config is 
 2. Edit the config: `sudo nano /etc/llama-server/rtx-5090.conf`
 3. Update `MODEL`, `HF_REPO`, `HF_FILE`, and `ALIAS`
 4. Restart: `sudo systemctl restart llama-server`
+
+This automation path is for `llama.cpp` + GGUF models. If the model is not distributed as GGUF, or if it requires a different runtime/kernel path, keep reading before trying to wire it into the service.
+
+### Models worth trying
+
+#### MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF
+
+`Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF` is a strong fit for this repo because it is already packaged as a `llama.cpp`-ready GGUF. The model card lists:
+
+- Base model: `google/gemma-4-26B-A4B-it`
+- Quantization: PRISM dynamic quantization
+- Language model file: `mythos-26b-a4b-prism-pro-dq.gguf`
+- Optional vision projector: `mmproj-mythos-26b-a4b-prism-pro.gguf`
+- Text-only size: about 17 GB
+
+For this repo's systemd service, use the language model file only. The current launcher does not manage the extra `mmproj` file, so image/video support is a manual `llama.cpp` workflow rather than a drop-in replacement for `llama-server.service`.
+
+Example 5090 config values:
+
+```bash
+MODEL="$HOME/models/mythos-26b-a4b-prism-pro-dq.gguf"
+HF_REPO="Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF"
+HF_FILE="mythos-26b-a4b-prism-pro-dq.gguf"
+ALIAS="MYTHOS-26B-A4B"
+```
+
+#### gemma-4-31B-it-NVFP4-turbo
+
+`LilaRest/gemma-4-31B-it-NVFP4-turbo` is not a `llama.cpp`/GGUF model. The model card documents it as a Blackwell-focused `vLLM` deployment that expects:
+
+- `vllm >= 0.19`
+- CUDA 13.0
+- `--quantization modelopt`
+- A Blackwell GPU with at least 20 GB VRAM
+
+That makes it a good RTX 5090 experiment, but it should be documented as a separate runtime path instead of a new `/etc/llama-server/*.conf` target.
+
+Quick start with Docker:
+
+```bash
+docker run --gpus all \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  -p 8001:8000 \
+  vllm/vllm-openai:cu130-nightly \
+  --model LilaRest/gemma-4-31B-it-NVFP4-turbo \
+  --quantization modelopt \
+  --max-model-len 16384 \
+  --max-num-seqs 128 \
+  --max-num-batched-tokens 8192 \
+  --gpu-memory-utilization 0.95 \
+  --kv-cache-dtype fp8 \
+  --enable-prefix-caching \
+  --trust-remote-code
+```
+
+That gives you a second OpenAI-compatible endpoint on `http://127.0.0.1:8001/v1`, which is useful for side-by-side benchmarking against the `llama.cpp` service on port `8000`.
 
 ## Usage
 
@@ -335,25 +401,146 @@ sudo systemctl restart llama-server
 
 ### RTX 5090 (32GB VRAM)
 
-With Q4_K_M quantization, models up to ~70B params fit. Q8_0 fits up to ~30B.
+With Q4_K_M quantization, models up to ~70B params fit. Q8_0 fits up to ~30B. Blackwell-specific FP4 runtimes also become viable here.
 
-| Model | Quant | Size | Notes |
-|---|---|---|---|
-| Qwen3.5-27B | Q4_K_M | 16.5GB | MoE, excellent quality, leaves room for 131k context |
-| Qwen3.5-27B | Q8_0 | 28.6GB | Higher quality, shorter context |
-| Llama-3.1-70B | Q4_K_M | ~40GB | Won't fully fit — needs CPU offload for some layers |
+| Model | Runtime | Quant | Size | Notes |
+|---|---|---|---|---|
+| Qwen3.5-27B | llama.cpp | Q4_K_M | 16.5GB | MoE, excellent quality, leaves room for 131k context |
+| Qwen3.5-27B | llama.cpp | Q8_0 | 28.6GB | Higher quality, shorter context |
+| MYTHOS-26B-A4B-PRISM-PRO-DQ | llama.cpp | PRISM-DQ GGUF | ~17GB | Drop-in 5090 experiment; text-only works with the current service |
+| Gemma 4 31B IT NVFP4 Turbo | vLLM | NVFP4 | ~18.5 GiB GPU memory | Blackwell-only fast path; best treated as a separate server on port 8001 |
+| Llama-3.1-70B | llama.cpp | Q4_K_M | ~40GB | Won't fully fit - needs CPU offload for some layers |
 
 ### RTX 5060 Ti (16GB VRAM)
 
 With Q4_K_M, models up to ~14B fit comfortably.
 
-| Model | Quant | Size | Notes |
-|---|---|---|---|
-| Qwen3.5-9B | Q4_K_M | ~5.5GB | Great quality, lots of room for context |
-| Qwen2.5-14B | Q4_K_M | ~8.5GB | Larger model, shorter context |
-| Llama-3.1-8B | Q4_K_M | ~4.9GB | Fast, high quality |
+| Model | Runtime | Quant | Size | Notes |
+|---|---|---|---|---|
+| Qwen3.5-9B | llama.cpp | Q4_K_M | ~5.5GB | Great quality, lots of room for context |
+| Qwen2.5-14B | llama.cpp | Q4_K_M | ~8.5GB | Larger model, shorter context |
+| Llama-3.1-8B | llama.cpp | Q4_K_M | ~4.9GB | Fast, high quality |
 
 > **Tip:** If you run out of VRAM, reduce `CONTEXT_LENGTH` in the config before switching to a smaller model. The KV cache quantization (`q4_0`) also helps significantly.
+
+The two models called out above are both 5090-class experiments:
+
+- `MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF` is a realistic fit on 32 GB cards, but too large for the 16 GB profile in this repo.
+- `gemma-4-31B-it-NVFP4-turbo` explicitly targets Blackwell FP4 tensor cores and the model card calls for at least 20 GB VRAM.
+
+## Benchmarking Models
+
+The easiest way to compare models on your own hardware is to separate the benchmark into three buckets:
+
+1. Raw engine speed: how fast the runtime ingests prompt tokens and emits output tokens.
+2. Server behavior: latency and throughput once the model is behind an OpenAI-compatible API.
+3. Task quality: whether the faster model is still solving the tasks you care about.
+
+Keep the comparison fair:
+
+- Use the same prompt length, max output tokens, temperature, and concurrency for every run.
+- Restart the server or discard the first run if you want to avoid one-time warmup effects.
+- Record GPU, driver, CUDA version, context length, and quantization alongside the scores.
+
+### 1. Raw `llama.cpp` throughput with `llama-bench`
+
+`llama.cpp` ships a dedicated benchmark tool:
+
+```bash
+~/.local/share/llama.cpp/build/bin/llama-bench \
+  -m ~/models/mythos-26b-a4b-prism-pro-dq.gguf
+```
+
+Use this when you want a runtime-only comparison between GGUF models. The output separates prompt processing from token generation, which is useful because some models prefill quickly but decode slowly.
+
+Suggested workflow:
+
+- Run each GGUF model at least 3 times.
+- Compare the `pp` numbers for prompt ingestion and the `tg` numbers for generation.
+- Keep `CONTEXT_LENGTH`, KV cache quantization, and GPU offload settings the same between runs.
+
+### 2. API-level load testing with `vllm bench serve`
+
+If you want to compare end-to-end latency between the `llama.cpp` service and a `vLLM` server, use `vllm bench serve` against each OpenAI-compatible endpoint:
+
+```bash
+vllm bench serve \
+  --backend openai \
+  --base-url http://127.0.0.1:8000 \
+  --endpoint /v1/completions \
+  --dataset-name random \
+  --model MYTHOS-26B-A4B \
+  --num-prompts 200 \
+  --input-len 2048 \
+  --output-len 256 \
+  --request-rate 1
+```
+
+Then repeat against the Gemma server:
+
+```bash
+vllm bench serve \
+  --backend openai \
+  --base-url http://127.0.0.1:8001 \
+  --endpoint /v1/completions \
+  --model LilaRest/gemma-4-31B-it-NVFP4-turbo \
+  --dataset-name random \
+  --num-prompts 200 \
+  --input-len 2048 \
+  --output-len 256 \
+  --request-rate 1
+```
+
+This method is good for measuring:
+
+- Time to first token
+- End-to-end latency
+- Throughput under a fixed request rate
+- Behavior as you raise concurrency or prompt length
+
+Start with `--request-rate 1` for single-user latency, then increase it to find where each runtime stops scaling cleanly.
+
+### 3. Quality benchmarking with `lm-eval`
+
+For standardized task quality, use EleutherAI's `lm-evaluation-harness` against your local API:
+
+```bash
+pip install "lm_eval[api]"
+
+export OPENAI_API_KEY=change-this-key
+
+lm_eval \
+  --model local-completions \
+  --tasks gsm8k,hellaswag,mmlu \
+  --model_args model=MYTHOS-26B-A4B,base_url=http://127.0.0.1:8000/v1/completions,num_concurrent=1,max_retries=3,tokenized_requests=False,batch_size=1
+```
+
+Repeat the same command with `model=LilaRest/gemma-4-31B-it-NVFP4-turbo` and `base_url=http://127.0.0.1:8001/v1/completions`.
+
+This is the most useful comparison if you want to know whether a faster model is actually better for coding, reasoning, or general instruction following instead of just generating tokens faster.
+
+### 4. Perplexity on your own corpus
+
+If you have a local text corpus that matches your real use case, `llama.cpp` also ships `llama-perplexity`:
+
+```bash
+~/.local/share/llama.cpp/build/bin/llama-perplexity \
+  -m ~/models/mythos-26b-a4b-prism-pro-dq.gguf \
+  -f ./sample-corpus.txt
+```
+
+Lower perplexity is better, but only compare scores on the exact same corpus. This is a useful supplement when your workload looks more like "next-token fit on my own docs/codebase" than public benchmark tasks.
+
+### A simple benchmark sheet
+
+Use a small table like this so the runs stay comparable:
+
+| Model | Runtime | Prompt len | Output len | Req/s | TTFT | tok/s | Task score notes |
+|---|---|---|---|---|---|---|---|
+| MYTHOS-26B-A4B | llama.cpp | 2048 | 256 | 1 | | | |
+| gemma-4-31B-it-NVFP4-turbo | vLLM | 2048 | 256 | 1 | | | |
+
+That is usually enough to decide which model is the better tradeoff for your hardware.
 
 ## Troubleshooting
 
