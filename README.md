@@ -4,16 +4,24 @@ Run a local LLM as a persistent systemd service using [llama.cpp](https://github
 
 ## Quick Start
 
+Before running the commands below on your own machine, edit `config/llama-server.service`. It is hardcoded to `User=ajmeese7`, `Group=ajmeese7`, and `/home/ajmeese7`, so those values must match your username and home path.
+
 ```bash
 git clone https://github.com/ajmeese7/local-llms.git
 cd local-llms
 
-# Review the config for your GPU and set your API key
-nano config/rtx-5090.conf
+# Review the config for your GPU, such as `config/rtx-5090.conf` or `config/rtx-5060.conf`
+# and change the default API key before exposing the service on your network
+nano config/rtx-5090.conf  # example for RTX 5090
 
 # Run the interactive setup
 ./setup.sh
+
+# Pick the runtime model profile after setup
+sudo /etc/llama-server/select-model.sh
 ```
+
+The GPU config owns hardware defaults and the API key. The checked-in default API key is literally `change-this-key`, so replace it before treating the service as reachable on your LAN. After setup installs the runtime files into `/etc/llama-server/`, use the selector to switch between supported model profiles without editing the GPU config again. If you choose a profile whose GGUF is not present locally yet, the next service start will fail until you download that model.
 
 ## Documentation
 

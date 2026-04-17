@@ -11,16 +11,24 @@ http://localhost:8000
 ## OpenAI-Compatible API
 
 ```bash
+# Inspect the active model alias first
+curl http://localhost:8000/v1/models \
+  -H "Authorization: Bearer <your-key>" \
+  -H "Content-Type: application/json"
+
+# Then use the alias returned by /v1/models in chat completions
 curl http://localhost:8000/v1/chat/completions \
   -H "Authorization: Bearer <your-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen3.5-27B",
+    "model": "<alias-from-/v1/models>",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-Any tool that speaks the OpenAI API can target `http://<your-ip>:8000/v1`.
+Any tool that speaks the OpenAI API can target `http://<your-ip>:8000/v1`. The active model comes from the GPU config plus `/etc/llama-server/active-model.conf`, not from the GPU config alone.
+
+The shipped default API key is `change-this-key`. Replace it in the GPU base config before treating the service as reachable on your LAN.
 
 ## Compatible Applications
 
@@ -45,10 +53,16 @@ journalctl -u llama-server --since "5m ago"
 
 # Test the API
 curl http://127.0.0.1:8000/v1/models \
-  -H "Authorization: Bearer change-this-key"
+  -H "Authorization: Bearer <your-key>"
 
-# Edit the active config
-sudo nano /etc/llama-server/rtx-5090.conf
+# Edit the GPU base config for hardware defaults and API key
+sudo nano /etc/llama-server/rtx-5090.conf  # example for RTX 5090
+
+# Switch the active MODEL_PROFILE
+sudo /etc/llama-server/select-model.sh
+
+# Edit the active overlay only if you are intentionally changing overlay-owned model metadata
+sudo nano /etc/llama-server/qwen35-27b.conf  # example overlay on RTX 5090
 
 # Update llama.cpp
 cd ~/.local/share/llama.cpp && git pull

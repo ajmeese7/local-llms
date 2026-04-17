@@ -28,6 +28,137 @@ confirm() {
     [[ "$reply" =~ ^[Yy]$ ]]
 }
 
+install_runtime_file() {
+    local src="$1"
+    local dest="$DEST_DIR/$(basename "$src")"
+    local backup_archive
+
+    if [ -e "$dest.bak" ] || [ -L "$dest.bak" ]; then
+        backup_archive="$dest.bak.$(date +%Y%m%d-%H%M%S)-$$"
+        while [ -e "$backup_archive" ] || [ -L "$backup_archive" ]; do
+            backup_archive="$dest.bak.$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
+        done
+        sudo mv -f "$dest.bak" "$backup_archive"
+        info "Preserved previous backup as $(basename "$backup_archive")"
+    fi
+
+    if [ -e "$dest" ] || [ -L "$dest" ]; then
+        sudo mv -f "$dest" "$dest.bak"
+        info "Backed up $(basename "$dest") to $(basename "$dest").bak"
+    fi
+
+    sudo cp "$src" "$dest"
+}
+
+profile_supported() {
+    local needle="$1"
+    local profile
+    local supported_profiles="${SUPPORTED_MODEL_PROFILES:-}"
+
+    [ -n "$supported_profiles" ] || return 1
+
+    for profile in $supported_profiles; do
+        if [ "$profile" = "$needle" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+load_active_model_profile() {
+    local active_model_file="$1"
+    local profile_line
+    local profile_value
+
+    [ -f "$active_model_file" ] || return 0
+
+    profile_line="$(grep -m1 -E '^[[:space:]]*MODEL_PROFILE[[:space:]]*=' "$active_model_file" || true)"
+    [ -n "$profile_line" ] || return 0
+
+    profile_value="${profile_line#*=}"
+    profile_value="${profile_value%%#*}"
+    profile_value="${profile_value#"${profile_value%%[![:space:]]*}"}"
+    profile_value="${profile_value%"${profile_value##*[![:space:]]}"}"
+
+    case "$profile_value" in
+        \"*\")
+            profile_value="${profile_value#\"}"
+            profile_value="${profile_value%\"}"
+            ;;
+        \'*\')
+            profile_value="${profile_value#\'}"
+            profile_value="${profile_value%\'}"
+            ;;
+    esac
+
+    printf '%s\n' "$profile_value"
+}
+
+resolve_model_profile() {
+    local active_model_file="$1"
+    local active_profile
+    local default_profile
+    local supported_profiles="${SUPPORTED_MODEL_PROFILES:-}"
+
+    if [ -z "$supported_profiles" ]; then
+        printf '\033[1;33m[WARN]\033[0m  No SUPPORTED_MODEL_PROFILES configured in the matched GPU config; skipping active/default profile resolution for %s\n' \
+            "$active_model_file" >&2
+        return 1
+    fi
+
+    active_profile="$(load_active_model_profile "$active_model_file")"
+    if [ -n "$active_profile" ]; then
+        if profile_supported "$active_profile"; then
+            printf '%s\n' "$active_profile"
+            return 0
+        fi
+
+        printf '\033[1;33m[WARN]\033[0m  Ignoring unsupported active model profile %s from %s; supported profiles: %s\n' \
+            "$active_profile" "$active_model_file" "${SUPPORTED_MODEL_PROFILES:-none}" >&2
+    fi
+
+    default_profile="${DEFAULT_MODEL_PROFILE:-}"
+    if [ -n "$default_profile" ]; then
+        if profile_supported "$default_profile"; then
+            printf '%s\n' "$default_profile"
+            return 0
+        fi
+
+        printf '\033[1;33m[WARN]\033[0m  Ignoring unsupported default model profile %s; supported profiles: %s\n' \
+            "$default_profile" "${SUPPORTED_MODEL_PROFILES:-none}" >&2
+    fi
+
+    return 1
+}
+
+source_model_overlay() {
+    local base_dir="$1"
+    local profile="$2"
+    local overlay_file="$base_dir/$profile.conf"
+
+    [ -f "$overlay_file" ] || return 1
+
+    # shellcheck source=/dev/null
+    source "$overlay_file"
+}
+
+source_model_overlay_prefer_runtime() {
+    local profile="$1"
+
+    if source_model_overlay "$DEST_DIR" "$profile"; then
+        printf '%s\n' "$DEST_DIR/$profile.conf"
+        return 0
+    fi
+
+    if source_model_overlay "$CONFIG_DIR" "$profile"; then
+        printf '%s\n' "$CONFIG_DIR/$profile.conf"
+        return 0
+    fi
+
+    return 1
+}
+
 # ── Step 1: Prerequisites ───────────────────────────────────────────────────
 
 info "Step 1: Checking prerequisites"
@@ -52,11 +183,11 @@ else
 fi
 
 # Build tools
-for cmd in cmake git gcc g++; do
+for cmd in cmake git gcc-12 g++-12; do
     if command -v "$cmd" &>/dev/null; then
         ok "$cmd found"
     else
-        err "$cmd not found. Install with: sudo apt install build-essential cmake git"
+        err "$cmd not found. Install with: sudo apt install build-essential cmake g++-12 gcc-12 git"
         errors=$((errors + 1))
     fi
 done
@@ -130,6 +261,17 @@ if [ -n "$matched_config" ]; then
     info "GPU '$detected_gpu' matches config: $matched_config"
     # shellcheck source=/dev/null
     source "$CONFIG_DIR/$matched_config"
+    resolved_model_profile=""
+    if resolved_model_profile="$(resolve_model_profile "$DEST_DIR/active-model.conf")"; then
+        if resolved_overlay_file="$(source_model_overlay_prefer_runtime "$resolved_model_profile")"; then
+            info "Using model profile: $resolved_model_profile"
+            info "Using model overlay: $resolved_overlay_file"
+        else
+            warn "Model overlay not found in $DEST_DIR or $CONFIG_DIR: $resolved_model_profile.conf"
+        fi
+    else
+        warn "No valid model profile configured. Set MODEL_PROFILE in $DEST_DIR/active-model.conf or a supported DEFAULT_MODEL_PROFILE in $CONFIG_DIR/$matched_config."
+    fi
 else
     warn "No config matches GPU '$detected_gpu'. You may need to add one to config/."
 fi
@@ -209,26 +351,34 @@ fi
 
 echo ""
 
-# ── Step 5: Copy config files & launcher ────────────────────────────────────
+# ── Step 5: Copy config files & runtime scripts ─────────────────────────────
 
-config_files=("$CONFIG_DIR"/rtx-*.conf)
+shopt -s nullglob
+config_files=("$CONFIG_DIR"/*.conf)
+shopt -u nullglob
+
 if [ ${#config_files[@]} -eq 0 ]; then
-    err "No GPU config files (config/rtx-*.conf) found in repo."
+    err "No runtime config files (config/*.conf) found in repo."
     exit 1
 fi
 
-if confirm "Copy GPU configs and launcher to $DEST_DIR? (${#config_files[@]} config file(s))"; then
+if confirm "Copy runtime configs and scripts to $DEST_DIR? (${#config_files[@]} config file(s) + 2 script(s))"; then
     sudo mkdir -p "$DEST_DIR"
     for f in "${config_files[@]}"; do
-        sudo cp "$f" "$DEST_DIR/"
+        install_runtime_file "$f"
         ok "Copied $(basename "$f")"
     done
-    sudo cp "$LAUNCHER_SRC" "$DEST_DIR/llama-launcher.sh"
+    install_runtime_file "$LAUNCHER_SRC"
     sudo chmod +x "$DEST_DIR/llama-launcher.sh"
     ok "Copied launcher script"
+    install_runtime_file "$CONFIG_DIR/select-model.sh"
+    sudo chmod +x "$DEST_DIR/select-model.sh"
+    ok "Copied model selector script"
     if [ -n "$matched_config" ]; then
         warn "Edit $DEST_DIR/$matched_config to set your API key before starting the service."
     fi
+    warn "Existing runtime-managed files were preserved as *.bak before replacement."
+    warn "Merge secrets like API_KEY forward from the .bak copies before restarting the service."
 else
     warn "Skipping config copy."
 fi
@@ -272,11 +422,14 @@ if systemctl is-active --quiet llama-server; then
     ok "llama-server service is running"
     info "Waiting for the API to become available (model loading can take a moment)..."
 
-    active_config=""
     if [ -n "${matched_config:-}" ] && [ -f "$DEST_DIR/$matched_config" ]; then
-        active_config="$DEST_DIR/$matched_config"
         # shellcheck source=/dev/null
-        source "$active_config"
+        source "$DEST_DIR/$matched_config"
+    fi
+    if resolved_model_profile="$(resolve_model_profile "$DEST_DIR/active-model.conf")"; then
+        if ! source_model_overlay "$DEST_DIR" "$resolved_model_profile"; then
+            warn "Model overlay not found: $DEST_DIR/$resolved_model_profile.conf"
+        fi
     fi
     port="${PORT:-8000}"
     api_key="${API_KEY:-change-this-key}"
