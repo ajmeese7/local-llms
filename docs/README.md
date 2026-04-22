@@ -9,7 +9,7 @@ This repo is now split into focused guides instead of one large `README.md`.
 | [SETUP.md](SETUP.md) | Prerequisites, CUDA install, quick start, and manual setup |
 | [CONFIGURATION.md](CONFIGURATION.md) | GPU config files, launcher behavior, and model switching |
 | [USAGE.md](USAGE.md) | Web UI, API examples, compatible apps, and common commands |
-| [MODELS.md](MODELS.md) | Model recommendations and notes for MYTHOS and Gemma NVFP4 |
+| [MODELS.md](MODELS.md) | Model recommendations and notes for MYTHOS, Gemma E4B OBLITERATED, and Gemma NVFP4 |
 | [BENCHMARKING.md](BENCHMARKING.md) | Throughput, latency, `lm-eval`, compare mode, and benchmark workflow |
 | [SWE-BENCH.md](SWE-BENCH.md) | Software-task benchmarking playbook for SWE-bench |
 | [WSL2.md](WSL2.md) | Networking, auto-start, and keep-alive guidance for WSL2 |

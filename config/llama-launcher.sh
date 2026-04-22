@@ -126,18 +126,32 @@ fi
 echo "Using model profile: $active_profile"
 echo "Using model overlay: $overlay_file"
 echo "Final model path: $MODEL"
+if [ -n "${TEMPERATURE:-}" ] || [ -n "${TOP_P:-}" ] || [ -n "${TOP_K:-}" ] || [ -n "${REPEAT_PENALTY:-}" ]; then
+    echo "Using runtime overrides: temp=${TEMPERATURE:-<default>} top_p=${TOP_P:-<default>} top_k=${TOP_K:-<default>} repeat_penalty=${REPEAT_PENALTY:-<default>}"
+fi
 echo "Starting llama-server with model: $MODEL"
 
-# Replace this process with llama-server
-exec "$LLAMA_SERVER_BIN" \
-    -m "$MODEL" \
-    --alias "$ALIAS" \
-    --host "$HOST" \
-    --port "$PORT" \
-    --api-key "$API_KEY" \
-    -ngl "$GPU_LAYERS" \
-    -c "$CONTEXT_LENGTH" \
-    -np "$PARALLEL_SLOTS" \
-    -fa "$FLASH_ATTENTION" \
-    --cache-type-k "$CACHE_TYPE_K" \
+cmd=(
+    "$LLAMA_SERVER_BIN"
+    -m "$MODEL"
+    --alias "$ALIAS"
+    --host "$HOST"
+    --port "$PORT"
+    --api-key "$API_KEY"
+    -ngl "$GPU_LAYERS"
+    -c "$CONTEXT_LENGTH"
+    -np "$PARALLEL_SLOTS"
+    -fa "$FLASH_ATTENTION"
+    --cache-type-k "$CACHE_TYPE_K"
     --cache-type-v "$CACHE_TYPE_V"
+)
+
+# Some profiles publish known-good decoding defaults. Only pass them through
+# when the selected overlay sets them.
+[ -n "${TEMPERATURE:-}" ] && cmd+=( --temp "$TEMPERATURE" )
+[ -n "${TOP_P:-}" ] && cmd+=( --top-p "$TOP_P" )
+[ -n "${TOP_K:-}" ] && cmd+=( --top-k "$TOP_K" )
+[ -n "${REPEAT_PENALTY:-}" ] && cmd+=( --repeat-penalty "$REPEAT_PENALTY" )
+
+# Replace this process with llama-server
+exec "${cmd[@]}"

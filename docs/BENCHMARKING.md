@@ -16,6 +16,8 @@ Keep comparisons fair:
 - Restart the server or discard the first run if you want to reduce warmup effects.
 - Record GPU, driver, CUDA version, context length, and quantization.
 
+For selector-backed profiles, also record the active `MODEL_PROFILE`. Some overlays carry decoding defaults. In particular, `gemma4-e4b-obliterated` injects `--temp 0.7 --top-p 0.9 --top-k 40 --repeat-penalty 1.1` through the launcher.
+
 ## 1. Raw llama.cpp throughput
 
 Use `llama-bench` for GGUF runtime comparisons:
@@ -32,6 +34,13 @@ Or use the helper:
   --model-file ~/models/mythos-26b-a4b-prism-pro-dq.gguf \
   --runs 3 \
   --label mythos-llama-bench
+```
+
+```bash
+./scripts/benchmark.sh llama-bench \
+  --model-file ~/models/gemma-4-E4B-it-OBLITERATED-Q4_K_M.gguf \
+  --runs 3 \
+  --label gemma4-e4b-obliterated-llama-bench
 ```
 
 Look at the `pp` and `tg` rows in each log:
@@ -69,6 +78,13 @@ Repeat against the Gemma server on port `8001`.
   --iterations 5 \
   --max-tokens 256 \
   --label mythos-api
+
+./scripts/benchmark.sh api \
+  --base-url http://127.0.0.1:8000/v1 \
+  --model gemma-4-E4B-it-OBLITERATED \
+  --iterations 5 \
+  --max-tokens 256 \
+  --label gemma4-e4b-obliterated-api
 
 ./scripts/benchmark.sh api \
   --base-url http://127.0.0.1:8001/v1 \
@@ -155,4 +171,5 @@ See [SWE-BENCH.md](SWE-BENCH.md) for the dedicated playbook.
 | Model | Runtime | Prompt len | Output len | Req/s | TTFT | tok/s | Task score notes |
 |---|---|---|---|---|---|---|---|
 | MYTHOS-26B-A4B | llama.cpp | 2048 | 256 | 1 | | | |
+| gemma-4-E4B-it-OBLITERATED | llama.cpp | 2048 | 256 | 1 | | | |
 | gemma-4-31B-it-NVFP4-turbo | vLLM | 2048 | 256 | 1 | | | |

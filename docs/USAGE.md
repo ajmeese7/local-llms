@@ -26,7 +26,7 @@ curl http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-Any tool that speaks the OpenAI API can target `http://<your-ip>:8000/v1`. The active model comes from the GPU config plus `/etc/llama-server/active-model.conf`, not from the GPU config alone.
+Any tool that speaks the OpenAI API can target `http://<your-ip>:8000/v1`. The active model comes from the GPU config plus `/etc/llama-server/active-model.conf`, not from the GPU config alone. Some overlays also set runtime decoding defaults, so the effective behavior is the combination of the GPU base config and the selected model overlay.
 
 The shipped default API key is `change-this-key`. Replace it in the GPU base config before treating the service as reachable on your LAN.
 
@@ -61,7 +61,7 @@ sudo nano /etc/llama-server/rtx-5090.conf  # example for RTX 5090
 # Switch the active MODEL_PROFILE
 sudo /etc/llama-server/select-model.sh
 
-# Edit the active overlay only if you are intentionally changing overlay-owned model metadata
+# Edit the active overlay only if you are intentionally changing overlay-owned model metadata or per-model decoding overrides
 sudo nano /etc/llama-server/qwen35-27b.conf  # example overlay on RTX 5090
 
 # Update llama.cpp
