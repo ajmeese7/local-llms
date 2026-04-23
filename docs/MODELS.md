@@ -9,7 +9,6 @@ With Q4_K_M quantization, models up to about the high-20B/low-30B range fit comf
 | Model | Runtime | Quant | Size | Notes |
 |---|---|---|---|---|
 | Qwen3.6-27B | llama.cpp | Q8_0 | 28.6GB | Default RTX 5090 profile in this repo; uses shorter 32K context |
-| Qwen3.5-27B | llama.cpp | Q4_K_M | 16.5GB | Alternate RTX 5090 profile with more headroom for long context |
 | MYTHOS-26B-A4B-PRISM-PRO-DQ | llama.cpp | PRISM-DQ GGUF | ~17GB | Supported RTX 5090 profile via `mythos` |
 | Gemma 4 E4B IT OBLITERATED | llama.cpp | Q4_K_M | 4.9GB | Supported on both GPUs via `gemma4-e4b-obliterated` |
 | Gemma 4 31B IT NVFP4 Turbo | vLLM | NVFP4 | ~18.5 GiB GPU memory | Best treated as a separate Blackwell-only server |
@@ -21,9 +20,8 @@ With Q4_K_M, models up to about 14B fit comfortably.
 
 | Model | Runtime | Quant | Size | Notes |
 |---|---|---|---|---|
-| Qwen3.5-9B | llama.cpp | Q4_K_M | ~5.5GB | Great balance of speed and quality |
+| Qwen3.5-9B | llama.cpp | Q4_K_M | ~5.5GB | Default 5060 Ti profile |
 | Gemma 4 E4B IT OBLITERATED | llama.cpp | Q4_K_M | 4.9GB | Supported alternate profile via `gemma4-e4b-obliterated` |
-| Qwen2.5-14B | llama.cpp | Q4_K_M | ~8.5GB | Larger model, shorter context |
 | Llama-3.1-8B | llama.cpp | Q4_K_M | ~4.9GB | Fast and dependable |
 
 ## Supported RTX 5090 Profiles
@@ -162,8 +160,8 @@ That exposes a second OpenAI-compatible endpoint on `http://127.0.0.1:8001/v1`.
 - `gemma4-e4b-obliterated` is supported on both GPUs and uses the upstream OBLITERATUS Q4_K_M GGUF as the common cross-GPU benchmark target.
 - The `gemma4-e4b-obliterated.conf` overlay also applies the model card's recommended `temperature`, `top_p`, `top_k`, and `repeat_penalty`.
 - `qwen36-27b` is the default RTX 5090 profile and uses the `ggml-org` GGUF build of the upstream `Qwen/Qwen3.6-27B` release.
-- `qwen35-27b` remains available on RTX 5090 if you want the smaller `Q4_K_M` artifact with more context headroom.
-- `mythos` is supported on RTX 5090 through the `SUPPORTED_MODEL_PROFILES="qwen36-27b qwen35-27b mythos gemma4-e4b-obliterated"` base config and the `mythos.conf` overlay.
+- `mythos` is supported on RTX 5090 through the `SUPPORTED_MODEL_PROFILES="qwen36-27b mythos gemma4-e4b-obliterated"` base config and the `mythos.conf` overlay.
+- `gemma4-e4b-obliterated` remains the alternate RTX 5060 Ti profile.
 - `gemma-4-31B-it-NVFP4-turbo` explicitly targets Blackwell FP4 tensor cores and the model card calls for at least 20 GB VRAM.
 - If you run out of VRAM, reduce `CONTEXT_LENGTH` before switching to a smaller model. The `q4_0` KV cache also helps.
 

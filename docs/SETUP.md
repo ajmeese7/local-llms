@@ -119,15 +119,15 @@ curl -L --progress-bar \
   https://huggingface.co/ggml-org/Qwen3.6-27B-GGUF/resolve/main/Qwen3.6-27B-Q8_0.gguf \
   -o ~/models/Qwen3.6-27B-Q8_0.gguf
 
-# Optional RTX 5090 alternate: previous Qwen3.5 profile
-curl -L --progress-bar \
-  https://huggingface.co/Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF/resolve/main/Qwen3.5-27B.Q4_K_M.gguf \
-  -o ~/models/Qwen3.5-27B.Q4_K_M.gguf
-
 # RTX 5060 Ti default
 curl -L --progress-bar \
   https://huggingface.co/huihui-ai/Huihui-Qwen3.5-9B-abliterated-GGUF/resolve/main/huihui-qwen3.5-9b-abliterated-q4_k_m.gguf \
   -o ~/models/Qwen3.5-9B.Q4_K_M.gguf
+
+# RTX 5060 Ti alternate
+curl -L --progress-bar \
+  https://huggingface.co/OBLITERATUS/gemma-4-E4B-it-OBLITERATED/resolve/main/gemma-4-E4B-it-OBLITERATED-Q4_K_M.gguf \
+  -o ~/models/gemma-4-E4B-it-OBLITERATED-Q4_K_M.gguf
 
 # Optional RTX 5090 experiment: MYTHOS
 curl -L --progress-bar \

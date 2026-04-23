@@ -32,7 +32,7 @@ The detailed guides now live under [`docs/`](docs/README.md).
 | [docs/SETUP.md](docs/SETUP.md) | Prerequisites, CUDA install, quick start, and manual setup |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | GPU config files, launcher behavior, and model switching |
 | [docs/USAGE.md](docs/USAGE.md) | Web UI, API examples, compatible apps, and useful commands |
-| [docs/MODELS.md](docs/MODELS.md) | Model recommendations and notes for MYTHOS, Gemma E4B OBLITERATED, and Gemma NVFP4 |
+| [docs/MODELS.md](docs/MODELS.md) | Model recommendations and notes for Qwen3.6, MYTHOS, Gemma E4B OBLITERATED, and Gemma NVFP4 |
 | [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | `llama-bench`, API timing, `lm-eval`, compare mode, and benchmark workflow |
 | [docs/SWE-BENCH.md](docs/SWE-BENCH.md) | Software-task benchmarking playbook for SWE-bench |
 | [docs/WSL2.md](docs/WSL2.md) | Networking, auto-start, and keep-alive guidance for WSL2 |
