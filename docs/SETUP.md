@@ -116,6 +116,11 @@ mkdir -p ~/models
 
 # RTX 5090 default
 curl -L --progress-bar \
+  https://huggingface.co/ggml-org/Qwen3.6-27B-GGUF/resolve/main/Qwen3.6-27B-Q8_0.gguf \
+  -o ~/models/Qwen3.6-27B-Q8_0.gguf
+
+# Optional RTX 5090 alternate: previous Qwen3.5 profile
+curl -L --progress-bar \
   https://huggingface.co/Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF/resolve/main/Qwen3.5-27B.Q4_K_M.gguf \
   -o ~/models/Qwen3.5-27B.Q4_K_M.gguf
 
@@ -131,6 +136,8 @@ curl -L --progress-bar \
 ```
 
 For more model options, see [MODELS.md](MODELS.md).
+
+The upstream `Qwen/Qwen3.6-27B` release is published in Transformers/Safetensors format. This repo's `llama.cpp` path uses the corresponding `ggml-org/Qwen3.6-27B-GGUF` Q8_0 build for the RTX 5090 default profile.
 
 ### 4. Copy runtime configs, overlays, and scripts
 

@@ -8,8 +8,8 @@ With Q4_K_M quantization, models up to about the high-20B/low-30B range fit comf
 
 | Model | Runtime | Quant | Size | Notes |
 |---|---|---|---|---|
-| Qwen3.5-27B | llama.cpp | Q4_K_M | 16.5GB | Default profile for this repo on RTX 5090 |
-| Qwen3.5-27B | llama.cpp | Q8_0 | 28.6GB | Higher quality, shorter context |
+| Qwen3.6-27B | llama.cpp | Q8_0 | 28.6GB | Default RTX 5090 profile in this repo; uses shorter 32K context |
+| Qwen3.5-27B | llama.cpp | Q4_K_M | 16.5GB | Alternate RTX 5090 profile with more headroom for long context |
 | MYTHOS-26B-A4B-PRISM-PRO-DQ | llama.cpp | PRISM-DQ GGUF | ~17GB | Supported RTX 5090 profile via `mythos` |
 | Gemma 4 E4B IT OBLITERATED | llama.cpp | Q4_K_M | 4.9GB | Supported on both GPUs via `gemma4-e4b-obliterated` |
 | Gemma 4 31B IT NVFP4 Turbo | vLLM | NVFP4 | ~18.5 GiB GPU memory | Best treated as a separate Blackwell-only server |
@@ -27,6 +27,30 @@ With Q4_K_M, models up to about 14B fit comfortably.
 | Llama-3.1-8B | llama.cpp | Q4_K_M | ~4.9GB | Fast and dependable |
 
 ## Supported RTX 5090 Profiles
+
+### Qwen3.6-27B
+
+`Qwen/Qwen3.6-27B` is the new default RTX 5090 model in this repo, but the service uses the `ggml-org/Qwen3.6-27B-GGUF` `Q8_0` artifact because this runtime is built around `llama.cpp` / GGUF overlays rather than the upstream Transformers weights.
+
+The current overlay values are:
+
+```bash
+MODEL="$HOME/models/Qwen3.6-27B-Q8_0.gguf"
+HF_REPO="ggml-org/Qwen3.6-27B-GGUF"
+HF_FILE="Qwen3.6-27B-Q8_0.gguf"
+ALIAS="Qwen3.6-27B"
+CONTEXT_LENGTH=32768
+```
+
+Download:
+
+```bash
+curl -L --progress-bar \
+  https://huggingface.co/ggml-org/Qwen3.6-27B-GGUF/resolve/main/Qwen3.6-27B-Q8_0.gguf \
+  -o ~/models/Qwen3.6-27B-Q8_0.gguf
+```
+
+The upstream model card at `Qwen/Qwen3.6-27B` is a Transformers/Safetensors release, so it is not used directly by this repo's `llama-server` path.
 
 ### Gemma 4 E4B IT OBLITERATED
 
@@ -137,7 +161,9 @@ That exposes a second OpenAI-compatible endpoint on `http://127.0.0.1:8001/v1`.
 - `MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF` is realistic on 32 GB cards, but too large for the 16 GB profile in this repo.
 - `gemma4-e4b-obliterated` is supported on both GPUs and uses the upstream OBLITERATUS Q4_K_M GGUF as the common cross-GPU benchmark target.
 - The `gemma4-e4b-obliterated.conf` overlay also applies the model card's recommended `temperature`, `top_p`, `top_k`, and `repeat_penalty`.
-- `mythos` is supported on RTX 5090 through the `SUPPORTED_MODEL_PROFILES="qwen35-27b mythos"` base config and the `mythos.conf` overlay.
+- `qwen36-27b` is the default RTX 5090 profile and uses the `ggml-org` GGUF build of the upstream `Qwen/Qwen3.6-27B` release.
+- `qwen35-27b` remains available on RTX 5090 if you want the smaller `Q4_K_M` artifact with more context headroom.
+- `mythos` is supported on RTX 5090 through the `SUPPORTED_MODEL_PROFILES="qwen36-27b qwen35-27b mythos gemma4-e4b-obliterated"` base config and the `mythos.conf` overlay.
 - `gemma-4-31B-it-NVFP4-turbo` explicitly targets Blackwell FP4 tensor cores and the model card calls for at least 20 GB VRAM.
 - If you run out of VRAM, reduce `CONTEXT_LENGTH` before switching to a smaller model. The `q4_0` KV cache also helps.
 

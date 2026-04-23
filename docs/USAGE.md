@@ -62,7 +62,7 @@ sudo nano /etc/llama-server/rtx-5090.conf  # example for RTX 5090
 sudo /etc/llama-server/select-model.sh
 
 # Edit the active overlay only if you are intentionally changing overlay-owned model metadata or per-model decoding overrides
-sudo nano /etc/llama-server/qwen35-27b.conf  # example overlay on RTX 5090
+sudo nano /etc/llama-server/qwen36-27b.conf  # example overlay on RTX 5090
 
 # Update llama.cpp
 cd ~/.local/share/llama.cpp && git pull
