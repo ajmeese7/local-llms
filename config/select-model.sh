@@ -7,11 +7,25 @@ set -euo pipefail
 CONFIG_DIR="${LLAMA_CONFIG_DIR:-/etc/llama-server}"
 ACTIVE_MODEL_FILE="$CONFIG_DIR/active-model.conf"
 NVIDIA_SMI_BIN="${NVIDIA_SMI_BIN:-/usr/lib/wsl/lib/nvidia-smi}"
+COMMON_HELPERS="$CONFIG_DIR/runtime-common.sh"
+SERVICE_NAME="${LLAMA_SERVICE_NAME:-llama-server}"
 
 die() {
     echo "ERROR: $*" >&2
     exit 1
 }
+
+confirm() {
+    local prompt="$1"
+    local reply
+    printf '\033[1;36m[???]\033[0m  %s [y/N] ' "$prompt"
+    read -r reply
+    [[ "$reply" =~ ^[Yy]$ ]]
+}
+
+[ -f "$COMMON_HELPERS" ] || die "Shared runtime helpers not found: $COMMON_HELPERS"
+# shellcheck source=/dev/null
+source "$COMMON_HELPERS"
 
 profile_supported() {
     local needle="$1"
@@ -79,6 +93,116 @@ write_active_model_profile() {
     fi
 }
 
+resolve_service_user() {
+    local service_user=""
+
+    if command -v systemctl >/dev/null 2>&1; then
+        service_user="$(systemctl show -p User --value "$SERVICE_NAME" 2>/dev/null || true)"
+    fi
+
+    if [ -z "$service_user" ] && [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
+        service_user="$(sed -n 's/^User=//p' "/etc/systemd/system/${SERVICE_NAME}.service" | head -1)"
+    fi
+
+    [ -n "$service_user" ] || service_user="${USER:-}"
+    printf '%s\n' "$service_user"
+}
+
+resolve_service_home() {
+    local service_user="$1"
+    local service_home=""
+
+    if command -v systemctl >/dev/null 2>&1; then
+        service_home="$(systemctl show -p WorkingDirectory --value "$SERVICE_NAME" 2>/dev/null || true)"
+    fi
+
+    if [ -z "$service_home" ] && [ -n "$service_user" ]; then
+        service_home="$(getent passwd "$service_user" | cut -d: -f6)"
+    fi
+
+    [ -n "$service_home" ] || service_home="${HOME:-}"
+    printf '%s\n' "$service_home"
+}
+
+run_as_service_user() {
+    local script="$1"
+    shift
+
+    if [ "$(id -un)" = "$RUNTIME_USER" ]; then
+        HOME="$RUNTIME_HOME" bash -lc "$script" _ "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo -u "$RUNTIME_USER" env HOME="$RUNTIME_HOME" bash -lc "$script" _ "$@"
+    else
+        die "Running commands as $RUNTIME_USER requires sudo; rerun with sudo"
+    fi
+}
+
+load_overlay_metadata() {
+    local profile="$1"
+    local overlay_file="$CONFIG_DIR/$profile.conf"
+    local original_home="${HOME:-}"
+
+    [ -f "$overlay_file" ] || return 1
+
+    HOME="$RUNTIME_HOME"
+    MODEL=""
+    HF_REPO=""
+    HF_FILE=""
+    ALIAS=""
+    # shellcheck source=/dev/null
+    source "$overlay_file"
+    HOME="$original_home"
+    [ -n "${MODEL:-}" ] || return 1
+    return 0
+}
+
+load_overlay_model_path() {
+    local profile="$1"
+
+    load_overlay_metadata "$profile" || return 1
+    printf '%s\n' "$MODEL"
+}
+
+download_profile_model() {
+    local profile="$1"
+    local model_state
+    local prompt
+
+    load_overlay_metadata "$profile" || die "Could not load metadata for profile $profile"
+    [ -n "$HF_REPO" ] || die "Profile $profile does not define HF_REPO"
+    [ -n "$HF_FILE" ] || die "Profile $profile does not define HF_FILE"
+
+    model_state="$(model_file_state "$MODEL")"
+    case "$model_state" in
+        installed)
+            return 0
+            ;;
+        empty)
+            prompt="Re-download $profile to $MODEL?"
+            ;;
+        missing)
+            prompt="Download $profile to $MODEL?"
+            ;;
+        *)
+            die "Unknown model state '$model_state' for $MODEL"
+            ;;
+    esac
+
+    if ! confirm "$prompt"; then
+        return 1
+    fi
+
+    run_as_service_user 'mkdir -p "$(dirname "$1")"' "$MODEL"
+    run_as_service_user 'curl -L --fail --progress-bar "https://huggingface.co/$2/resolve/main/$3" -o "$1"' "$MODEL" "$HF_REPO" "$HF_FILE"
+
+    if ! model_file_is_ready "$MODEL"; then
+        die "Download completed but model is still unavailable: $MODEL"
+    fi
+
+    echo "Downloaded model: $MODEL"
+    return 0
+}
+
 # Fallback to PATH if the WSL-specific path doesn't exist.
 if [ ! -x "$NVIDIA_SMI_BIN" ]; then
     NVIDIA_SMI_BIN="nvidia-smi"
@@ -105,6 +229,9 @@ echo "Using GPU config: $config_file"
 # shellcheck source=/dev/null
 source "$config_file"
 
+RUNTIME_USER="$(resolve_service_user)"
+RUNTIME_HOME="$(resolve_service_home "$RUNTIME_USER")"
+
 [ -n "${SUPPORTED_MODEL_PROFILES:-}" ] || die "Required config field 'SUPPORTED_MODEL_PROFILES' is not set in $config_file"
 
 current_profile="$(load_active_model_profile "$ACTIVE_MODEL_FILE")"
@@ -130,10 +257,24 @@ echo "Available model profiles for $gpu_name:"
 index=1
 for profile in $SUPPORTED_MODEL_PROFILES; do
     marker=""
+    install_marker="unknown"
     if [ "$profile" = "${current_profile:-}" ]; then
         marker=" (current)"
     fi
-    printf '  %d) %s%s\n' "$index" "$profile" "$marker"
+    if model_path="$(load_overlay_model_path "$profile")"; then
+        case "$(model_file_state "$model_path")" in
+            installed)
+                install_marker="installed"
+                ;;
+            empty)
+                install_marker="empty file"
+                ;;
+            missing)
+                install_marker="missing"
+                ;;
+        esac
+    fi
+    printf '  %d) %s [%s]%s\n' "$index" "$profile" "$install_marker" "$marker"
     index=$((index + 1))
 done
 
@@ -159,6 +300,18 @@ done
 
 [ -n "$selected_profile" ] || die "Selection must be a number between 1 and $((index - 1))"
 
+if selected_model_path="$(load_overlay_model_path "$selected_profile")"; then
+    case "$(model_file_state "$selected_model_path")" in
+        installed)
+            echo "Model path: $selected_model_path"
+            ;;
+        empty|missing)
+            echo "Model path: $selected_model_path"
+            download_profile_model "$selected_profile" || die "Selection cancelled; active profile unchanged."
+            ;;
+    esac
+fi
+
 write_active_model_profile "$selected_profile"
 
 echo "Wrote $ACTIVE_MODEL_FILE"
@@ -167,6 +320,9 @@ echo "Selected profile: $selected_profile"
 read -r -p "Restart llama-server now? [y/N] " reply
 case "$reply" in
     [Yy]|[Yy][Ee][Ss])
+        if [ -n "${selected_model_path:-}" ] && ! model_file_is_ready "$selected_model_path"; then
+            die "Selected profile is still not installed: $selected_model_path"
+        fi
         if [ "${EUID:-$(id -u)}" -eq 0 ]; then
             systemctl restart llama-server
         elif command -v sudo >/dev/null 2>&1; then

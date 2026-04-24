@@ -74,7 +74,7 @@ git clone https://github.com/ajmeese7/local-llms.git
 cd local-llms
 
 # Review the config for your GPU, such as `config/rtx-5090.conf` or `config/rtx-5060.conf`,
-# and replace the default API key before exposing the service on your network
+# and optionally set API_KEY before exposing the service on your network
 nano config/rtx-5090.conf  # example for RTX 5090
 
 # Run the interactive setup
@@ -84,9 +84,9 @@ nano config/rtx-5090.conf  # example for RTX 5090
 sudo /etc/llama-server/select-model.sh
 ```
 
-The setup script auto-detects your GPU, builds `llama.cpp`, offers to download the resolved model, installs the runtime configs and scripts, and offers to enable the systemd service during Step 7 if you confirm. After setup, use the selector to switch profiles without editing the GPU config, but make sure the target profile's GGUF has been downloaded first.
+The setup script auto-detects your GPU, builds `llama.cpp`, offers to download the resolved model, installs the runtime configs and scripts, and offers to enable the systemd service during Step 7 if you confirm. If the resolved active profile points at a missing or empty GGUF, setup now skips service activation and tells you to use the selector to download that model or switch to an installed profile first.
 
-The checked-in default API key is literally `change-this-key`. Replace it before treating the service as reachable on your LAN or beyond.
+`API_KEY` is optional. Leave it unset to run without bearer auth, or set it before treating the service as reachable on your LAN or beyond.
 
 ## Manual Setup
 
@@ -145,10 +145,17 @@ The upstream `Qwen/Qwen3.6-27B` release is published in Transformers/Safetensors
 sudo mkdir -p /etc/llama-server
 sudo cp config/*.conf /etc/llama-server/
 sudo cp config/llama-launcher.sh /etc/llama-server/
+sudo cp config/runtime-common.sh /etc/llama-server/
 sudo cp config/select-model.sh /etc/llama-server/
 sudo chmod +x /etc/llama-server/llama-launcher.sh
 sudo chmod +x /etc/llama-server/select-model.sh
 ```
+
+Those runtime files have distinct roles:
+
+- `llama-launcher.sh`: systemd entrypoint that detects the GPU, resolves `MODEL_PROFILE`, sources the overlay, and execs `llama-server`.
+- `runtime-common.sh`: shared helper functions for local API readiness probes and optional auth flag/header handling.
+- `select-model.sh`: interactive selector that writes `/etc/llama-server/active-model.conf`, shows whether each supported profile is installed, missing, or empty, and can download the selected model before restart.
 
 Edit the GPU base config for your card:
 
@@ -168,7 +175,8 @@ sudo cp config/llama-server.service /etc/systemd/system/llama-server.service
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now llama-server
+sudo systemctl enable llama-server
+sudo systemctl restart llama-server
 ```
 
 ### 7. Verify
@@ -176,7 +184,7 @@ sudo systemctl enable --now llama-server
 ```bash
 systemctl status llama-server
 curl http://127.0.0.1:8000/v1/models \
-  -H "Authorization: Bearer <your-key>"
+  -H "Authorization: Bearer <your-key>"  # only if API_KEY is set
 ```
 
 ## Next Steps
@@ -189,4 +197,4 @@ curl http://127.0.0.1:8000/v1/models \
 
 Rerunning `./setup.sh` copies the runtime-managed configs and scripts into `/etc/llama-server` again. Existing runtime files are preserved as `.bak` before replacement, and if a `.bak` already exists it is archived to a timestamped backup first.
 
-If you had custom edits in `/etc/llama-server`, compare them against the new files after reinstalling. Secrets such as `API_KEY` may need to be merged forward from the backup copy into the new active config.
+If you had custom edits in `/etc/llama-server`, compare them against the new files after reinstalling. Intentional overrides such as `API_KEY` may need to be merged forward from the backup copy into the new active config.

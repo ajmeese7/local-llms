@@ -11,7 +11,16 @@ The runtime configuration is layered:
 5. It sources the matching overlay file such as `qwen36-27b.conf` or `mythos.conf`.
 6. It launches `llama-server` with the combined values from the GPU config and overlay, including any optional per-model runtime overrides.
 
-The standalone selector at `/etc/llama-server/select-model.sh` uses the same GPU matching and supported-profile metadata, then writes `active-model.conf` for the next service restart.
+The standalone selector at `/etc/llama-server/select-model.sh` uses the same GPU matching and supported-profile metadata, then writes `active-model.conf` for the next service restart. Shared readiness-probe and auth-flag behavior lives in `config/runtime-common.sh`, which is copied into `/etc/llama-server/` alongside the launcher and selector.
+
+## Runtime Scripts
+
+| File | Role |
+|---|---|
+| [`setup.sh`](../setup.sh) | Interactive installer that builds `llama.cpp`, installs runtime files, restarts `llama-server`, and polls `/v1/models` with bounded local curl timeouts |
+| [`config/llama-launcher.sh`](../config/llama-launcher.sh) | Runtime entrypoint used by systemd; detects GPU, resolves the active profile, loads the overlay, and execs `llama-server` |
+| [`config/runtime-common.sh`](../config/runtime-common.sh) | Shared shell helpers for setup-time readiness probes and optional API key handling |
+| [`config/select-model.sh`](../config/select-model.sh) | Interactive model-profile selector that writes `/etc/llama-server/active-model.conf`, shows install state, and can download the selected model before restart |
 
 ## GPU Base Configs
 
@@ -33,7 +42,7 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 2. Set `DEFAULT_MODEL_PROFILE` and `SUPPORTED_MODEL_PROFILES` for the new card.
 3. Adjust the hardware-specific values such as `CONTEXT_LENGTH`, `GPU_LAYERS`, and cache settings.
 4. Add matching logic in [`config/llama-launcher.sh`](../config/llama-launcher.sh) and [`config/select-model.sh`](../config/select-model.sh) if the GPU name pattern is new.
-5. Re-run `./setup.sh` or manually copy the updated runtime files into `/etc/llama-server/`.
+5. Re-run `./setup.sh` or manually copy the updated runtime files into `/etc/llama-server/`, including [`config/runtime-common.sh`](../config/runtime-common.sh).
 
 ## Config Options
 
@@ -47,7 +56,7 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 | `TEMPERATURE` / `TOP_P` / `TOP_K` / `REPEAT_PENALTY` | Optional per-model decoding overrides from the overlay |
 | `HOST` | Bind address |
 | `PORT` | API port |
-| `API_KEY` | Required bearer token for requests |
+| `API_KEY` | Optional bearer token for requests; leave unset or empty to disable auth |
 | `GPU_LAYERS` | Layers to offload to GPU |
 | `CONTEXT_LENGTH` | Max context length in tokens |
 | `PARALLEL_SLOTS` | Concurrent request slots |
@@ -67,7 +76,7 @@ To switch models:
    sudo /etc/llama-server/select-model.sh
    ```
 2. Choose one of the profiles listed for the detected GPU.
-3. Make sure the selected profile's GGUF has already been downloaded locally.
+3. If the selected profile is marked `missing` or `empty file`, let the selector download or re-download it before restart.
 4. Restart the service if the selector does not do it automatically:
    ```bash
    sudo systemctl restart llama-server

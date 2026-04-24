@@ -11,7 +11,7 @@ git clone https://github.com/ajmeese7/local-llms.git
 cd local-llms
 
 # Review the config for your GPU, such as `config/rtx-5090.conf` or `config/rtx-5060.conf`
-# and change the default API key before exposing the service on your network
+# and optionally set API_KEY before exposing the service on your network
 nano config/rtx-5090.conf  # example for RTX 5090
 
 # Run the interactive setup
@@ -21,7 +21,7 @@ nano config/rtx-5090.conf  # example for RTX 5090
 sudo /etc/llama-server/select-model.sh
 ```
 
-The GPU config owns hardware defaults and the API key. The checked-in default API key is literally `change-this-key`, so replace it before treating the service as reachable on your LAN. After setup installs the runtime files into `/etc/llama-server/`, use the selector to switch between supported model profiles without editing the GPU config again. If you choose a profile whose GGUF is not present locally yet, the next service start will fail until you download that model.
+The GPU config owns hardware defaults and optional authentication. Leave `API_KEY` unset to run without bearer auth, or set it before treating the service as reachable on your LAN. After setup installs the runtime files into `/etc/llama-server/`, use the selector to switch between supported model profiles without editing the GPU config again. The selector shows whether each supported profile is installed, missing, or backed by an empty file, and can download the selected model before restart when needed.
 
 ## Documentation
 
@@ -38,6 +38,16 @@ The detailed guides now live under [`docs/`](docs/README.md).
 | [docs/WSL2.md](docs/WSL2.md) | Networking, auto-start, and keep-alive guidance for WSL2 |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | CUDA, OOM, service startup, and build failures |
 | [docs/DRIVER-RECOVERY.md](docs/DRIVER-RECOVERY.md) | NVIDIA driver recovery after a broken install |
+
+## Runtime Scripts
+
+The main operational entrypoints are:
+
+- [`setup.sh`](setup.sh): interactive installer that builds `llama.cpp`, installs runtime files into `/etc/llama-server`, restarts the service, and waits for the local API to respond with bounded readiness checks.
+- [`config/llama-launcher.sh`](config/llama-launcher.sh): systemd entrypoint that detects the GPU, resolves the active model profile, loads the overlay, and execs `llama-server`.
+- [`config/runtime-common.sh`](config/runtime-common.sh): shared shell helpers used by setup-time API verification and launcher-time optional `--api-key` handling.
+- [`config/select-model.sh`](config/select-model.sh): writes `/etc/llama-server/active-model.conf` for the next restart.
+- [`scripts/benchmark.sh`](scripts/benchmark.sh): benchmark helper for `llama-bench`, API timing, compare mode, and `lm-eval`.
 
 ## Suggested Reading Paths
 

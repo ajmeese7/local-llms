@@ -7,11 +7,16 @@ set -euo pipefail
 CONFIG_DIR="${LLAMA_CONFIG_DIR:-/etc/llama-server}"
 LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-$HOME/.local/share/llama.cpp/build/bin/llama-server}"
 NVIDIA_SMI_BIN="${NVIDIA_SMI_BIN:-/usr/lib/wsl/lib/nvidia-smi}"
+COMMON_HELPERS="$CONFIG_DIR/runtime-common.sh"
 
 die() {
     echo "ERROR: $*" >&2
     exit 1
 }
+
+[ -f "$COMMON_HELPERS" ] || die "Shared runtime helpers not found: $COMMON_HELPERS"
+# shellcheck source=/dev/null
+source "$COMMON_HELPERS"
 
 profile_supported() {
     local needle="$1"
@@ -93,6 +98,7 @@ fi
 echo "Using GPU config: $config_file"
 
 # Source the GPU config (sets hardware defaults, secrets, and profile metadata).
+API_KEY=""
 # shellcheck source=/dev/null
 source "$config_file"
 
@@ -109,14 +115,21 @@ overlay_file="$CONFIG_DIR/$active_profile.conf"
 # shellcheck source=/dev/null
 source "$overlay_file"
 
-for required_field in MODEL ALIAS HOST PORT API_KEY GPU_LAYERS CONTEXT_LENGTH PARALLEL_SLOTS FLASH_ATTENTION CACHE_TYPE_K CACHE_TYPE_V; do
+for required_field in MODEL ALIAS HOST PORT GPU_LAYERS CONTEXT_LENGTH PARALLEL_SLOTS FLASH_ATTENTION CACHE_TYPE_K CACHE_TYPE_V; do
     if [ -z "${!required_field:-}" ]; then
         die "Required config field '$required_field' is not set after loading $config_file and $overlay_file"
     fi
 done
 
-if [ ! -f "$MODEL" ]; then
-    die "Model file not found: $MODEL"
+if ! model_file_is_ready "$MODEL"; then
+    case "$(model_file_state "$MODEL")" in
+        empty)
+            die "Model file exists but is empty: $MODEL"
+            ;;
+        *)
+            die "Model file not found: $MODEL"
+            ;;
+    esac
 fi
 
 if [ ! -x "$LLAMA_SERVER_BIN" ]; then
@@ -137,7 +150,6 @@ cmd=(
     --alias "$ALIAS"
     --host "$HOST"
     --port "$PORT"
-    --api-key "$API_KEY"
     -ngl "$GPU_LAYERS"
     -c "$CONTEXT_LENGTH"
     -np "$PARALLEL_SLOTS"
@@ -145,6 +157,7 @@ cmd=(
     --cache-type-k "$CACHE_TYPE_K"
     --cache-type-v "$CACHE_TYPE_V"
 )
+append_llama_api_key_flag cmd "${API_KEY:-}"
 
 # Some profiles publish known-good decoding defaults. Only pass them through
 # when the selected overlay sets them.

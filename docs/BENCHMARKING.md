@@ -121,7 +121,7 @@ Use EleutherAI's `lm-evaluation-harness` against your local API:
 ```bash
 pip install "lm_eval[api]"
 
-export OPENAI_API_KEY=change-this-key
+export OPENAI_API_KEY=your-configured-api-key  # only if the local server requires auth
 
 lm_eval \
   --model local-completions \

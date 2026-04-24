@@ -10,8 +10,12 @@ LLAMA_DIR="$HOME/.local/share/llama.cpp"
 MODELS_DIR="$HOME/models"
 SERVICE_SRC="$CONFIG_DIR/llama-server.service"
 LAUNCHER_SRC="$CONFIG_DIR/llama-launcher.sh"
+COMMON_HELPERS_SRC="$CONFIG_DIR/runtime-common.sh"
 DEST_DIR="/etc/llama-server"
 SERVICE_DEST="/etc/systemd/system/llama-server.service"
+
+# shellcheck source=/dev/null
+source "$COMMON_HELPERS_SRC"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,6 +161,30 @@ source_model_overlay_prefer_runtime() {
     fi
 
     return 1
+}
+
+resolve_runtime_model_path() {
+    local gpu_config_file="$1"
+    local active_model_file="$2"
+    local profile
+
+    [ -f "$gpu_config_file" ] || return 1
+
+    API_KEY=""
+    MODEL=""
+    SUPPORTED_MODEL_PROFILES=""
+    DEFAULT_MODEL_PROFILE=""
+    # shellcheck source=/dev/null
+    source "$gpu_config_file"
+
+    profile="$(resolve_model_profile "$active_model_file")" || return 1
+
+    if ! source_model_overlay_prefer_runtime "$profile" >/dev/null; then
+        return 1
+    fi
+
+    [ -n "${MODEL:-}" ] || return 1
+    printf '%s\n' "$MODEL"
 }
 
 # ── Step 1: Prerequisites ───────────────────────────────────────────────────
@@ -329,22 +357,38 @@ echo ""
 # ── Step 4: Download model ──────────────────────────────────────────────────
 
 if [ -n "$matched_config" ] && [ -n "${MODEL:-}" ]; then
-    if [ -f "$MODEL" ]; then
-        model_size=$(du -h "$MODEL" | cut -f1)
-        ok "Model already downloaded: $MODEL ($model_size)"
-    else
-        info "Model: ${HF_REPO}/${HF_FILE}"
-        if confirm "Download model to $MODEL?"; then
-            mkdir -p "$MODELS_DIR"
-            info "Downloading $HF_FILE (this may take a while)..."
-            curl -L --progress-bar \
-                "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" \
-                -o "$MODEL"
-            ok "Model downloaded"
-        else
-            warn "Skipping model download. The service will fail without it."
-        fi
-    fi
+    case "$(model_file_state "$MODEL")" in
+        installed)
+            model_size=$(du -h "$MODEL" | cut -f1)
+            ok "Model already downloaded: $MODEL ($model_size)"
+            ;;
+        empty)
+            warn "Model file exists but is empty: $MODEL"
+            if confirm "Re-download model to $MODEL?"; then
+                mkdir -p "$MODELS_DIR"
+                info "Downloading $HF_FILE (this may take a while)..."
+                curl -L --fail --progress-bar \
+                    "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" \
+                    -o "$MODEL"
+                ok "Model downloaded"
+            else
+                warn "Skipping model download. The service will fail without a valid GGUF."
+            fi
+            ;;
+        missing)
+            info "Model: ${HF_REPO}/${HF_FILE}"
+            if confirm "Download model to $MODEL?"; then
+                mkdir -p "$MODELS_DIR"
+                info "Downloading $HF_FILE (this may take a while)..."
+                curl -L --fail --progress-bar \
+                    "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" \
+                    -o "$MODEL"
+                ok "Model downloaded"
+            else
+                warn "Skipping model download. The service will fail without it."
+            fi
+            ;;
+    esac
 else
     warn "No GPU config matched — skipping model download."
 fi
@@ -362,12 +406,14 @@ if [ ${#config_files[@]} -eq 0 ]; then
     exit 1
 fi
 
-if confirm "Copy runtime configs and scripts to $DEST_DIR? (${#config_files[@]} config file(s) + 2 script(s))"; then
+if confirm "Copy runtime configs and scripts to $DEST_DIR? (${#config_files[@]} config file(s) + 3 script(s))"; then
     sudo mkdir -p "$DEST_DIR"
     for f in "${config_files[@]}"; do
         install_runtime_file "$f"
         ok "Copied $(basename "$f")"
     done
+    install_runtime_file "$COMMON_HELPERS_SRC"
+    ok "Copied shared runtime helpers"
     install_runtime_file "$LAUNCHER_SRC"
     sudo chmod +x "$DEST_DIR/llama-launcher.sh"
     ok "Copied launcher script"
@@ -375,10 +421,10 @@ if confirm "Copy runtime configs and scripts to $DEST_DIR? (${#config_files[@]} 
     sudo chmod +x "$DEST_DIR/select-model.sh"
     ok "Copied model selector script"
     if [ -n "$matched_config" ]; then
-        warn "Edit $DEST_DIR/$matched_config to set your API key before starting the service."
+        warn "Edit $DEST_DIR/$matched_config if you want to require an API key before exposing the service."
     fi
     warn "Existing runtime-managed files were preserved as *.bak before replacement."
-    warn "Merge secrets like API_KEY forward from the .bak copies before restarting the service."
+    warn "Merge any intentional local overrides forward from the .bak copies before restarting the service."
 else
     warn "Skipping config copy."
 fi
@@ -407,11 +453,25 @@ echo ""
 # ── Step 7: Reload systemd & enable service ─────────────────────────────────
 
 if confirm "Reload systemd and enable+start the llama-server service?"; then
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now llama-server
-    ok "Service enabled and started"
+    runtime_model_path=""
+    if [ -n "${matched_config:-}" ]; then
+        runtime_model_path="$(resolve_runtime_model_path "$DEST_DIR/$matched_config" "$DEST_DIR/active-model.conf" || true)"
+    fi
+
+    if [ -z "$runtime_model_path" ]; then
+        warn "Could not resolve the active runtime model from $DEST_DIR."
+        warn "Skipping service activation until the runtime config and overlays are complete."
+    elif ! model_file_is_ready "$runtime_model_path"; then
+        warn "Selected runtime model is not installed: $runtime_model_path"
+        warn "Use $DEST_DIR/select-model.sh to download that profile or switch to an installed one before restarting the service."
+    else
+        sudo systemctl daemon-reload
+        sudo systemctl enable llama-server
+        sudo systemctl restart llama-server
+        ok "Service enabled and restarted with the latest runtime config"
+    fi
 else
-    warn "Skipping service activation. Start manually with: sudo systemctl enable --now llama-server"
+    warn "Skipping service activation. Start manually with: sudo systemctl enable llama-server && sudo systemctl restart llama-server"
 fi
 
 echo ""
@@ -423,6 +483,7 @@ if systemctl is-active --quiet llama-server; then
     info "Waiting for the API to become available (model loading can take a moment)..."
 
     if [ -n "${matched_config:-}" ] && [ -f "$DEST_DIR/$matched_config" ]; then
+        API_KEY=""
         # shellcheck source=/dev/null
         source "$DEST_DIR/$matched_config"
     fi
@@ -432,18 +493,21 @@ if systemctl is-active --quiet llama-server; then
         fi
     fi
     port="${PORT:-8000}"
-    api_key="${API_KEY:-change-this-key}"
+    api_key="${API_KEY:-}"
 
     attempts=0
     max_attempts=30
     while [ $attempts -lt $max_attempts ]; do
-        if curl -sf "http://127.0.0.1:$port/v1/models" \
-             -H "Authorization: Bearer $api_key" >/dev/null 2>&1; then
+        probe_cmd=()
+        build_models_probe_command probe_cmd "$port" "$api_key"
+
+        if "${probe_cmd[@]}" >/dev/null 2>&1; then
             ok "API is responding!"
             echo ""
             info "Models available:"
-            curl -s "http://127.0.0.1:$port/v1/models" \
-                 -H "Authorization: Bearer $api_key" | python3 -m json.tool 2>/dev/null || true
+            fetch_cmd=()
+            build_models_fetch_command fetch_cmd "$port" "$api_key"
+            "${fetch_cmd[@]}" | python3 -m json.tool 2>/dev/null || true
             echo ""
             break
         fi
@@ -457,11 +521,19 @@ if systemctl is-active --quiet llama-server; then
     fi
 else
     info "Service is not running. Check status with: systemctl status llama-server"
+    if [ -n "${matched_config:-}" ]; then
+        runtime_model_path="$(resolve_runtime_model_path "$DEST_DIR/$matched_config" "$DEST_DIR/active-model.conf" || true)"
+        if [ -n "$runtime_model_path" ] && ! model_file_is_ready "$runtime_model_path"; then
+            warn "Resolved runtime model is unavailable: $runtime_model_path ($(model_file_state "$runtime_model_path"))"
+            warn "Switch to an installed profile with: sudo $DEST_DIR/select-model.sh"
+        fi
+    fi
 fi
 
 echo ""
 info "Setup complete. Useful commands:"
-echo "  systemctl status llama-server          # check service status"
-echo "  journalctl -u llama-server -f          # follow live logs"
-echo "  sudo systemctl restart llama-server    # restart after config changes"
-echo "  sudo nano $DEST_DIR/${matched_config:-rtx-XXXX.conf}  # edit config"
+printf '  %-42s # %s\n' "sudo $DEST_DIR/select-model.sh" "switch profiles or download a selected model"
+printf '  %-42s # %s\n' "systemctl status llama-server" "check service status"
+printf '  %-42s # %s\n' "journalctl -u llama-server -f" "follow live logs"
+printf '  %-42s # %s\n' "sudo systemctl restart llama-server" "restart after config changes"
+printf '  %-42s # %s\n' "sudo nano $DEST_DIR/${matched_config:-rtx-XXXX.conf}" "edit the active GPU base config"
