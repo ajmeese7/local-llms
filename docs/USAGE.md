@@ -5,18 +5,18 @@
 `llama-server` includes a chat interface. Open:
 
 ```text
-http://localhost:8000
+http://localhost:9999
 ```
 
 ## OpenAI-Compatible API
 
 ```bash
 # Inspect the active model alias first
-curl http://localhost:8000/v1/models \
+curl http://localhost:9999/v1/models \
   -H "Content-Type: application/json"
 
 # Then use the alias returned by /v1/models in chat completions
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:9999/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "<alias-from-/v1/models>",
@@ -26,7 +26,7 @@ curl http://localhost:8000/v1/chat/completions \
 
 If you set `API_KEY` in the GPU base config, add `-H "Authorization: Bearer <your-key>"` to those requests.
 
-Any tool that speaks the OpenAI API can target `http://<your-ip>:8000/v1`. The active model comes from the GPU config plus `/etc/llama-server/active-model.conf`, not from the GPU config alone. Some overlays also set runtime decoding defaults, so the effective behavior is the combination of the GPU base config and the selected model overlay.
+Any tool that speaks the OpenAI API can target `http://<your-ip>:9999/v1`. The active model comes from the GPU config plus `/etc/llama-server/active-model.conf`, not from the GPU config alone. Some overlays also set runtime decoding defaults, so the effective behavior is the combination of the GPU base config and the selected model overlay.
 
 `API_KEY` is optional. Leave it unset to run without bearer auth, or set it in the GPU base config before treating the service as reachable on your LAN.
 
@@ -52,10 +52,10 @@ journalctl -u llama-server -f
 journalctl -u llama-server --since "5m ago"
 
 # Test the API
-curl http://127.0.0.1:8000/v1/models
+curl http://127.0.0.1:9999/v1/models
 
 # If API_KEY is set, include the bearer token
-curl http://127.0.0.1:8000/v1/models \
+curl http://127.0.0.1:9999/v1/models \
   -H "Authorization: Bearer <your-key>"
 
 # Edit the GPU base config for hardware defaults and optional API key

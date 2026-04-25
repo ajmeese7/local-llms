@@ -57,7 +57,7 @@ If you want end-to-end timing against an OpenAI-compatible server, use `vllm ben
 ```bash
 vllm bench serve \
   --backend openai \
-  --base-url http://127.0.0.1:8000 \
+  --base-url http://127.0.0.1:9999 \
   --endpoint /v1/completions \
   --dataset-name random \
   --model MYTHOS-26B-A4B \
@@ -73,14 +73,14 @@ Repeat against the Gemma server on port `8001`.
 
 ```bash
 ./scripts/benchmark.sh api \
-  --base-url http://127.0.0.1:8000/v1 \
+  --base-url http://127.0.0.1:9999/v1 \
   --model MYTHOS-26B-A4B \
   --iterations 5 \
   --max-tokens 256 \
   --label mythos-api
 
 ./scripts/benchmark.sh api \
-  --base-url http://127.0.0.1:8000/v1 \
+  --base-url http://127.0.0.1:9999/v1 \
   --model gemma-4-E4B-it-OBLITERATED \
   --iterations 5 \
   --max-tokens 256 \
@@ -126,14 +126,14 @@ export OPENAI_API_KEY=your-configured-api-key  # only if the local server requir
 lm_eval \
   --model local-completions \
   --tasks gsm8k,hellaswag,mmlu \
-  --model_args model=MYTHOS-26B-A4B,base_url=http://127.0.0.1:8000/v1/completions,num_concurrent=1,max_retries=3,tokenized_requests=False,batch_size=1
+  --model_args model=MYTHOS-26B-A4B,base_url=http://127.0.0.1:9999/v1/completions,num_concurrent=1,max_retries=3,tokenized_requests=False,batch_size=1
 ```
 
 Helper version:
 
 ```bash
 ./scripts/benchmark.sh lm-eval \
-  --base-url http://127.0.0.1:8000/v1/completions \
+  --base-url http://127.0.0.1:9999/v1/completions \
   --model MYTHOS-26B-A4B \
   --tasks gsm8k,hellaswag,mmlu \
   --limit 50 \

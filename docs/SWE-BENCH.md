@@ -65,7 +65,7 @@ python -m swebench.harness.run_evaluation \
 
 Examples:
 
-- `llama.cpp` service from this repo on `http://127.0.0.1:8000/v1`
+- `llama.cpp` service from this repo on `http://127.0.0.1:9999/v1`
 - `vLLM` Gemma NVFP4 server on `http://127.0.0.1:8001/v1`
 
 Before spending time on SWE-bench, verify that the endpoint is stable under your usual local prompt load.

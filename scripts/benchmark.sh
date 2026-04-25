@@ -48,7 +48,7 @@ Subcommands:
     raw responses plus a TSV summary.
 
     Options:
-      --base-url URL         Base API URL, default: http://127.0.0.1:8000/v1
+      --base-url URL         Base API URL, default: http://127.0.0.1:9999/v1
       --model NAME           Model name reported by the API
       --mode MODE            completions or chat, default: completions
       --prompt TEXT          Inline prompt text
@@ -73,7 +73,7 @@ Subcommands:
     Run EleutherAI lm-eval against a local OpenAI-compatible endpoint.
 
     Options:
-      --base-url URL         Base API URL, default: http://127.0.0.1:8000/v1/completions
+      --base-url URL         Base API URL, default: http://127.0.0.1:9999/v1/completions
       --model NAME           Model name reported by the API
       --tasks LIST           Comma-separated task list
       --backend NAME         local-completions or local-chat-completions,
@@ -270,7 +270,7 @@ run_api_benchmark() {
     require_cmd curl
     require_cmd python3
 
-    local base_url="http://127.0.0.1:8000/v1"
+    local base_url="http://127.0.0.1:9999/v1"
     local model=""
     local mode="completions"
     local prompt="Summarize why consistent benchmark settings matter in one paragraph."
@@ -433,7 +433,7 @@ PY
 run_lm_eval() {
     require_cmd lm_eval
 
-    local base_url="http://127.0.0.1:8000/v1/completions"
+    local base_url="http://127.0.0.1:9999/v1/completions"
     local model=""
     local tasks=""
     local backend="local-completions"

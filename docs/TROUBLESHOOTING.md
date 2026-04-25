@@ -67,7 +67,7 @@ bind: Address already in use
 Find the conflict:
 
 ```bash
-ss -tlnp | grep 8000
+ss -tlnp | grep 9999
 ```
 
 Then either stop the conflicting process or change `PORT` in the config.

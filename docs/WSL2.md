@@ -20,12 +20,12 @@ Then restart WSL:
 wsl --shutdown
 ```
 
-After restart, other machines on the LAN can connect to the Windows host IP on port `8000`.
+After restart, other machines on the LAN can connect to the Windows host IP on port `9999`.
 
 You also need a Windows firewall rule:
 
 ```powershell
-New-NetFirewallRule -DisplayName "llama-server" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+New-NetFirewallRule -DisplayName "llama-server" -Direction Inbound -Protocol TCP -LocalPort 9999 -Action Allow
 ```
 
 ## Auto-Shutdown Behavior

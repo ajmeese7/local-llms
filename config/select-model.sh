@@ -324,8 +324,10 @@ case "$reply" in
             die "Selected profile is still not installed: $selected_model_path"
         fi
         if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+            systemctl daemon-reload
             systemctl restart llama-server
         elif command -v sudo >/dev/null 2>&1; then
+            sudo systemctl daemon-reload
             sudo systemctl restart llama-server
         elif command -v systemctl >/dev/null 2>&1; then
             die "systemctl requires elevated privileges; rerun with sudo to restart llama-server"

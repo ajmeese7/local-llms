@@ -492,7 +492,7 @@ if systemctl is-active --quiet llama-server; then
             warn "Model overlay not found: $DEST_DIR/$resolved_model_profile.conf"
         fi
     fi
-    port="${PORT:-8000}"
+    port="${PORT:-9999}"
     api_key="${API_KEY:-}"
 
     attempts=0
