@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RTX 5090 Local LLM Benchmark</title>
+<link rel="stylesheet" href="assets/colors_and_type.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+<style>
+  /* ============================================================
+     Page chrome
+     ============================================================ */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--me-bg);
+    color: var(--me-fg);
+    overflow-x: hidden;
+    /* subtle scanline floor */
+    background-image:
+      repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(255,255,255,0.018) 2px, rgba(255,255,255,0.018) 3px),
+      radial-gradient(ellipse at 20% -10%, rgba(214,0,255,0.08), transparent 50%),
+      radial-gradient(ellipse at 90% 0%, rgba(0,184,255,0.06), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  a { color: var(--me-cyan); text-decoration: none; }
+  a:hover { text-shadow: 0 0 6px var(--me-cyan-60); }
+
+  /* ============================================================
+     NAV
+     ============================================================ */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    height: 56px;
+    background: rgba(5,5,5,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--me-border);
+    display: flex; align-items: center;
+    padding: 0 32px;
+    gap: 32px;
+  }
+  .nav-logo {
+    font-family: var(--me-font-logo);
+    font-size: 22px;
+    color: transparent;
+    text-shadow: -1px -1px 0 var(--me-magenta-60), 1px 1px 0 var(--me-cyan-60);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    user-select: none;
+  }
+  .nav-tabs { display: flex; gap: 4px; margin-left: auto; }
+  .nav-tab {
+    background: none; border: none;
+    color: var(--me-fg-2);
+    font-family: var(--me-font-display);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    cursor: pointer;
+    position: relative;
+    transition: color var(--me-t-base);
+  }
+  .nav-tab:hover { color: var(--me-fg); }
+  .nav-tab.active { color: var(--me-fg); }
+  .nav-tab.active::after {
+    content: "";
+    position: absolute; left: 14px; right: 14px; bottom: 2px;
+    height: 1px;
+    background: linear-gradient(90deg, var(--me-magenta), var(--me-cyan));
+    box-shadow: 0 0 6px var(--me-magenta-60);
+  }
+  .nav-meta {
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    color: var(--me-fg-3);
+    letter-spacing: 0.04em;
+  }
+  .nav-meta .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--me-success); box-shadow: 0 0 6px var(--me-success); margin-right: 6px; vertical-align: middle; }
+
+  /* ============================================================
+     LAYOUT
+     ============================================================ */
+  .wrap { max-width: 1366px; margin: 0 auto; padding: 40px 32px 96px; }
+  section { display: none; }
+  section.active { display: block; }
+
+  /* ============================================================
+     HERO
+     ============================================================ */
+  .hero {
+    border: 1px solid var(--me-border);
+    background: linear-gradient(180deg, rgba(214,0,255,0.04), rgba(0,184,255,0.02) 60%, transparent);
+    padding: 32px 36px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 3px);
+    pointer-events: none;
+  }
+  .hero-eyebrow {
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--me-fg-3);
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .hero-eyebrow span { display: inline-flex; align-items: center; gap: 6px; }
+  .hero-eyebrow i { color: var(--me-cyan); }
+  .hero-title {
+    font-family: var(--me-font-display);
+    font-size: clamp(44px, 6vw, 72px);
+    line-height: 1.0;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: transparent;
+    text-shadow: -2px -1px 0 var(--me-magenta-60), 2px 1px 0 var(--me-cyan-60);
+    margin: 4px 0 8px;
+  }
+  .hero-tagline {
+    font-family: var(--me-font-mono);
+    font-size: 15px;
+    color: var(--me-fg-2);
+    letter-spacing: -0.5px;
+    word-spacing: -4px;
+    margin: 0 0 24px;
+  }
+  .hero-tagline .accent-m { color: var(--me-magenta); }
+  .hero-tagline .accent-c { color: var(--me-cyan); }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+
+  .hero-narrative { font-size: 15px; line-height: 1.65; color: var(--me-fg-2); max-width: 62ch; }
+  .hero-narrative strong { color: var(--me-fg); font-weight: 600; }
+  .hero-narrative .mono { font-family: var(--me-font-mono); color: var(--me-cyan); font-size: 0.92em; }
+
+  .badges { display: flex; flex-direction: column; gap: 10px; }
+  .badge {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--me-border);
+    background: rgba(10,10,10,0.6);
+    font-family: var(--me-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    transition: border-color var(--me-t-base), transform var(--me-t-base);
+  }
+  .badge:hover { transform: translateX(-2px); }
+  .badge .label {
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--me-fg-3);
+    flex-shrink: 0;
+    width: 92px;
+  }
+  .badge .value { color: var(--me-fg); font-weight: 500; }
+  .badge.balanced { border-left: 3px solid var(--me-magenta); }
+  .badge.balanced .value { color: var(--me-magenta); text-shadow: 0 0 6px var(--me-magenta-60); }
+  .badge.fastest { border-left: 3px solid var(--me-cyan); }
+  .badge.fastest .value { color: var(--me-cyan); text-shadow: 0 0 6px var(--me-cyan-60); }
+  .badge.quality { border-left: 3px solid var(--me-warning); }
+  .badge.quality .value { color: var(--me-warning); }
+
+  /* ============================================================
+     SECTION HEADERS
+     ============================================================ */
+  .section-head {
+    display: flex; align-items: baseline; gap: 16px;
+    margin: 56px 0 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--me-border);
+  }
+  .section-head h2 {
+    font-family: var(--me-font-display);
+    font-size: 22px;
+    margin: 0;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--me-fg);
+  }
+  .section-head h2 .num {
+    color: var(--me-magenta);
+    font-size: 14px;
+    margin-right: 10px;
+    text-shadow: 0 0 6px var(--me-magenta-60);
+  }
+  .section-head .sub {
+    font-family: var(--me-font-mono);
+    font-size: 12px;
+    color: var(--me-fg-3);
+    letter-spacing: 0.04em;
+  }
+
+  /* ============================================================
+     RECOMMENDATION CARDS
+     ============================================================ */
+  .rec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .rec {
+    background: var(--me-bg-alt);
+    border: 1px solid var(--me-border);
+    padding: 18px 18px 16px;
+    position: relative;
+    transition: transform var(--me-t-base), border-color var(--me-t-base);
+  }
+  .rec:hover { transform: translateY(-3px); border-color: var(--me-border-strong); }
+  .rec.highlight {
+    border-color: var(--me-magenta-60);
+    box-shadow: 0 0 24px rgba(214,0,255,0.18), inset 0 0 0 1px rgba(214,0,255,0.18);
+  }
+  .rec-tag {
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--me-fg-3);
+  }
+  .rec.highlight .rec-tag { color: var(--me-magenta); }
+  .rec.fastest-tag .rec-tag { color: var(--me-cyan); }
+  .rec-name {
+    font-family: var(--me-font-mono);
+    font-size: 17px;
+    margin: 8px 0 14px;
+    color: var(--me-fg);
+    word-break: break-all;
+  }
+  .rec-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .rec-metric { padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--me-border); }
+  .rec-metric .k { font-family: var(--me-font-mono); font-size: 9px; letter-spacing: 0.18em; color: var(--me-fg-3); text-transform: uppercase; }
+  .rec-metric .v { font-family: var(--me-font-mono); font-size: 18px; color: var(--me-fg); margin-top: 2px; }
+  .rec-metric.speed .v { color: var(--me-success); }
+  .rec-metric.quality .v { color: var(--me-warning); }
+  .rec-tradeoff { font-size: 13px; line-height: 1.5; color: var(--me-fg-2); }
+  .rec-flags { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .flag {
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border: 1px solid var(--me-border);
+    color: var(--me-fg-3);
+  }
+  .flag.clean { color: var(--me-success); border-color: rgba(25,240,168,0.4); }
+  .flag.leak  { color: var(--me-warning); border-color: rgba(255,200,87,0.4); }
+  .flag.danger{ color: var(--me-danger); border-color: rgba(255,56,100,0.4); }
+
+  /* ============================================================
+     CHART AREA
+     ============================================================ */
+  .chart-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 1000px) { .chart-row { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: var(--me-bg-alt);
+    border: 1px solid var(--me-border);
+    padding: 18px;
+  }
+  .chart-card-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 14px;
+    gap: 12px;
+  }
+  .chart-card-head h3 {
+    font-family: var(--me-font-display);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--me-fg);
+  }
+  .chart-card-head .axis-meta {
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    color: var(--me-fg-3);
+  }
+  .chart-toggle { display: flex; gap: 0; }
+  .chart-toggle button {
+    background: transparent;
+    border: 1px solid var(--me-border);
+    color: var(--me-fg-2);
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    cursor: pointer;
+    transition: all var(--me-t-base);
+  }
+  .chart-toggle button + button { border-left: none; }
+  .chart-toggle button:hover { color: var(--me-fg); }
+  .chart-toggle button.on {
+    color: var(--me-bg);
+    background: var(--me-cyan);
+    border-color: var(--me-cyan);
+  }
+
+  /* Bar chart */
+  .bars { display: flex; flex-direction: column; gap: 10px; }
+  .bar-row { display: grid; grid-template-columns: 200px 1fr 70px; align-items: center; gap: 12px; font-family: var(--me-font-mono); font-size: 12px; }
+  .bar-row .lbl { color: var(--me-fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-row .track { height: 18px; background: rgba(255,255,255,0.04); position: relative; overflow: hidden; }
+  .bar-row .fill {
+    position: absolute; inset: 0 auto 0 0;
+    background: linear-gradient(90deg, rgba(0,184,255,0.6), var(--me-cyan));
+    box-shadow: 0 0 8px var(--me-cyan-60);
+    transition: width 0.6s var(--me-ease);
+  }
+  .bar-row.highlight .fill { background: linear-gradient(90deg, rgba(214,0,255,0.6), var(--me-magenta)); box-shadow: 0 0 10px var(--me-magenta-60); }
+  .bar-row.metric-quality .fill { background: linear-gradient(90deg, rgba(255,200,87,0.4), var(--me-warning)); box-shadow: 0 0 8px rgba(255,200,87,0.4); }
+  .bar-row.metric-latency .fill { background: linear-gradient(90deg, rgba(255,56,100,0.4), var(--me-danger)); box-shadow: 0 0 8px rgba(255,56,100,0.3); }
+  .bar-row .num { text-align: right; color: var(--me-fg); }
+  .bar-row.highlight .lbl { color: var(--me-magenta); }
+
+  /* Scatter chart */
+  .scatter-wrap { position: relative; height: 320px; padding: 8px 12px 28px 56px; }
+  .scatter-svg { width: 100%; height: 100%; overflow: visible; }
+  .scatter-grid line { stroke: rgba(255,255,255,0.06); stroke-width: 1; }
+  .scatter-axis line { stroke: rgba(255,255,255,0.18); stroke-width: 1; }
+  .scatter-axis text { fill: var(--me-fg-3); font-family: var(--me-font-mono); font-size: 10px; letter-spacing: 0.06em; }
+  .scatter-pt { transition: r 0.2s ease; cursor: pointer; }
+  .scatter-pt:hover { filter: drop-shadow(0 0 8px currentColor); }
+  .scatter-pt.balanced { fill: var(--me-magenta); }
+  .scatter-pt.fastest  { fill: var(--me-cyan); }
+  .scatter-pt.other    { fill: var(--me-warning); }
+  .scatter-label { font-family: var(--me-font-mono); font-size: 10px; fill: var(--me-fg-2); }
+  .scatter-label.balanced { fill: var(--me-magenta); }
+  .scatter-label.fastest { fill: var(--me-cyan); }
+  .scatter-axis-title { fill: var(--me-fg-3); font-family: var(--me-font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
+  .scatter-quadrant { stroke: rgba(255,255,255,0.08); stroke-dasharray: 2 4; stroke-width: 1; fill: none; }
+
+  /* ============================================================
+     TABLE
+     ============================================================ */
+  .table-wrap {
+    background: var(--me-bg-alt);
+    border: 1px solid var(--me-border);
+    overflow: hidden;
+  }
+  .table-tools {
+    display: flex; gap: 8px; padding: 12px 14px;
+    border-bottom: 1px solid var(--me-border);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .table-tools .label {
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--me-fg-3);
+    margin-right: 4px;
+  }
+  .chip {
+    background: transparent;
+    border: 1px solid var(--me-border);
+    color: var(--me-fg-2);
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    transition: all var(--me-t-base);
+  }
+  .chip:hover { color: var(--me-fg); border-color: var(--me-border-strong); }
+  .chip.on { color: var(--me-bg); background: var(--me-fg); border-color: var(--me-fg); }
+  .chip.on.cyan { background: var(--me-cyan); border-color: var(--me-cyan); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--me-font-mono);
+    font-size: 12px;
+  }
+  th {
+    text-align: left;
+    font-weight: 500;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--me-border);
+    color: var(--me-fg-3);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { color: var(--me-fg); }
+  th.sorted { color: var(--me-cyan); }
+  th.sorted::after { content: " ▾"; }
+  th.sorted.asc::after { content: " ▴"; }
+  th.numeric { text-align: right; }
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--me-fg-2);
+    vertical-align: middle;
+  }
+  td.numeric { text-align: right; color: var(--me-fg); }
+  tr.highlight td { background: rgba(214,0,255,0.05); }
+  tr.highlight td:first-child { box-shadow: inset 3px 0 0 var(--me-magenta); }
+  tr.fastest-row td:first-child { box-shadow: inset 3px 0 0 var(--me-cyan); }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  td .pn { color: var(--me-fg); }
+
+  .miniflag {
+    display: inline-block;
+    font-family: var(--me-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    padding: 2px 6px;
+    border: 1px solid var(--me-border);
+    color: var(--me-fg-3);
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+  .miniflag.clean { color: var(--me-success); border-color: rgba(25,240,168,0.35); }
+  .miniflag.leak  { color: var(--me-warning); border-color: rgba(255,200,87,0.35); }
+  .miniflag.danger{ color: var(--me-danger);  border-color: rgba(255,56,100,0.35); }
+
+  /* ============================================================
+     PROMPT DRILLDOWN
+     ============================================================ */
+  .filters {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+    align-items: center;
+  }
+  .filters .label {
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--me-fg-3);
+  }
+  .pgrid { display: flex; flex-direction: column; gap: 12px; }
+  .pcard {
+    background: var(--me-bg-alt);
+    border: 1px solid var(--me-border);
+  }
+  .pcard-head {
+    display: grid;
+    grid-template-columns: 200px 1fr auto;
+    gap: 16px;
+    padding: 14px 18px;
+    align-items: center;
+    border-bottom: 1px solid var(--me-border);
+  }
+  .pcat {
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--me-cyan);
+  }
+  .pcat .pid { display: block; color: var(--me-fg); font-size: 13px; letter-spacing: 0.04em; text-transform: none; margin-top: 4px; }
+  .pdesc { font-size: 13px; color: var(--me-fg-2); line-height: 1.5; }
+  .pcard-head .meta {
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    color: var(--me-fg-3);
+    text-align: right;
+  }
+  .prun-table { width: 100%; }
+  .prun-table th, .prun-table td { font-size: 11px; padding: 8px 14px; }
+  .prun-table .excerpt-row td {
+    background: rgba(0,0,0,0.4);
+    border-bottom: 1px solid var(--me-border);
+    padding: 0;
+  }
+  .excerpt-inner {
+    padding: 14px 18px;
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--me-fg-2);
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow: auto;
+  }
+  .excerpt-inner .think { color: var(--me-warning); opacity: 0.7; }
+  .excerpt-inner.hide-thinking .think { display: none; }
+  .excerpt-foot {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 8px 18px 12px;
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    color: var(--me-fg-3);
+    align-items: center;
+  }
+  .excerpt-foot button {
+    background: transparent; border: 1px solid var(--me-border); color: var(--me-fg-2);
+    font-family: inherit; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 3px 8px; cursor: pointer;
+  }
+  .excerpt-foot button:hover { color: var(--me-cyan); border-color: var(--me-cyan); }
+  .raw-path {
+    font-family: var(--me-font-mono);
+    color: var(--me-cyan);
+    word-break: break-all;
+    cursor: pointer;
+  }
+
+  .toggle-row td { cursor: pointer; }
+  .toggle-row td:first-child::before {
+    content: "▸";
+    color: var(--me-fg-3);
+    margin-right: 6px;
+    display: inline-block;
+    transition: transform var(--me-t-base);
+  }
+  .toggle-row.open td:first-child::before { transform: rotate(90deg); }
+
+  /* Quality bar in prompt rows */
+  .qbar { display: inline-flex; align-items: center; gap: 6px; }
+  .qbar .qnum { color: var(--me-fg); }
+  .qbar .qtrack { width: 60px; height: 5px; background: rgba(255,255,255,0.06); position: relative; }
+  .qbar .qfill { position: absolute; inset: 0 auto 0 0; background: var(--me-warning); }
+  .qbar.low .qfill { background: var(--me-danger); }
+  .qbar.full .qfill { background: var(--me-success); }
+
+  /* ============================================================
+     CLEANLINESS SECTION
+     ============================================================ */
+  .clean-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .clean-card {
+    background: var(--me-bg-alt);
+    border: 1px solid var(--me-border);
+    padding: 14px 16px;
+  }
+  .clean-card h4 {
+    font-family: var(--me-font-mono);
+    font-size: 13px;
+    margin: 0 0 12px;
+    color: var(--me-fg);
+  }
+  .clean-track { display: flex; gap: 2px; height: 24px; margin-bottom: 10px; }
+  .clean-seg {
+    flex: 1;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--me-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: var(--me-fg-3);
+    cursor: help;
+  }
+  .clean-seg.clean { background: rgba(25,240,168,0.12); border-color: rgba(25,240,168,0.4); color: var(--me-success); }
+  .clean-seg.leak { background: rgba(255,200,87,0.10); border-color: rgba(255,200,87,0.4); color: var(--me-warning); }
+  .clean-seg.empty { background: rgba(255,56,100,0.10); border-color: rgba(255,56,100,0.4); color: var(--me-danger); }
+  .clean-legend {
+    display: flex; gap: 14px; font-family: var(--me-font-mono); font-size: 10px; color: var(--me-fg-3);
+    margin-top: 18px; flex-wrap: wrap;
+  }
+  .clean-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .clean-legend .swatch { width: 10px; height: 10px; border: 1px solid rgba(255,255,255,0.2); }
+  .clean-legend .swatch.clean { background: rgba(25,240,168,0.4); border-color: var(--me-success); }
+  .clean-legend .swatch.leak { background: rgba(255,200,87,0.4); border-color: var(--me-warning); }
+  .clean-legend .swatch.empty { background: rgba(255,56,100,0.4); border-color: var(--me-danger); }
+
+  /* ============================================================
+     METHODOLOGY
+     ============================================================ */
+  .meth-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .meth-card { background: var(--me-bg-alt); border: 1px solid var(--me-border); padding: 18px; }
+  .meth-card h3 {
+    font-family: var(--me-font-display);
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--me-fg);
+    margin: 0 0 12px;
+  }
+  .meth-card h3 i { color: var(--me-cyan); margin-right: 8px; }
+  .meth-card p { margin: 0 0 10px; font-size: 13px; line-height: 1.6; color: var(--me-fg-2); }
+  .meth-card ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--me-fg-2); }
+  .meth-card code { background: rgba(0,184,255,0.08); padding: 1px 6px; color: var(--me-cyan); border: 1px solid rgba(0,184,255,0.18); }
+  .caveat {
+    border-left: 3px solid var(--me-warning);
+    padding: 10px 12px;
+    background: rgba(255,200,87,0.05);
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--me-fg-2);
+  }
+
+  /* run info */
+  .runinfo {
+    margin-top: 24px;
+    padding: 16px 18px;
+    background: var(--me-bg-alt);
+    border: 1px solid var(--me-border);
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    color: var(--me-fg-3);
+    line-height: 1.7;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;
+  }
+  .runinfo .k { color: var(--me-fg-3); text-transform: uppercase; letter-spacing: 0.15em; font-size: 9px; }
+  .runinfo .v { color: var(--me-fg); }
+
+  /* footer */
+  footer {
+    margin-top: 64px;
+    padding: 24px 32px;
+    border-top: 1px solid var(--me-border);
+    font-family: var(--me-font-mono);
+    font-size: 11px;
+    color: var(--me-fg-3);
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+
+  /* tooltip */
+  [data-tip] { position: relative; }
+  [data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 100%; left: 50%;
+    transform: translateX(-50%) translateY(-6px);
+    background: var(--me-black);
+    border: 1px solid var(--me-magenta-60);
+    color: var(--me-fg);
+    padding: 6px 10px;
+    font-family: var(--me-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 0 12px rgba(214,0,255,0.3);
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">Meese · Bench</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-tab="summary">Summary</button>
+    <button class="nav-tab" data-tab="profiles">Profiles</button>
+    <button class="nav-tab" data-tab="prompts">Prompt Drilldown</button>
+    <button class="nav-tab" data-tab="methodology">Methodology</button>
+  </div>
+  <div class="nav-meta"><span class="dot"></span>5/5 profiles · 25/25 runs · 28 Apr 2026</div>
+</nav>
+
+<div class="wrap">
+
+<!-- ====================== SUMMARY ====================== -->
+<section id="summary" class="active" data-screen-label="01 Summary">
+
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <span><i class="fa-solid fa-microchip"></i> RTX 5090 · 32 GB</span>
+      <span><i class="fa-solid fa-server"></i> llama.cpp / llama-server</span>
+      <span><i class="fa-solid fa-bolt"></i> OpenAI-compatible API</span>
+      <span><i class="fa-solid fa-list-check"></i> 5 prompts × 5 profiles</span>
+      <span><i class="fa-regular fa-calendar"></i> 2026-04-28 15:17</span>
+    </div>
+    <h1 class="hero-title">RTX 5090 / Local LLM Bench</h1>
+    <p class="hero-tagline">
+      <span class="accent-m">// </span>five local <span class="accent-c">qwen3.6 / mythos</span> profiles, end-to-end response timing through llama-server's OpenAI-compatible <span class="accent-m">/chat/completions</span>.
+    </p>
+
+    <div class="hero-grid">
+      <div class="hero-narrative">
+        The experimental <span class="mono">qwen36-35B-A3B-q4-ngram</span> profile is dramatically faster than anything else in the suite — roughly <strong>4×</strong> the throughput of the 27B baselines and <strong>1.8×</strong> the standard 35B-A3B — but its rubric quality drops <strong>~15 points</strong> and its coding bugfix answer truncates early.
+        <br /><br />
+        For a daily driver, <span class="mono">qwen36-35B-A3B</span> wins on balance: it ties the 27B profiles for top quality (96.7%) while running <strong>~2.5×</strong> faster. The 27B profiles remain the most stable known-good baseline, but they no longer earn the throughput cost on this hardware.
+      </div>
+      <div class="badges">
+        <div class="badge balanced">
+          <div class="label">Balanced</div>
+          <div class="value">qwen36-35B-A3B</div>
+        </div>
+        <div class="badge fastest">
+          <div class="label">Fastest</div>
+          <div class="value">qwen36-35B-A3B-q4-ngram</div>
+        </div>
+        <div class="badge quality">
+          <div class="label">Top Quality</div>
+          <div class="value">35B-A3B · 27b · 27B-AEON · 96.7%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECOMMENDATIONS -->
+  <div class="section-head">
+    <h2><span class="num">01</span>Recommendations</h2>
+    <span class="sub">// pick a profile by job, not by name</span>
+  </div>
+  <div class="rec-grid" id="rec-grid"></div>
+
+  <!-- VISUAL COMPARISON -->
+  <div class="section-head">
+    <h2><span class="num">02</span>Visual Comparison</h2>
+    <span class="sub">// throughput vs latency vs quality</span>
+  </div>
+  <div class="chart-row">
+    <div class="chart-card">
+      <div class="chart-card-head">
+        <h3 id="bar-title">Average Output tok/s</h3>
+        <div class="chart-toggle" id="bar-toggle">
+          <button class="on" data-metric="tps">tok/s</button>
+          <button data-metric="latency">latency</button>
+          <button data-metric="quality">quality</button>
+        </div>
+      </div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-head">
+        <h3>Quality vs Throughput</h3>
+        <div class="axis-meta">y: rubric % · x: tok/s</div>
+      </div>
+      <div class="scatter-wrap">
+        <svg class="scatter-svg" id="scatter" viewBox="0 0 600 320" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLEANLINESS -->
+  <div class="section-head">
+    <h2><span class="num">03</span>Output Cleanliness</h2>
+    <span class="sub">// per-prompt reasoning leakage — left-to-right: bugfix · shell · ops · creative · long-ctx</span>
+  </div>
+  <div class="clean-grid" id="clean-grid"></div>
+  <div class="clean-legend">
+    <span><span class="swatch clean"></span> clean visible answer</span>
+    <span><span class="swatch leak"></span> visible thinking preamble</span>
+    <span><span class="swatch empty"></span> empty content · reasoning_content fallback</span>
+  </div>
+
+</section>
+
+<!-- ====================== PROFILES ====================== -->
+<section id="profiles" data-screen-label="02 Profiles">
+  <div class="section-head">
+    <h2><span class="num">04</span>Profile Manifest</h2>
+    <span class="sub">// click any header to sort · all five profiles completed 5/5 runs</span>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-tools">
+      <span class="label">Highlight</span>
+      <button class="chip on cyan" data-hl="balanced">Balanced winner</button>
+      <button class="chip" data-hl="fastest">Fastest</button>
+      <button class="chip" data-hl="none">None</button>
+    </div>
+    <table id="profile-table">
+      <thead>
+        <tr>
+          <th data-sort="profile" class="sorted">Profile</th>
+          <th data-sort="quant">Model · Quant</th>
+          <th data-sort="ctx" class="numeric">Ctx</th>
+          <th data-sort="par" class="numeric">Par</th>
+          <th data-sort="kv">KV K/V</th>
+          <th data-sort="flags">Flags</th>
+          <th data-sort="latency" class="numeric">Avg Lat (s)</th>
+          <th data-sort="tps" class="numeric">tok/s</th>
+          <th data-sort="quality" class="numeric">Quality %</th>
+          <th data-sort="status">Status</th>
+          <th data-sort="cleanliness">Output</th>
+        </tr>
+      </thead>
+      <tbody id="profile-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="runinfo">
+    <div><div class="k">Run dir</div><div class="v">benchmark-results/5090-suite-20260428-151710</div></div>
+    <div><div class="k">Hardware</div><div class="v">RTX 5090 · 32 GB · single-GPU</div></div>
+    <div><div class="k">Server</div><div class="v">llama-server · OpenAI-compat /chat/completions</div></div>
+    <div><div class="k">Prompts</div><div class="v">5 (coding ×2 · assistant · creative · long-ctx)</div></div>
+    <div><div class="k">Sampling</div><div class="v">non-streaming · default temperature</div></div>
+    <div><div class="k">Total runs</div><div class="v">25 · 25/25 HTTP 200</div></div>
+  </div>
+</section>
+
+<!-- ====================== PROMPT DRILLDOWN ====================== -->
+<section id="prompts" data-screen-label="03 Prompts">
+  <div class="section-head">
+    <h2><span class="num">05</span>Prompt Drilldown</h2>
+    <span class="sub">// each prompt × each profile · click a row to expand the excerpt</span>
+  </div>
+
+  <div class="filters">
+    <span class="label">Category</span>
+    <button class="chip on" data-filter="all">All</button>
+    <button class="chip" data-filter="coding">Coding</button>
+    <button class="chip" data-filter="assistant">Assistant</button>
+    <button class="chip" data-filter="creative">Creative</button>
+    <button class="chip" data-filter="long-context">Long-context</button>
+    <span style="flex: 1;"></span>
+    <button class="chip" id="thinking-toggle" data-on="0">Hide thinking text</button>
+  </div>
+
+  <div class="pgrid" id="pgrid"></div>
+</section>
+
+<!-- ====================== METHODOLOGY ====================== -->
+<section id="methodology" data-screen-label="04 Methodology">
+  <div class="section-head">
+    <h2><span class="num">06</span>Methodology &amp; Caveats</h2>
+    <span class="sub">// how the numbers were produced — and what they don't mean</span>
+  </div>
+
+  <div class="meth-grid">
+    <div class="meth-card">
+      <h3><i class="fa-solid fa-stopwatch"></i> Timings</h3>
+      <p>All five profiles were tested through <code>llama-server</code>'s OpenAI-compatible <code>/chat/completions</code> endpoint with <code>stream: false</code>. Reported latency is end-to-end response time including prompt processing, generation, and server overhead.</p>
+      <div class="caveat">
+        <strong>TTFT caveat.</strong> The raw report column labelled <code>ttft_sec</code> is curl's <code>time_starttransfer</code>, but because requests were non-streaming this is effectively full-response time. Treat it as latency, not first-token. This page omits the misleading column.
+      </div>
+    </div>
+
+    <div class="meth-card">
+      <h3><i class="fa-solid fa-list-check"></i> Quality rubric</h3>
+      <p>Quality is a lightweight automated keyword/requirement rubric scored per prompt, with a max score that varies by prompt (e.g. 5/5 on bugfix, 6/6 on shell, 4/4 on creative). Quality % is the average ratio across the five prompts.</p>
+      <ul>
+        <li><strong>Not</strong> a human eval, taste judgment, or correctness proof</li>
+        <li>Rewards format compliance &amp; required keywords</li>
+        <li>Penalises truncation and missing requirements</li>
+      </ul>
+    </div>
+
+    <div class="meth-card">
+      <h3><i class="fa-solid fa-broom"></i> Reasoning leakage</h3>
+      <p>Several profiles emit visible <code>&lt;think&gt;</code> blocks or "Here's a thinking process:" preambles in their <code>content</code> field. Some emit empty <code>content</code> and place the answer in <code>reasoning_content</code> — the rubric falls back to that field but it changes how the response renders in a chat UI.</p>
+      <p>This affects real usefulness and is surfaced as a per-prompt indicator on the cleanliness strip, the profile table, and the drilldown excerpts.</p>
+    </div>
+
+    <div class="meth-card">
+      <h3><i class="fa-solid fa-folder-tree"></i> Raw artifacts</h3>
+      <p>Every response is preserved on disk for audit. Full paths are linked in the prompt drilldown.</p>
+      <ul>
+        <li><code>report.md</code> — agent-friendly text report</li>
+        <li><code>results.jsonl</code> — one record per prompt × profile</li>
+        <li><code>manifest.tsv</code> — profile lifecycle</li>
+        <li><code>raw/&lt;profile&gt;/&lt;prompt&gt;.response.json</code> — raw API JSON</li>
+        <li><code>raw/&lt;profile&gt;/&lt;prompt&gt;.result.json</code> — derived metrics</li>
+        <li><code>prompts/prompts.json</code> — exact input prompts</li>
+      </ul>
+    </div>
+
+    <div class="meth-card">
+      <h3><i class="fa-solid fa-gear"></i> Profile differences that matter</h3>
+      <ul>
+        <li><code>q4-ngram</code> trades quant precision (Q4_K_P vs Q5_K_P) for speed and uses <strong>parallel=4</strong> + <strong>f16/f16</strong> KV + the experimental ngram modifier</li>
+        <li>27B profiles run at <strong>262k</strong> context but only one parallel slot — long-context recall is correct but slow</li>
+        <li><code>mythos</code> uses the PRISM-DQ GGUF and produces a distinctly different writing voice — useful for creative work, less optimal for coding</li>
+      </ul>
+    </div>
+
+    <div class="meth-card">
+      <h3><i class="fa-solid fa-triangle-exclamation"></i> What this report is not</h3>
+      <ul>
+        <li>Not a head-to-head against hosted frontier models</li>
+        <li>Not a substitute for a project-specific eval</li>
+        <li>Not a guarantee these numbers reproduce on different driver / kernel versions</li>
+        <li>Not corrected for prompt-token cost variance (coding prompts are short; long-context is ~5k tokens)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span style="font-family: var(--me-font-logo); letter-spacing: 0.1em; color: var(--me-fg-2);">MEESE · ENTERPRISES</span>
+  &nbsp;//&nbsp; benchmark report v1 &nbsp;//&nbsp; <a href="#" onclick="navigator.clipboard.writeText(location.href);return false;">copy permalink</a>
+</footer>
+
+</div>
+
+<script>
+/* ============================================================
+   DATA
+   ============================================================ */
+const PROFILES = [
+  {
+    profile: "qwen36-35B-A3B",
+    quant: "Q5_K_P",
+    model: "Qwen3.6-35B-A3B",
+    ctx: 131072,
+    par: 1,
+    kv: "q8_0/q4_0",
+    flags: ["jinja", "mmproj"],
+    latency: 11.95,
+    tps: 86.28,
+    quality: 96.7,
+    status: "completed",
+    cleanliness: ["clean","leak","leak","leak","leak"], /* per prompt order: bugfix, shell, ops, creative, long-ctx */
+    role: "balanced",
+  },
+  {
+    profile: "qwen36-35B-A3B-q4-ngram",
+    quant: "Q4_K_P",
+    model: "Qwen3.6-35B-A3B",
+    ctx: 262144,
+    par: 4,
+    kv: "f16/f16",
+    flags: ["jinja", "unified-kv", "ngram-mod"],
+    latency: 5.29,
+    tps: 151.68,
+    quality: 81.3,
+    status: "completed",
+    cleanliness: ["clean","leak","leak","leak","leak"],
+    role: "fastest",
+  },
+  {
+    profile: "qwen36-27b",
+    quant: "Q5_K_XL",
+    model: "Qwen3.6-27B",
+    ctx: 262144,
+    par: 1,
+    kv: "q8_0/q4_0",
+    flags: ["jinja"],
+    latency: 30.26,
+    tps: 35.96,
+    quality: 96.7,
+    status: "completed",
+    cleanliness: ["leak","leak","leak","leak","leak"],
+    role: "baseline",
+  },
+  {
+    profile: "qwen36-27B-AEON",
+    quant: "Q6_K",
+    model: "Qwen3.6-27B (Uncensored)",
+    ctx: 262144,
+    par: 1,
+    kv: "q8_0/q4_0",
+    flags: ["jinja"],
+    latency: 27.49,
+    tps: 32.58,
+    quality: 96.7,
+    status: "completed",
+    cleanliness: ["leak","leak","leak","leak","empty"],
+    role: "uncensored",
+  },
+  {
+    profile: "mythos",
+    quant: "PRISM-DQ",
+    model: "MYTHOS-26B-A4B",
+    ctx: 131072,
+    par: 1,
+    kv: "q8_0/q4_0",
+    flags: ["baseline"],
+    latency: 21.93,
+    tps: 43.29,
+    quality: 93.3,
+    status: "completed",
+    cleanliness: ["clean","clean","leak","leak","clean"],
+    role: "creative",
+  },
+];
+
+const RECOMMENDATIONS = [
+  {
+    tag: "Use for coding",
+    profile: "qwen36-35B-A3B",
+    metric_speed: "86.3 tok/s",
+    metric_quality: "96.7%",
+    tradeoff: "Cleanest bugfix answer in the run, ties for top rubric quality, and ~2.5× faster than the 27B baselines. The default to ship.",
+    flags: [["clean", "Clean bugfix"], ["leak", "Leaks elsewhere"]],
+    role: "balanced",
+    highlight: true,
+  },
+  {
+    tag: "Use for max speed",
+    profile: "qwen36-35B-A3B-q4-ngram",
+    metric_speed: "151.7 tok/s",
+    metric_quality: "81.3%",
+    tradeoff: "Fastest by a wide margin and held quality on 4 of 5 prompts, but its bugfix answer truncated to 2/5 — keep it off the critical path.",
+    flags: [["leak", "Reasoning leakage"], ["danger", "Bugfix 2/5"]],
+    role: "fastest-tag",
+  },
+  {
+    tag: "Conservative default",
+    profile: "qwen36-27b",
+    metric_speed: "36.0 tok/s",
+    metric_quality: "96.7%",
+    tradeoff: "Known-good baseline with the largest 262k context. Quality is excellent, but throughput is the slowest practical option in this run.",
+    flags: [["leak", "Always preambles"]],
+  },
+  {
+    tag: "Alternative voice",
+    profile: "mythos",
+    metric_speed: "43.3 tok/s",
+    metric_quality: "93.3%",
+    tradeoff: "Distinct writing style with the cleanest output of any profile (3/5 prompts clean). Worth keeping for creative & long-context work where voice matters.",
+    flags: [["clean", "3/5 clean"]],
+  },
+];
+
+const PROMPTS = [
+  { id: "coding_bugfix", category: "coding", title: "Coding · bugfix",
+    desc: "Explain Python's mutable-default-argument bug, fix the function, and write a minimal pytest that proves the fix." },
+  { id: "coding_shell", category: "coding", title: "Coding · shell function",
+    desc: "Write a bash wait_for_http_ok(url, attempts, sleep) using curl with a connect timeout, returning 0 on HTTP 200." },
+  { id: "assistant_ops", category: "assistant", title: "Assistant · ops troubleshooting",
+    desc: "Prioritised troubleshooting checklist for llama-server intermittently failing when switching to a larger model on a 32 GB GPU." },
+  { id: "creative_constraints", category: "creative", title: "Creative · constraints",
+    desc: "180-240 word micro-scene of a systems engineer alone in a server room at 2 AM. Exactly one line of terminal output. End on an unresolved choice." },
+  { id: "long_context_recall", category: "long-context", title: "Long-context · recall",
+    desc: "Extract four facts (codename, rollback window, port, db table) from a ~5 k-token noisy operational note. Compact JSON only." },
+];
+
+const RUNS = [
+  // qwen36-27b
+  { profile:"qwen36-27b", prompt:"coding_bugfix", latency:23.55, tps:42.45, q:5, qmax:5, clean:"leak", excerpt:"Here's a thinking process:\n\n1.  Analyze User Input:\n   - Function: def add_tag(tag, tags=[]): tags.append(tag); return tags\n   - Task: Explain the bug, provide a corrected implementation, include one minimal pytest test that proves the fix.\n2.  Identify the Bug:\n   - The bug is a classic Python gotcha: using a mutable default argument (tags=[]).\n   - In Python, default arguments are evaluated only once at function definition time, not each time the function is called.", path:"raw/qwen36-27b/coding_bugfix.response.json" },
+  { profile:"qwen36-27b", prompt:"coding_shell", latency:21.04, tps:42.77, q:6, qmax:6, clean:"leak", excerpt:"Here's a thinking process:\n\n1. Analyze User Requirements: wait_for_http_ok / URL / max attempts / sleep seconds. curl. Connect timeout. Return 0 on HTTP 200. Avoid noisy output on success.\n2. Determine Function Signature:\n   wait_for_http_ok() {\n     local url=\"$1\"\n     local max_attempts=\"$2\"\n     local sleep_sec=\"$3\"\n     ...", path:"raw/qwen36-27b/coding_shell.response.json" },
+  { profile:"qwen36-27b", prompt:"assistant_ops", latency:20.94, tps:42.98, q:5, qmax:6, clean:"leak", excerpt:"Here's a thinking process:\n\n1. Understand User Problem: local llama.cpp server, 32 GB GPU, sometimes fails on larger model.\n2. Identify Key Constraints & Context: llama-server, 32 GB VRAM, 'sometimes fails' implies intermittent.", path:"raw/qwen36-27b/assistant_ops.response.json" },
+  { profile:"qwen36-27b", prompt:"creative_constraints", latency:15.74, tps:44.47, q:4, qmax:4, clean:"leak", excerpt:"Here's a thinking process:\n\n1. Analyze User Constraints:\n   - Length: 180-240 words\n   - Subject: Systems engineer alone in a server room at 2 AM\n   - Constraint 1: Include exactly one line of terminal output\n   - Constraint 2: Avoid explaining the theme\n   - Constraint 3: End with an unresolved choice", path:"raw/qwen36-27b/creative_constraints.response.json" },
+  { profile:"qwen36-27b", prompt:"long_context_recall", latency:70.02, tps:7.14, q:4, qmax:4, clean:"leak", excerpt:"Here's a thinking process:\n\n1. Analyze User Input:\n   - Input Text: long operational note consisting of many repetitive reference blocks (001 to 189), all containing the same text.\n   - Important Facts: codename Atlas-17, rollback 42 minutes, api port 48129, table ledger_events.", path:"raw/qwen36-27b/long_context_recall.response.json" },
+
+  // qwen36-27B-AEON
+  { profile:"qwen36-27B-AEON", prompt:"coding_bugfix", latency:26.26, tps:38.08, q:5, qmax:5, clean:"leak", excerpt:"<think>\nHere's a thinking process:\n1. Analyze the User Input: def add_tag(tag, tags=[]): ...\n2. Identify the Bug: classic Python mutable default argument bug.\n   tags=[] is evaluated once at function definition time, not at each call.\n</think>", path:"raw/qwen36-27B-AEON/coding_bugfix.response.json" },
+  { profile:"qwen36-27B-AEON", prompt:"coding_shell", latency:22.07, tps:40.78, q:6, qmax:6, clean:"leak", excerpt:"<think>\nHere's a thinking process:\n1. Analyze User Requirements: wait_for_http_ok / URL / max attempts / sleep seconds. curl with a connect timeout. Return 0 on HTTP 200. Avoid noisy output on success.\n</think>", path:"raw/qwen36-27B-AEON/coding_shell.response.json" },
+  { profile:"qwen36-27B-AEON", prompt:"assistant_ops", latency:21.93, tps:41.04, q:5, qmax:6, clean:"leak", excerpt:"<think>\nHere's a thinking process:\n1. Understand User Problem: local llama.cpp server, 32 GB GPU, sometimes fails when switching to a larger model.\n2. Identify Key Failure Modes: VRAM exhaustion, CUDA fragmentation, model loading/switching.\n</think>", path:"raw/qwen36-27B-AEON/assistant_ops.response.json" },
+  { profile:"qwen36-27B-AEON", prompt:"creative_constraints", latency:16.70, tps:41.93, q:4, qmax:4, clean:"leak", excerpt:"<think>\nThinking Process:\n  Topic: Systems engineer alone in a server room at 2 AM. Length: 180-240 words. Constraint: exactly one line of terminal output. Avoid explaining the theme. End with unresolved choice.\n</think>", path:"raw/qwen36-27B-AEON/creative_constraints.response.json" },
+  { profile:"qwen36-27B-AEON", prompt:"long_context_recall", latency:50.52, tps:1.07, q:4, qmax:4, clean:"empty", excerpt:"<think>\n\n</think>\n\n{\n  \"codename\": \"Atlas-17\",\n  \"rollback_window_minutes\": 42,\n  \"api_port\": 48129,\n  \"database_table\": \"ledger_events\"\n}", path:"raw/qwen36-27B-AEON/long_context_recall.response.json" },
+
+  // qwen36-35B-A3B
+  { profile:"qwen36-35B-A3B", prompt:"coding_bugfix", latency:9.11, tps:109.77, q:5, qmax:5, clean:"clean", excerpt:"### The Bug: Mutable Default Argument\n\nIn Python, default arguments are evaluated **once** when the function is defined, not every time it is called. Because [] is a mutable object, the list created as the default value persists in memory.\n\nIf you call add_tag('a') and then add_tag('b'), both calls modify the *same* underlying list instance. The second call will return ['a', 'b'] instead of just ['b'].\n\n### Corrected Implementation\n\nThe standard Python idiom is to use None as a sentinel value for mutable defaults, then initialize the variable inside the function body.", path:"raw/qwen36-35B-A3B/coding_bugfix.response.json" },
+  { profile:"qwen36-35B-A3B", prompt:"coding_shell", latency:10.46, tps:86.05, q:6, qmax:6, clean:"leak", excerpt:"Here's a thinking process:\n1. Analyze User Requirements: wait_for_http_ok / URL / max attempts / sleep seconds. curl. Connect timeout. Silent on success.\n2. Determine curl options: -s, -o /dev/null, -w \"%{http_code}\".", path:"raw/qwen36-35B-A3B/coding_shell.response.json" },
+  { profile:"qwen36-35B-A3B", prompt:"assistant_ops", latency:9.16, tps:98.30, q:5, qmax:6, clean:"leak", excerpt:"Here's a thinking process:\n1. Understand User Problem: local llama.cpp server (likely llama-server or llama-cpp-python with FastAPI), 32 GB GPU, sometimes fails when switching to larger model.\n2. Identify Key Failure Modes: OOM during model loading/switching, fragmentation, mmap issues.", path:"raw/qwen36-35B-A3B/assistant_ops.response.json" },
+  { profile:"qwen36-35B-A3B", prompt:"creative_constraints", latency:5.97, tps:117.30, q:4, qmax:4, clean:"leak", excerpt:"Thinking Process:\n  Deconstruct the prompt: micro-scene about a systems engineer alone in a server room at 2 AM. Length 180-240 words. Constraints: exactly one line of terminal output, avoid explaining the theme, unresolved choice ending.", path:"raw/qwen36-35B-A3B/creative_constraints.response.json" },
+  { profile:"qwen36-35B-A3B", prompt:"long_context_recall", latency:25.06, tps:19.95, q:4, qmax:4, clean:"leak", excerpt:"Here's a thinking process:\n1. Analyze User Input: long operational note consisting of many reference blocks (001 to 189). Important facts: codename Atlas-17, rollback 42, port 48129, table ledger_events.", path:"raw/qwen36-35B-A3B/long_context_recall.response.json" },
+
+  // qwen36-35B-A3B-q4-ngram
+  { profile:"qwen36-35B-A3B-q4-ngram", prompt:"coding_bugfix", latency:6.71, tps:148.93, q:2, qmax:5, clean:"clean", excerpt:"### The Bug: Mutable Default Arguments\n\nThe bug is caused by using a mutable object ([]) as a default argument. In Python, default arguments are evaluated **once** when the function is defined, not every time it is called.\n\nThis means tags points to the same list object in memory for every subsequent call where no second argument is provided. Since list.append() modifies the list in place, tags accumulate across calls.", path:"raw/qwen36-35B-A3B-q4-ngram/coding_bugfix.response.json" },
+  { profile:"qwen36-35B-A3B-q4-ngram", prompt:"coding_shell", latency:6.09, tps:147.72, q:6, qmax:6, clean:"leak", excerpt:"Here's a thinking process:\n1. Analyze User Requirements: wait_for_http_ok / URL / max attempts / sleep seconds. curl. Connect & total timeout. Return 0 on HTTP 200. Suppress stdout/stderr on success.", path:"raw/qwen36-35B-A3B-q4-ngram/coding_shell.response.json" },
+  { profile:"qwen36-35B-A3B-q4-ngram", prompt:"assistant_ops", latency:4.95, tps:181.70, q:4, qmax:6, clean:"leak", excerpt:"Here's a thinking process:\n1. Understand User Request: local llama.cpp server, 32 GB GPU, model-switch failure. Developer audience.\n2. Identify failure points: llama-server, OpenAI API, GPU memory, switching mechanism.", path:"raw/qwen36-35B-A3B-q4-ngram/assistant_ops.response.json" },
+  { profile:"qwen36-35B-A3B-q4-ngram", prompt:"creative_constraints", latency:4.09, tps:171.04, q:4, qmax:4, clean:"leak", excerpt:"Here's a thinking process:\n1. Analyze User Input: systems engineer alone in a server room at 2 AM. Length 180-240. One line of terminal output. End on unresolved choice.", path:"raw/qwen36-35B-A3B-q4-ngram/creative_constraints.response.json" },
+  { profile:"qwen36-35B-A3B-q4-ngram", prompt:"long_context_recall", latency:4.59, tps:108.99, q:4, qmax:4, clean:"leak", excerpt:"Here's a thinking process:\n1. Analyze User Input: long operational note with two important facts at the start, 189 identical reference blocks, two more facts near the end.", path:"raw/qwen36-35B-A3B-q4-ngram/long_context_recall.response.json" },
+
+  // mythos
+  { profile:"mythos", prompt:"coding_bugfix", latency:19.69, tps:48.71, q:5, qmax:5, clean:"clean", excerpt:"### The Bug: Mutable Default Arguments\n\nThe bug is that **default arguments in Python are evaluated only once at the time the function is defined**, not every time the function is called.\n\nBecause a list [] is a mutable object, the same list instance is reused for every call that doesn't provide its own tags argument. This causes \"state leakage\" where tags from previous calls persist into subsequent calls.", path:"raw/mythos/coding_bugfix.response.json" },
+  { profile:"mythos", prompt:"coding_shell", latency:17.58, tps:51.19, q:5, qmax:6, clean:"clean", excerpt:"```bash\nwait_for_http_ok() {\n    local url=$1\n    local max_attempts=$2\n    local sleep_seconds=$3\n\n    for ((i=1; i<=max_attempts; i++)); do\n        local status=$(curl -s -o /dev/null -w \"%{http_code}\" --connect-timeout 2 \"$url\")\n        if [[ \"$status\" == \"200\" ]]; then return 0; fi\n        [[ $i -lt $max_attempts ]] && sleep \"$sleep_seconds\"\n    done\n    return 1\n}\n```", path:"raw/mythos/coding_shell.response.json" },
+  { profile:"mythos", prompt:"assistant_ops", latency:17.39, tps:51.74, q:5, qmax:6, clean:"leak", excerpt:"*Environment:* Local llama.cpp server (OpenAI-compatible API).\n*Hardware:* 32 GB NVIDIA GPU.\n*Problem:* Fails when switching to a *larger* model.\n  - VRAM Exhaustion: most obvious. Larger models need more memory for weights + KV cache + activation buffers.\n  - System RAM Exhaustion: model loaded from disk to RAM before being moved to GPU.", path:"raw/mythos/assistant_ops.response.json" },
+  { profile:"mythos", prompt:"creative_constraints", latency:12.72, tps:55.04, q:4, qmax:4, clean:"leak", excerpt:"*Subject:* A systems engineer alone in a server room at 2 AM.\n*Word Count:* 180-240 words.\n*Constraint 1:* Exactly one line of terminal output.\n*Constraint 2:* Avoid explaining the theme.\n*Constraint 3:* End with an unresolved choice.", path:"raw/mythos/creative_constraints.response.json" },
+  { profile:"mythos", prompt:"long_context_recall", latency:42.24, tps:9.75, q:4, qmax:4, clean:"clean", excerpt:"```json\n{\"codename\": \"Atlas-17\", \"rollback_window_minutes\": 42, \"api_port\": 48129, \"database_table\": \"ledger_events\"}\n```", path:"raw/mythos/long_context_recall.response.json" },
+];
+
+/* ============================================================
+   TABS
+   ============================================================ */
+document.querySelectorAll(".nav-tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".nav-tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll("section").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    document.getElementById(t.dataset.tab).classList.add("active");
+    window.scrollTo({top: 0, behavior: "smooth"});
+  });
+});
+
+/* ============================================================
+   RECOMMENDATIONS
+   ============================================================ */
+function renderRecs() {
+  const el = document.getElementById("rec-grid");
+  el.innerHTML = RECOMMENDATIONS.map(r => `
+    <div class="rec ${r.highlight ? 'highlight' : ''} ${r.role || ''}">
+      <div class="rec-tag">${r.tag}</div>
+      <div class="rec-name">${r.profile}</div>
+      <div class="rec-metrics">
+        <div class="rec-metric speed">
+          <div class="k" data-tip="end-to-end /chat/completions, non-streaming">Speed</div>
+          <div class="v">${r.metric_speed}</div>
+        </div>
+        <div class="rec-metric quality">
+          <div class="k" data-tip="rubric hit-rate across 5 prompts">Quality</div>
+          <div class="v">${r.metric_quality}</div>
+        </div>
+      </div>
+      <div class="rec-tradeoff">${r.tradeoff}</div>
+      <div class="rec-flags">${r.flags.map(f => `<span class="flag ${f[0]}">${f[1]}</span>`).join("")}</div>
+    </div>
+  `).join("");
+}
+renderRecs();
+
+/* ============================================================
+   BAR CHART
+   ============================================================ */
+const BAR_CFG = {
+  tps:     { title: "Average Output tok/s", key: "tps",     fmt: v => v.toFixed(1), better: "high", cls: "" },
+  latency: { title: "Average Latency (s)",  key: "latency", fmt: v => v.toFixed(2), better: "low",  cls: "metric-latency" },
+  quality: { title: "Quality Heuristic %",  key: "quality", fmt: v => v.toFixed(1) + "%", better: "high", cls: "metric-quality" },
+};
+let BAR_METRIC = "tps";
+function renderBars() {
+  const cfg = BAR_CFG[BAR_METRIC];
+  document.getElementById("bar-title").textContent = cfg.title;
+  const sorted = [...PROFILES].sort((a, b) => cfg.better === "high" ? b[cfg.key] - a[cfg.key] : a[cfg.key] - b[cfg.key]);
+  const max = Math.max(...sorted.map(p => p[cfg.key]));
+  document.getElementById("bars").innerHTML = sorted.map(p => {
+    const pct = (p[cfg.key] / max) * 100;
+    const isHl = p.role === "balanced";
+    return `<div class="bar-row ${cfg.cls} ${isHl ? "highlight" : ""}">
+      <div class="lbl" title="${p.profile}">${p.profile}</div>
+      <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+      <div class="num">${cfg.fmt(p[cfg.key])}</div>
+    </div>`;
+  }).join("");
+}
+renderBars();
+document.getElementById("bar-toggle").addEventListener("click", e => {
+  if (e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#bar-toggle button").forEach(b => b.classList.remove("on"));
+  e.target.classList.add("on");
+  BAR_METRIC = e.target.dataset.metric;
+  renderBars();
+});
+
+/* ============================================================
+   SCATTER
+   ============================================================ */
+function renderScatter() {
+  const W = 600, H = 320;
+  const padL = 44, padR = 90, padT = 14, padB = 38;
+  const xMax = 175, xMin = 0;
+  const yMax = 100, yMin = 75;
+  const xScale = v => padL + ((v - xMin) / (xMax - xMin)) * (W - padL - padR);
+  const yScale = v => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
+
+  let svg = "";
+  // grid
+  svg += `<g class="scatter-grid">`;
+  for (let v = xMin; v <= xMax; v += 25) svg += `<line x1="${xScale(v)}" x2="${xScale(v)}" y1="${padT}" y2="${H - padB}"/>`;
+  for (let v = yMin; v <= yMax; v += 5)  svg += `<line x1="${padL}" x2="${W - padR}" y1="${yScale(v)}" y2="${yScale(v)}"/>`;
+  svg += `</g>`;
+  // axes
+  svg += `<g class="scatter-axis">`;
+  svg += `<line x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"/>`;
+  svg += `<line x1="${padL}" x2="${padL}" y1="${padT}" y2="${H - padB}"/>`;
+  for (let v = xMin; v <= xMax; v += 25) svg += `<text x="${xScale(v)}" y="${H - padB + 14}" text-anchor="middle">${v}</text>`;
+  for (let v = yMin; v <= yMax; v += 5)  svg += `<text x="${padL - 8}" y="${yScale(v) + 3}" text-anchor="end">${v}%</text>`;
+  svg += `</g>`;
+  // axis titles
+  svg += `<text class="scatter-axis-title" x="${(W - padR + padL) / 2}" y="${H - 6}" text-anchor="middle">tok/s →</text>`;
+  svg += `<text class="scatter-axis-title" x="${-((H + padT) / 2)}" y="14" transform="rotate(-90)" text-anchor="middle">quality %</text>`;
+  // ideal-quadrant indicator (top-right)
+  svg += `<rect class="scatter-quadrant" x="${xScale(80)}" y="${yScale(100)}" width="${xScale(xMax) - xScale(80)}" height="${yScale(95) - yScale(100)}"/>`;
+  svg += `<text x="${xScale(xMax) - 4}" y="${yScale(100) + 12}" text-anchor="end" class="scatter-axis-title" style="fill:rgba(255,255,255,0.25);">FAST + HIGH-QUALITY</text>`;
+
+  // points
+  PROFILES.forEach(p => {
+    const cx = xScale(p.tps);
+    const cy = yScale(p.quality);
+    let cls = "other", lblCls = "";
+    let r = 6;
+    if (p.role === "balanced") { cls = "balanced"; lblCls = "balanced"; r = 9; }
+    else if (p.role === "fastest") { cls = "fastest"; lblCls = "fastest"; r = 8; }
+    svg += `<circle class="scatter-pt ${cls}" cx="${cx}" cy="${cy}" r="${r}"><title>${p.profile} · ${p.tps.toFixed(1)} tok/s · ${p.quality}%</title></circle>`;
+    // smart label placement to avoid overlaps
+    const offsetMap = {
+      "qwen36-35B-A3B": [12, -10],
+      "qwen36-35B-A3B-q4-ngram": [-10, -14],
+      "qwen36-27b": [12, 4],
+      "qwen36-27B-AEON": [12, 16],
+      "mythos": [12, 4],
+    };
+    const [dx, dy] = offsetMap[p.profile] || [10, 4];
+    const anchor = dx < 0 ? "end" : "start";
+    svg += `<text class="scatter-label ${lblCls}" x="${cx + dx}" y="${cy + dy}" text-anchor="${anchor}">${p.profile}</text>`;
+  });
+
+  document.getElementById("scatter").innerHTML = svg;
+}
+renderScatter();
+
+/* ============================================================
+   CLEANLINESS GRID
+   ============================================================ */
+function renderClean() {
+  const labels = ["bugfix","shell","ops","creat.","long-ctx"];
+  document.getElementById("clean-grid").innerHTML = PROFILES.map(p => `
+    <div class="clean-card">
+      <h4>${p.profile}</h4>
+      <div class="clean-track">
+        ${p.cleanliness.map((c,i) => `<div class="clean-seg ${c}" data-tip="${labels[i]}: ${c === 'clean' ? 'clean answer' : c === 'leak' ? 'thinking preamble' : 'empty content (reasoning_content fallback)'}">${labels[i]}</div>`).join("")}
+      </div>
+      <div style="font-family: var(--me-font-mono); font-size: 11px; color: var(--me-fg-3);">
+        clean ${p.cleanliness.filter(c=>c==="clean").length}/5 · leak ${p.cleanliness.filter(c=>c==="leak").length}/5 ${p.cleanliness.filter(c=>c==="empty").length ? "· empty " + p.cleanliness.filter(c=>c==="empty").length + "/5" : ""}
+      </div>
+    </div>
+  `).join("");
+}
+renderClean();
+
+/* ============================================================
+   PROFILE TABLE
+   ============================================================ */
+let SORT_KEY = "quality", SORT_DIR = -1; /* -1 desc, 1 asc */
+let HIGHLIGHT = "balanced";
+function cleanSummary(arr) {
+  const c = arr.filter(x=>x==="clean").length;
+  const l = arr.filter(x=>x==="leak").length;
+  const e = arr.filter(x=>x==="empty").length;
+  const cls = e ? "danger" : (c >= l ? "clean" : "leak");
+  return `<span class="miniflag ${cls}">${c}c · ${l}l${e ? " · " + e + "e" : ""}</span>`;
+}
+function renderTable() {
+  const rows = [...PROFILES].sort((a, b) => {
+    const av = a[SORT_KEY], bv = b[SORT_KEY];
+    if (typeof av === "string") return av.localeCompare(bv) * SORT_DIR;
+    return (av - bv) * SORT_DIR;
+  });
+  document.getElementById("profile-tbody").innerHTML = rows.map(p => {
+    let rowCls = "";
+    if (HIGHLIGHT === "balanced" && p.role === "balanced") rowCls = "highlight";
+    else if (HIGHLIGHT === "fastest" && p.role === "fastest") rowCls = "fastest-row";
+    return `<tr class="${rowCls}">
+      <td><span class="pn">${p.profile}</span></td>
+      <td>${p.model} · <span style="color:var(--me-cyan)">${p.quant}</span></td>
+      <td class="numeric">${(p.ctx/1024).toFixed(0)}k</td>
+      <td class="numeric">${p.par}</td>
+      <td>${p.kv}</td>
+      <td>${p.flags.map(f => `<span class="miniflag">${f}</span>`).join("")}</td>
+      <td class="numeric" style="color:${p.latency < 12 ? 'var(--me-success)' : p.latency < 25 ? 'var(--me-warning)' : 'var(--me-danger)'}">${p.latency.toFixed(2)}</td>
+      <td class="numeric" style="color:${p.tps > 100 ? 'var(--me-cyan)' : 'var(--me-fg)'}">${p.tps.toFixed(2)}</td>
+      <td class="numeric" style="color:${p.quality >= 95 ? 'var(--me-success)' : p.quality >= 90 ? 'var(--me-warning)' : 'var(--me-danger)'}">${p.quality.toFixed(1)}</td>
+      <td><span class="miniflag clean">${p.status}</span></td>
+      <td>${cleanSummary(p.cleanliness)}</td>
+    </tr>`;
+  }).join("");
+  // header sort indicator
+  document.querySelectorAll("#profile-table th").forEach(th => {
+    th.classList.remove("sorted","asc");
+    if (th.dataset.sort === SORT_KEY) {
+      th.classList.add("sorted");
+      if (SORT_DIR === 1) th.classList.add("asc");
+    }
+  });
+}
+document.querySelectorAll("#profile-table th").forEach(th => {
+  th.addEventListener("click", () => {
+    const k = th.dataset.sort;
+    if (SORT_KEY === k) SORT_DIR *= -1;
+    else { SORT_KEY = k; SORT_DIR = (typeof PROFILES[0][k] === "number") ? -1 : 1; }
+    renderTable();
+  });
+});
+document.querySelectorAll("[data-hl]").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-hl]").forEach(x => x.classList.remove("on","cyan"));
+  HIGHLIGHT = b.dataset.hl;
+  b.classList.add("on");
+  if (HIGHLIGHT === "balanced") b.classList.add("cyan");
+  renderTable();
+}));
+renderTable();
+
+/* ============================================================
+   PROMPT DRILLDOWN
+   ============================================================ */
+let PROMPT_FILTER = "all";
+let HIDE_THINKING = false;
+
+function highlightThinking(text) {
+  // wrap thinking-style preambles in span.think
+  const lines = text.split("\n");
+  let inThink = false;
+  return lines.map(line => {
+    if (/^\s*<think>/.test(line)) { inThink = true; return `<span class="think">${escapeHtml(line)}</span>`; }
+    if (/^\s*<\/think>/.test(line)) { inThink = false; return `<span class="think">${escapeHtml(line)}</span>`; }
+    if (inThink) return `<span class="think">${escapeHtml(line)}</span>`;
+    if (/^\s*(here'?s a thinking process|thinking process|deconstruct the prompt|analyze user|drafting - attempt|identify )/i.test(line)) {
+      return `<span class="think">${escapeHtml(line)}</span>`;
+    }
+    if (/^\s*\d+\.\s+\*\*(analyze|understand|deconstruct|identify|determine|drafting)/i.test(line)) {
+      return `<span class="think">${escapeHtml(line)}</span>`;
+    }
+    return escapeHtml(line);
+  }).join("\n");
+}
+function escapeHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function qBarClass(q, qmax) {
+  const r = q / qmax;
+  if (r < 0.6) return "low";
+  if (r >= 1) return "full";
+  return "";
+}
+function renderPrompts() {
+  const filtered = PROMPT_FILTER === "all" ? PROMPTS : PROMPTS.filter(p => p.category === PROMPT_FILTER);
+  document.getElementById("pgrid").innerHTML = filtered.map(p => {
+    const runs = RUNS.filter(r => r.prompt === p.id).sort((a, b) => a.latency - b.latency);
+    return `<div class="pcard">
+      <div class="pcard-head">
+        <div class="pcat">${p.category}<span class="pid">${p.id}</span></div>
+        <div class="pdesc">${p.desc}</div>
+        <div class="meta">${runs.length} profiles · sorted by latency ↑</div>
+      </div>
+      <table class="prun-table">
+        <thead>
+          <tr>
+            <th style="width:30px"></th>
+            <th>Profile</th>
+            <th class="numeric">Latency</th>
+            <th class="numeric">tok/s</th>
+            <th class="numeric">Quality</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${runs.map((r, idx) => `
+            <tr class="toggle-row" data-prompt="${p.id}" data-profile="${r.profile}">
+              <td></td>
+              <td><span class="pn">${r.profile}</span></td>
+              <td class="numeric">${r.latency.toFixed(2)} s</td>
+              <td class="numeric">${r.tps.toFixed(1)}</td>
+              <td class="numeric">
+                <span class="qbar ${qBarClass(r.q, r.qmax)}">
+                  <span class="qnum">${r.q}/${r.qmax}</span>
+                  <span class="qtrack"><span class="qfill" style="width:${(r.q/r.qmax)*100}%"></span></span>
+                </span>
+              </td>
+              <td><span class="miniflag ${r.clean === 'clean' ? 'clean' : r.clean === 'empty' ? 'danger' : 'leak'}">${r.clean === 'clean' ? 'clean' : r.clean === 'empty' ? 'empty' : 'thinking'}</span></td>
+            </tr>
+            <tr class="excerpt-row" style="display:none">
+              <td colspan="6">
+                <div class="excerpt-inner ${HIDE_THINKING ? 'hide-thinking' : ''}">${highlightThinking(r.excerpt)}</div>
+                <div class="excerpt-foot">
+                  <span class="raw-path" data-path="${r.path}">${r.path}</span>
+                  <button class="copy-path" data-path="${r.path}"><i class="fa-regular fa-copy"></i> copy path</button>
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>`;
+  }).join("");
+  attachPromptHandlers();
+}
+function attachPromptHandlers() {
+  document.querySelectorAll(".toggle-row").forEach(tr => {
+    tr.addEventListener("click", () => {
+      tr.classList.toggle("open");
+      const next = tr.nextElementSibling;
+      next.style.display = (next.style.display === "none" || !next.style.display) ? "table-row" : "none";
+    });
+  });
+  document.querySelectorAll(".copy-path").forEach(b => {
+    b.addEventListener("click", e => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(b.dataset.path);
+      const orig = b.innerHTML;
+      b.innerHTML = '<i class="fa-solid fa-check"></i> copied';
+      setTimeout(() => b.innerHTML = orig, 1200);
+    });
+  });
+}
+document.querySelectorAll("[data-filter]").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-filter]").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  PROMPT_FILTER = b.dataset.filter;
+  renderPrompts();
+}));
+document.getElementById("thinking-toggle").addEventListener("click", e => {
+  HIDE_THINKING = !HIDE_THINKING;
+  e.target.classList.toggle("on", HIDE_THINKING);
+  e.target.textContent = HIDE_THINKING ? "Show thinking text" : "Hide thinking text";
+  document.querySelectorAll(".excerpt-inner").forEach(el => el.classList.toggle("hide-thinking", HIDE_THINKING));
+});
+renderPrompts();
+</script>
+
+</body>
+</html>
