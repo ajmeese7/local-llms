@@ -17,9 +17,9 @@
 ## Current Model Layout
 
 - RTX 5090 default profile: `qwen36-27b`
-- RTX 5090 supported profiles: `qwen36-27b`, `mythos`, `gemma4-e4b-obliterated`
+- RTX 5090 supported profiles: `qwen36-27b`, `mythos`
 - RTX 5060 Ti default profile: `qwen35-9b`
-- RTX 5060 Ti supported profiles: `qwen35-9b`, `gemma4-e4b-obliterated`
+- RTX 5060 Ti supported profiles: `qwen35-9b`
 
 ## Important Model Facts
 
@@ -39,7 +39,7 @@
 ## Normal Verification
 
 - Syntax check: `bash -n setup.sh config/llama-launcher.sh config/select-model.sh`
-- Find model/profile references: `rg -n "qwen36|qwen35-9b|mythos|gemma4-e4b-obliterated" .`
+- Find model/profile references: `rg -n "qwen36|qwen35-9b|mythos" .`
 - Inspect current repo changes: `git status --short`
 
 ## Editing Notes

@@ -1,175 +1,117 @@
 # Benchmarking
 
-This repo includes a helper at [`scripts/benchmark.sh`](../scripts/benchmark.sh) for repeatable local benchmarks. Results are written under `./benchmark-results/`.
+Use [`scripts/benchmark.sh`](../scripts/benchmark.sh). This guide intentionally avoids raw runtime commands and one-off API recipes. If the repo has benchmark automation, the docs should use that automation.
 
-## Benchmark Layers
+Results are written under `./benchmark-results/`.
 
-Use three levels of comparison:
+## What Works From This Repo
 
-1. Raw engine speed
-2. API latency and throughput
-3. Task quality
+| Benchmark | Command | Requires |
+|---|---|---|
+| Active API aliases | `models` | Running `llama-server`, `curl`, `python3` |
+| API latency and output speed | `api` | Running `llama-server`, `curl`, `python3` |
+| Saved API run comparison | `compare` | API benchmark result directories, `python3` |
+| Raw GGUF runtime speed | `llama-bench` | `llama.cpp` built by `setup.sh` |
 
-Keep comparisons fair:
+`setup.sh` builds `llama.cpp` under `~/.local/share/llama.cpp`. That build normally provides `llama-server` and `llama-bench`. If `llama-bench` is missing, rerun `./setup.sh` and choose the rebuild path.
 
-- Use the same prompt length, max output tokens, temperature, and concurrency.
-- Restart the server or discard the first run if you want to reduce warmup effects.
-- Record GPU, driver, CUDA version, context length, and quantization.
+## Before Running
 
-For selector-backed profiles, also record the active `MODEL_PROFILE`. Some overlays carry decoding defaults. In particular, `gemma4-e4b-obliterated` injects `--temp 0.7 --top-p 0.9 --top-k 40 --repeat-penalty 1.1` through the launcher.
+Start from a working service:
 
-## 1. Raw llama.cpp throughput
+- `./setup.sh` has completed.
+- `sudo /etc/llama-server/select-model.sh` has selected an installed profile.
+- `http://127.0.0.1:9999/v1/models` responds from the local machine.
 
-Use `llama-bench` for GGUF runtime comparisons:
+If `API_KEY` is set in the runtime GPU config, either export the same value as `API_KEY` or pass `--api-key` to the helper.
 
-```bash
-~/.local/share/llama.cpp/build/bin/llama-bench \
-  -m ~/models/mythos-26b-a4b-prism-pro-dq.gguf
-```
-
-Or use the helper:
+## Check The Active Alias
 
 ```bash
-./scripts/benchmark.sh llama-bench \
-  --model-file ~/models/mythos-26b-a4b-prism-pro-dq.gguf \
-  --runs 3 \
-  --label mythos-llama-bench
+./scripts/benchmark.sh models
 ```
 
-```bash
-./scripts/benchmark.sh llama-bench \
-  --model-file ~/models/gemma-4-E4B-it-OBLITERATED-Q4_K_M.gguf \
-  --runs 3 \
-  --label gemma4-e4b-obliterated-llama-bench
-```
+This prints the model aliases exposed by the active OpenAI-compatible endpoint. The `api` command also auto-detects the first alias, so this is mainly a sanity check.
 
-Look at the `pp` and `tg` rows in each log:
-
-- `pp` measures prompt processing throughput
-- `tg` measures token generation throughput
-
-## 2. API latency and throughput
-
-If you want end-to-end timing against an OpenAI-compatible server, use `vllm bench serve` or the local helper.
-
-### Using vLLM's benchmark tool
-
-```bash
-vllm bench serve \
-  --backend openai \
-  --base-url http://127.0.0.1:9999 \
-  --endpoint /v1/completions \
-  --dataset-name random \
-  --model MYTHOS-26B-A4B \
-  --num-prompts 200 \
-  --input-len 2048 \
-  --output-len 256 \
-  --request-rate 1
-```
-
-Repeat against the Gemma server on port `8001`.
-
-### Using the repo helper
+## API Benchmark
 
 ```bash
 ./scripts/benchmark.sh api \
-  --base-url http://127.0.0.1:9999/v1 \
-  --model MYTHOS-26B-A4B \
   --iterations 5 \
   --max-tokens 256 \
-  --label mythos-api
+  --label active-api
+```
 
+By default this targets `http://127.0.0.1:9999/v1`, auto-detects the first model alias from `/models`, sends completion requests, and stores:
+
+- `request.txt`: endpoint, model, mode, iterations, token limit, temperature
+- `response-*.json`: raw responses
+- `metrics-*.txt`: curl timing data
+- `summary.tsv`: per-run metrics
+- `summary.txt`: averages across successful runs
+
+Use chat mode only when you specifically want to benchmark `/v1/chat/completions`:
+
+```bash
 ./scripts/benchmark.sh api \
-  --base-url http://127.0.0.1:9999/v1 \
-  --model gemma-4-E4B-it-OBLITERATED \
+  --mode chat \
   --iterations 5 \
   --max-tokens 256 \
-  --label gemma4-e4b-obliterated-api
+  --label active-chat-api
+```
 
+For a second local endpoint, keep the same helper and change only the base URL:
+
+```bash
 ./scripts/benchmark.sh api \
   --base-url http://127.0.0.1:8001/v1 \
-  --model LilaRest/gemma-4-31B-it-NVFP4-turbo \
   --iterations 5 \
   --max-tokens 256 \
-  --label gemma-nvfp4-api
+  --label endpoint-8001-api
 ```
 
-Each run stores:
+## Raw llama.cpp Benchmark
 
-- Request metadata
-- Raw response JSON
-- Per-run latency metrics
-- A TSV summary with derived completion tokens/sec when usage data is available
+```bash
+./scripts/benchmark.sh llama-bench \
+  --runs 3 \
+  --label active-llama-bench
+```
 
-## Compare saved API runs
+Without `--model-file`, the helper resolves the active runtime model from the GPU config, `/etc/llama-server/active-model.conf`, and the selected model overlay. Use this when comparing GGUF runtime throughput without HTTP overhead.
 
-Once you have saved a few `api` runs, generate a Markdown comparison table:
+Each run stores a raw `llama-bench` log. Inspect the `pp` and `tg` rows:
+
+- `pp`: prompt processing throughput
+- `tg`: token generation throughput
+
+## Compare API Runs
+
+After saving two or more API runs, compare them with the helper:
 
 ```bash
 ./scripts/benchmark.sh compare \
-  --run-dir ./benchmark-results/20260414-101500-mythos-api \
-  --run-dir ./benchmark-results/20260414-102200-gemma-nvfp4-api \
+  --run-dir ./benchmark-results/20260414-101500-active-api \
+  --run-dir ./benchmark-results/20260414-102200-active-chat-api \
   --output ./benchmark-results/model-comparison.md
 ```
 
-The compare mode is intentionally narrow. It aggregates structured API timings only. Keep the raw `llama-bench` logs and `lm-eval` outputs for deeper inspection.
+The compare mode intentionally reads only structured `api` outputs. It does not parse `llama-bench` logs.
 
-## 3. Task quality with lm-eval
+## Fair Comparisons
 
-Use EleutherAI's `lm-evaluation-harness` against your local API:
+Keep these fixed when comparing models or endpoints:
 
-```bash
-pip install "lm_eval[api]"
+- Prompt text
+- `--mode`
+- `--max-tokens`
+- Temperature
+- Concurrency, if you add it later
+- GPU, driver, CUDA version, context length, and quantization
+- Active `MODEL_PROFILE`
 
-export OPENAI_API_KEY=your-configured-api-key  # only if the local server requires auth
+Some overlays carry decoding defaults. Record the active profile with the result when comparing it to another model.
 
-lm_eval \
-  --model local-completions \
-  --tasks gsm8k,hellaswag,mmlu \
-  --model_args model=MYTHOS-26B-A4B,base_url=http://127.0.0.1:9999/v1/completions,num_concurrent=1,max_retries=3,tokenized_requests=False,batch_size=1
-```
+## What This Guide Does Not Cover
 
-Helper version:
-
-```bash
-./scripts/benchmark.sh lm-eval \
-  --base-url http://127.0.0.1:9999/v1/completions \
-  --model MYTHOS-26B-A4B \
-  --tasks gsm8k,hellaswag,mmlu \
-  --limit 50 \
-  --label mythos-lm-eval
-```
-
-Repeat against the Gemma endpoint on port `8001`.
-
-## 4. Perplexity on your own corpus
-
-If your workload looks more like “fit on my own docs or codebase” than public benchmarks, use `llama-perplexity`:
-
-```bash
-~/.local/share/llama.cpp/build/bin/llama-perplexity \
-  -m ~/models/mythos-26b-a4b-prism-pro-dq.gguf \
-  -f ./sample-corpus.txt
-```
-
-Only compare perplexity on the exact same corpus.
-
-## 5. Coding-task evaluation with SWE-bench
-
-If software engineering is the main use case, add SWE-bench as a later-stage benchmark after speed and general quality checks.
-
-Recommended order:
-
-1. `llama-bench` or `api` mode to eliminate slow candidates
-2. `lm-eval` for quick quality sanity checks
-3. SWE-bench Lite or a small verified subset for software-task capability
-
-See [SWE-BENCH.md](SWE-BENCH.md) for the dedicated playbook.
-
-## Simple Benchmark Sheet
-
-| Model | Runtime | Prompt len | Output len | Req/s | TTFT | tok/s | Task score notes |
-|---|---|---|---|---|---|---|---|
-| MYTHOS-26B-A4B | llama.cpp | 2048 | 256 | 1 | | | |
-| gemma-4-E4B-it-OBLITERATED | llama.cpp | 2048 | 256 | 1 | | | |
-| gemma-4-31B-it-NVFP4-turbo | vLLM | 2048 | 256 | 1 | | | |
+This guide is for benchmarks the repo can run through its own helper. External quality suites are separate projects with their own setup, dependencies, and failure modes. They should not be mixed into this basic throughput guide unless this repo grows first-class scripts for installing and running them.

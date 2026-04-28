@@ -32,8 +32,8 @@ The detailed guides now live under [`docs/`](docs/README.md).
 | [docs/SETUP.md](docs/SETUP.md) | Prerequisites, CUDA install, quick start, and manual setup |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | GPU config files, launcher behavior, and model switching |
 | [docs/USAGE.md](docs/USAGE.md) | Web UI, API examples, compatible apps, and useful commands |
-| [docs/MODELS.md](docs/MODELS.md) | Model recommendations and notes for Qwen3.6, MYTHOS, Gemma E4B OBLITERATED, and Gemma NVFP4 |
-| [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | `llama-bench`, API timing, `lm-eval`, compare mode, and benchmark workflow |
+| [docs/MODELS.md](docs/MODELS.md) | Model recommendations and notes for Qwen3.6, MYTHOS, and Gemma NVFP4 |
+| [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | Scripted API timing, `llama-bench`, compare mode, and benchmark workflow |
 | [docs/SWE-BENCH.md](docs/SWE-BENCH.md) | Software-task benchmarking playbook for SWE-bench |
 | [docs/WSL2.md](docs/WSL2.md) | Networking, auto-start, and keep-alive guidance for WSL2 |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | CUDA, OOM, service startup, and build failures |
@@ -47,7 +47,7 @@ The main operational entrypoints are:
 - [`config/llama-launcher.sh`](config/llama-launcher.sh): systemd entrypoint that detects the GPU, resolves the active model profile, loads the overlay, and execs `llama-server`.
 - [`config/runtime-common.sh`](config/runtime-common.sh): shared shell helpers used by setup-time API verification and launcher-time optional `--api-key` handling.
 - [`config/select-model.sh`](config/select-model.sh): writes `/etc/llama-server/active-model.conf` for the next restart.
-- [`scripts/benchmark.sh`](scripts/benchmark.sh): benchmark helper for `llama-bench`, API timing, compare mode, and `lm-eval`.
+- [`scripts/benchmark.sh`](scripts/benchmark.sh): benchmark helper for active API aliases, API timing, `llama-bench`, and compare mode.
 
 ## Suggested Reading Paths
 

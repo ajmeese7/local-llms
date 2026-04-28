@@ -10,7 +10,6 @@ With Q4_K_M quantization, models up to about the high-20B/low-30B range fit comf
 |---|---|---|---|---|
 | Qwen3.6-27B | llama.cpp | Q8_0 | 28.6GB | Default RTX 5090 profile in this repo; uses shorter 32K context |
 | MYTHOS-26B-A4B-PRISM-PRO-DQ | llama.cpp | PRISM-DQ GGUF | ~17GB | Supported RTX 5090 profile via `mythos` |
-| Gemma 4 E4B IT OBLITERATED | llama.cpp | Q4_K_M | 4.9GB | Supported on both GPUs via `gemma4-e4b-obliterated` |
 | Gemma 4 31B IT NVFP4 Turbo | vLLM | NVFP4 | ~18.5 GiB GPU memory | Best treated as a separate Blackwell-only server |
 | Llama-3.1-70B | llama.cpp | Q4_K_M | ~40GB | Needs CPU offload for some layers |
 
@@ -21,7 +20,6 @@ With Q4_K_M, models up to about 14B fit comfortably.
 | Model | Runtime | Quant | Size | Notes |
 |---|---|---|---|---|
 | Qwen3.5-9B | llama.cpp | Q4_K_M | ~5.5GB | Default 5060 Ti profile |
-| Gemma 4 E4B IT OBLITERATED | llama.cpp | Q4_K_M | 4.9GB | Supported alternate profile via `gemma4-e4b-obliterated` |
 | Llama-3.1-8B | llama.cpp | Q4_K_M | ~4.9GB | Fast and dependable |
 
 ## Unique Model Profiles

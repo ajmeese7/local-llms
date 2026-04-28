@@ -30,8 +30,8 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 
 | GPU | Config | VRAM | Default Profile | Supported Profiles |
 |---|---|---|---|---|
-| RTX 5090 | [`config/rtx-5090.conf`](../config/rtx-5090.conf) | 32GB | `qwen36-27b` | `qwen36-27b`, `mythos`, `gemma4-e4b-obliterated` |
-| RTX 5060 Ti | [`config/rtx-5060.conf`](../config/rtx-5060.conf) | 16GB | `qwen35-9b` | `qwen35-9b`, `gemma4-e4b-obliterated` |
+| RTX 5090 | [`config/rtx-5090.conf`](../config/rtx-5090.conf) | 32GB | `qwen36-27b` | `qwen36-27b`, `mythos` |
+| RTX 5060 Ti | [`config/rtx-5060.conf`](../config/rtx-5060.conf) | 16GB | `qwen35-9b` | `qwen35-9b` |
 
 ## Adding a New GPU
 
@@ -65,7 +65,7 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 
 ## Model Overlays
 
-Model-specific settings live in overlay files like `qwen36-27b.conf`, `qwen35-9b.conf`, `mythos.conf`, and `gemma4-e4b-obliterated.conf`. These files define the model path, Hugging Face metadata, and `ALIAS`. When a specific artifact needs different runtime limits than the GPU-wide default, an overlay can also lower settings such as `CONTEXT_LENGTH`; overlays should not redefine secrets such as `API_KEY`.
+Model-specific settings live in overlay files like `qwen36-27b.conf`, `qwen35-9b.conf`, and `mythos.conf`. These files define the model path, Hugging Face metadata, and `ALIAS`. When a specific artifact needs different runtime limits than the GPU-wide default, an overlay can also lower settings such as `CONTEXT_LENGTH`; overlays should not redefine secrets such as `API_KEY`.
 
 Overlays can also define optional decoding knobs such as `TEMPERATURE`, `TOP_P`, `TOP_K`, and `REPEAT_PENALTY`. That is the supported way to keep a model profile aligned with its published runtime guidance without moving GPU-memory-sensitive settings out of the base config.
 
@@ -87,10 +87,8 @@ The selector writes `/etc/llama-server/active-model.conf`, and the launcher load
 ## Model-Specific Notes
 
 - `mythos` is a supported RTX 5090 profile. It uses the `Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF` language-model GGUF directly in this service.
-- `gemma4-e4b-obliterated` is supported on both GPUs and carries the OBLITERATUS recommended decoding defaults as overlay-owned runtime overrides.
 - `qwen36-27b` is the RTX 5090 default profile. It uses the `ggml-org/Qwen3.6-27B-GGUF` Q8_0 artifact derived from the upstream `Qwen/Qwen3.6-27B` release, and the overlay lowers `CONTEXT_LENGTH` to `32768` to keep that larger quant practical on a 32 GB card.
 - `qwen35-9b` is the RTX 5060 Ti default profile.
-- `gemma4-e4b-obliterated` remains the alternate 5060 Ti profile.
 - `LilaRest/gemma-4-31B-it-NVFP4-turbo` is still a separate `vLLM` server path, not a `llama.cpp` overlay.
 
 See [MODELS.md](MODELS.md) for the exact commands and runtime distinctions.

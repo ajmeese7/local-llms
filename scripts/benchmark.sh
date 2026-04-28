@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG_DIR="$ROOT_DIR/config"
+RUNTIME_CONFIG_DIR="${LLAMA_CONFIG_DIR:-/etc/llama-server}"
 RESULTS_ROOT_DEFAULT="$ROOT_DIR/benchmark-results"
 
 die() {
@@ -34,22 +36,200 @@ strip_trailing_slash() {
     printf '%s\n' "${value%/}"
 }
 
+append_auth_header() {
+    local array_name="$1"
+    local -n headers_ref="$array_name"
+    local api_key="${2:-}"
+
+    if [ -n "$api_key" ]; then
+        headers_ref+=(-H "Authorization: Bearer $api_key")
+    fi
+}
+
+load_active_model_profile() {
+    local active_model_file="$1"
+    local profile_line
+    local profile_value
+
+    [ -f "$active_model_file" ] || return 0
+
+    profile_line="$(grep -m1 -E '^[[:space:]]*MODEL_PROFILE[[:space:]]*=' "$active_model_file" || true)"
+    [ -n "$profile_line" ] || return 0
+
+    profile_value="${profile_line#*=}"
+    profile_value="${profile_value%%#*}"
+    profile_value="${profile_value#"${profile_value%%[![:space:]]*}"}"
+    profile_value="${profile_value%"${profile_value##*[![:space:]]}"}"
+
+    case "$profile_value" in
+        \"*\")
+            profile_value="${profile_value#\"}"
+            profile_value="${profile_value%\"}"
+            ;;
+        \'*\')
+            profile_value="${profile_value#\'}"
+            profile_value="${profile_value%\'}"
+            ;;
+    esac
+
+    printf '%s\n' "$profile_value"
+}
+
+profile_supported() {
+    local needle="$1"
+    local profile
+
+    for profile in ${SUPPORTED_MODEL_PROFILES:-}; do
+        if [ "$profile" = "$needle" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+prefer_runtime_file() {
+    local filename="$1"
+
+    if [ -f "$RUNTIME_CONFIG_DIR/$filename" ]; then
+        printf '%s\n' "$RUNTIME_CONFIG_DIR/$filename"
+        return 0
+    fi
+
+    if [ -f "$CONFIG_DIR/$filename" ]; then
+        printf '%s\n' "$CONFIG_DIR/$filename"
+        return 0
+    fi
+
+    return 1
+}
+
+detect_gpu_config_file() {
+    local nvidia_smi_bin="${NVIDIA_SMI_BIN:-/usr/lib/wsl/lib/nvidia-smi}"
+    local gpu_name
+    local config_name=""
+
+    if [ ! -x "$nvidia_smi_bin" ]; then
+        nvidia_smi_bin="nvidia-smi"
+    fi
+
+    command -v "$nvidia_smi_bin" >/dev/null 2>&1 || die "nvidia-smi is required to resolve the active model; pass --model-file explicitly"
+
+    gpu_name="$("$nvidia_smi_bin" --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
+    [ -n "$gpu_name" ] || die "could not detect GPU via nvidia-smi; pass --model-file explicitly"
+
+    if echo "$gpu_name" | grep -qi "5090"; then
+        config_name="rtx-5090.conf"
+    elif echo "$gpu_name" | grep -qi "5060"; then
+        config_name="rtx-5060.conf"
+    fi
+
+    [ -n "$config_name" ] || die "no GPU config mapping for '$gpu_name'; pass --model-file explicitly"
+    prefer_runtime_file "$config_name" || die "GPU config not found: $config_name"
+}
+
+resolve_active_model_file() {
+    local gpu_config_file
+    local active_profile
+    local overlay_file
+
+    gpu_config_file="$(detect_gpu_config_file)"
+
+    API_KEY=""
+    MODEL=""
+    SUPPORTED_MODEL_PROFILES=""
+    DEFAULT_MODEL_PROFILE=""
+    # shellcheck source=/dev/null
+    source "$gpu_config_file"
+
+    active_profile="$(load_active_model_profile "$RUNTIME_CONFIG_DIR/active-model.conf")"
+    [ -n "$active_profile" ] || active_profile="${DEFAULT_MODEL_PROFILE:-}"
+    [ -n "$active_profile" ] || die "no active MODEL_PROFILE and no DEFAULT_MODEL_PROFILE in $gpu_config_file"
+
+    if [ -n "${SUPPORTED_MODEL_PROFILES:-}" ] && ! profile_supported "$active_profile"; then
+        die "active MODEL_PROFILE '$active_profile' is not supported by $gpu_config_file"
+    fi
+
+    overlay_file="$(prefer_runtime_file "$active_profile.conf")" || die "model overlay not found for active profile: $active_profile"
+
+    MODEL=""
+    # shellcheck source=/dev/null
+    source "$overlay_file"
+
+    [ -n "${MODEL:-}" ] || die "MODEL is not set by $overlay_file"
+    printf '%s\n' "$MODEL"
+}
+
+fetch_models_json() {
+    local base_url="$1"
+    local api_key="${2:-}"
+    local -a auth_header=()
+
+    append_auth_header auth_header "$api_key"
+
+    curl -sS \
+        --fail \
+        --noproxy "*" \
+        --connect-timeout "${LLAMA_API_CONNECT_TIMEOUT:-2}" \
+        --max-time "${LLAMA_API_MAX_TIME:-5}" \
+        "${auth_header[@]}" \
+        -H "Content-Type: application/json" \
+        "$(strip_trailing_slash "$base_url")/models"
+}
+
+extract_model_ids() {
+    python3 -c '
+import json
+import sys
+
+try:
+    payload = json.load(sys.stdin)
+except json.JSONDecodeError as exc:
+    raise SystemExit(f"could not parse /v1/models response as JSON: {exc}")
+
+ids = [
+    item.get("id")
+    for item in payload.get("data", [])
+    if isinstance(item, dict) and item.get("id")
+]
+
+if not ids:
+    raise SystemExit("no model ids found in /v1/models response")
+
+print("\n".join(ids))
+'
+}
+
+detect_first_api_model() {
+    local base_url="$1"
+    local api_key="${2:-}"
+
+    fetch_models_json "$base_url" "$api_key" | extract_model_ids | head -1
+}
+
 usage() {
     cat <<'EOF'
 Usage:
+  scripts/benchmark.sh models [options]
   scripts/benchmark.sh api [options]
   scripts/benchmark.sh llama-bench [options]
-  scripts/benchmark.sh lm-eval [options]
   scripts/benchmark.sh compare [options]
 
 Subcommands:
+  models
+    Print model aliases exposed by the active OpenAI-compatible endpoint.
+
+    Options:
+      --base-url URL         Base API URL, default: http://127.0.0.1:9999/v1
+      --api-key KEY          Bearer token, default: API_KEY or OPENAI_API_KEY
+
   api
     Run repeated timing tests against an OpenAI-compatible endpoint and save
     raw responses plus a TSV summary.
 
     Options:
       --base-url URL         Base API URL, default: http://127.0.0.1:9999/v1
-      --model NAME           Model name reported by the API
+      --model NAME           Model name reported by the API, default: first /models alias
       --mode MODE            completions or chat, default: completions
       --prompt TEXT          Inline prompt text
       --prompt-file PATH     Read prompt text from a file
@@ -63,28 +243,11 @@ Subcommands:
     Run llama.cpp's llama-bench multiple times and store each run log.
 
     Options:
-      --model-file PATH      GGUF model path
+      --model-file PATH      GGUF model path, default: active runtime model
       --runs N               Number of runs, default: 3
       --llama-bench PATH     Path to llama-bench binary
       --label NAME           Optional label for results directory
       --extra-arg ARG        Extra argument passed through to llama-bench
-
-  lm-eval
-    Run EleutherAI lm-eval against a local OpenAI-compatible endpoint.
-
-    Options:
-      --base-url URL         Base API URL, default: http://127.0.0.1:9999/v1/completions
-      --model NAME           Model name reported by the API
-      --tasks LIST           Comma-separated task list
-      --backend NAME         local-completions or local-chat-completions,
-                             default: local-completions
-      --num-concurrent N     Request concurrency, default: 1
-      --batch-size N         Batch size, default: 1
-      --limit N              Optional sample limit for quick comparisons
-      --api-key KEY          Bearer token, default: API_KEY or OPENAI_API_KEY
-      --label NAME           Optional label for results directory
-      --extra-model-arg ARG  Extra model_args fragment, may be repeated
-      --extra-arg ARG        Extra lm_eval CLI arg, may be repeated
 
   compare
     Build a Markdown comparison table from saved API benchmark runs.
@@ -93,6 +256,25 @@ Subcommands:
       --run-dir PATH         Benchmark run directory from `api`, may be repeated
       --output PATH          Optional Markdown output file
 EOF
+}
+
+run_models() {
+    require_cmd curl
+    require_cmd python3
+
+    local base_url="http://127.0.0.1:9999/v1"
+    local api_key="${API_KEY:-${OPENAI_API_KEY:-}}"
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --base-url) base_url="$2"; shift 2 ;;
+            --api-key) api_key="$2"; shift 2 ;;
+            -h|--help) usage; exit 0 ;;
+            *) die "unknown models option: $1" ;;
+        esac
+    done
+
+    fetch_models_json "$base_url" "$api_key" | extract_model_ids
 }
 
 build_request_body() {
@@ -271,7 +453,7 @@ run_api_benchmark() {
     require_cmd python3
 
     local base_url="http://127.0.0.1:9999/v1"
-    local model=""
+    local model="auto"
     local mode="completions"
     local prompt="Summarize why consistent benchmark settings matter in one paragraph."
     local prompt_file=""
@@ -298,11 +480,17 @@ run_api_benchmark() {
         esac
     done
 
-    [ -n "$model" ] || die "--model is required"
     case "$mode" in
         completions|chat) ;;
         *) die "--mode must be completions or chat" ;;
     esac
+
+    if [ -z "$model" ] || [ "$model" = "auto" ]; then
+        note "auto-detecting model alias from $(strip_trailing_slash "$base_url")/models"
+        model="$(detect_first_api_model "$base_url" "$api_key")"
+        [ -n "$model" ] || die "could not auto-detect model alias; pass --model explicitly"
+        note "using model: $model"
+    fi
 
     if [ -n "$prompt_file" ]; then
         [ -f "$prompt_file" ] || die "prompt file not found: $prompt_file"
@@ -333,9 +521,7 @@ run_api_benchmark() {
     } >"$headers_file"
 
     local auth_header=()
-    if [ -n "$api_key" ]; then
-        auth_header=(-H "Authorization: Bearer $api_key")
-    fi
+    append_auth_header auth_header "$api_key"
 
     local request_body
     request_body="$(build_request_body "$mode" "$model" "$prompt" "$max_tokens" "$temperature")"
@@ -389,7 +575,12 @@ run_llama_bench() {
         esac
     done
 
-    [ -n "$model_file" ] || die "--model-file is required"
+    if [ -z "$model_file" ]; then
+        note "auto-detecting active runtime model file"
+        model_file="$(resolve_active_model_file)"
+        note "using model file: $model_file"
+    fi
+
     [ -f "$model_file" ] || die "model file not found: $model_file"
     [ -x "$llama_bench_bin" ] || die "llama-bench binary not executable: $llama_bench_bin"
 
@@ -428,82 +619,6 @@ PY
 
     note "saved llama-bench logs to: $run_dir"
     note "inspect the pp/tg rows in each log for prompt and generation throughput"
-}
-
-run_lm_eval() {
-    require_cmd lm_eval
-
-    local base_url="http://127.0.0.1:9999/v1/completions"
-    local model=""
-    local tasks=""
-    local backend="local-completions"
-    local num_concurrent=1
-    local batch_size=1
-    local limit=""
-    local api_key="${API_KEY:-${OPENAI_API_KEY:-}}"
-    local label="lm-eval"
-    local -a extra_model_args=()
-    local -a extra_args=()
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-            --base-url) base_url="$2"; shift 2 ;;
-            --model) model="$2"; shift 2 ;;
-            --tasks) tasks="$2"; shift 2 ;;
-            --backend) backend="$2"; shift 2 ;;
-            --num-concurrent) num_concurrent="$2"; shift 2 ;;
-            --batch-size) batch_size="$2"; shift 2 ;;
-            --limit) limit="$2"; shift 2 ;;
-            --api-key) api_key="$2"; shift 2 ;;
-            --label) label="$2"; shift 2 ;;
-            --extra-model-arg) extra_model_args+=("$2"); shift 2 ;;
-            --extra-arg) extra_args+=("$2"); shift 2 ;;
-            -h|--help) usage; exit 0 ;;
-            *) die "unknown lm-eval option: $1" ;;
-        esac
-    done
-
-    [ -n "$model" ] || die "--model is required"
-    [ -n "$tasks" ] || die "--tasks is required"
-    [ -n "$api_key" ] || die "set --api-key or API_KEY/OPENAI_API_KEY for lm-eval"
-
-    local run_dir
-    run_dir="$(make_run_dir "$label")"
-    local log_file="$run_dir/lm-eval.log"
-    local args_file="$run_dir/command.txt"
-    local -a eval_cmd
-
-    local model_args="model=$model,base_url=$(strip_trailing_slash "$base_url"),num_concurrent=$num_concurrent,max_retries=3,tokenized_requests=False,batch_size=$batch_size"
-    local fragment
-    for fragment in "${extra_model_args[@]}"; do
-        model_args="$model_args,$fragment"
-    done
-
-    {
-        printf 'backend=%s\n' "$backend"
-        printf 'tasks=%s\n' "$tasks"
-        printf 'model_args=%s\n' "$model_args"
-    } >"$args_file"
-
-    eval_cmd=(
-        lm_eval
-        --model "$backend"
-        --tasks "$tasks"
-        --model_args "$model_args"
-    )
-
-    if [ -n "$limit" ]; then
-        eval_cmd+=(--limit "$limit")
-    fi
-
-    if [ "${#extra_args[@]}" -gt 0 ]; then
-        eval_cmd+=("${extra_args[@]}")
-    fi
-
-    note "lm-eval -> $log_file"
-    OPENAI_API_KEY="$api_key" "${eval_cmd[@]}" 2>&1 | tee "$log_file"
-
-    note "saved lm-eval output to: $run_dir"
 }
 
 run_compare() {
@@ -669,9 +784,9 @@ main() {
     shift
 
     case "$command" in
+        models) run_models "$@" ;;
         api) run_api_benchmark "$@" ;;
         llama-bench) run_llama_bench "$@" ;;
-        lm-eval) run_lm_eval "$@" ;;
         compare) run_compare "$@" ;;
         -h|--help|help) usage ;;
         *) die "unknown subcommand: $command" ;;
