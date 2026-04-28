@@ -53,7 +53,7 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 | `MODEL` | Path to the GGUF model file from the overlay |
 | `HF_REPO` / `HF_FILE` | Hugging Face repo and filename used by `setup.sh` |
 | `ALIAS` | Model name reported by the API |
-| `TEMPERATURE` / `TOP_P` / `TOP_K` / `REPEAT_PENALTY` | Optional per-model decoding overrides from the overlay |
+| `TEMPERATURE` / `TOP_P` / `TOP_K` / `MIN_P` / `PRESENCE_PENALTY` / `REPEAT_PENALTY` | Optional per-model decoding overrides from the overlay |
 | `HOST` | Bind address |
 | `PORT` | API port |
 | `API_KEY` | Optional bearer token for requests; leave unset or empty to disable auth |
@@ -67,7 +67,7 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 
 Model-specific settings live in overlay files like `qwen36-27b.conf`, `qwen35-9b.conf`, and `mythos.conf`. These files define the model path, Hugging Face metadata, and `ALIAS`. When a specific artifact needs different runtime limits than the GPU-wide default, an overlay can also lower settings such as `CONTEXT_LENGTH`; overlays should not redefine secrets such as `API_KEY`.
 
-Overlays can also define optional decoding knobs such as `TEMPERATURE`, `TOP_P`, `TOP_K`, and `REPEAT_PENALTY`. That is the supported way to keep a model profile aligned with its published runtime guidance without moving GPU-memory-sensitive settings out of the base config.
+Overlays can also define optional decoding knobs such as `TEMPERATURE` and `TOP_P`. That is the supported way to keep a model profile aligned with its published runtime guidance without moving GPU-memory-sensitive settings out of the base config.
 
 To switch models:
 

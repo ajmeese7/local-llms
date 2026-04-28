@@ -139,8 +139,8 @@ fi
 echo "Using model profile: $active_profile"
 echo "Using model overlay: $overlay_file"
 echo "Final model path: $MODEL"
-if [ -n "${TEMPERATURE:-}" ] || [ -n "${TOP_P:-}" ] || [ -n "${TOP_K:-}" ] || [ -n "${REPEAT_PENALTY:-}" ]; then
-    echo "Using runtime overrides: temp=${TEMPERATURE:-<default>} top_p=${TOP_P:-<default>} top_k=${TOP_K:-<default>} repeat_penalty=${REPEAT_PENALTY:-<default>}"
+if [ -n "${TEMPERATURE:-}" ] || [ -n "${TOP_P:-}" ] || [ -n "${TOP_K:-}" ] || [ -n "${MIN_P:-}" ] || [ -n "${PRESENCE_PENALTY:-}" ] || [ -n "${REPEAT_PENALTY:-}" ]; then
+    echo "Using runtime overrides: temp=${TEMPERATURE:-<default>} top_p=${TOP_P:-<default>} top_k=${TOP_K:-<default>} min_p=${MIN_P:-<default>} presence_penalty=${PRESENCE_PENALTY:-<default>} repeat_penalty=${REPEAT_PENALTY:-<default>}"
 fi
 echo "Starting llama-server with model: $MODEL"
 
@@ -164,6 +164,8 @@ append_llama_api_key_flag cmd "${API_KEY:-}"
 [ -n "${TEMPERATURE:-}" ] && cmd+=( --temp "$TEMPERATURE" )
 [ -n "${TOP_P:-}" ] && cmd+=( --top-p "$TOP_P" )
 [ -n "${TOP_K:-}" ] && cmd+=( --top-k "$TOP_K" )
+[ -n "${MIN_P:-}" ] && cmd+=( --min-p "$MIN_P" )
+[ -n "${PRESENCE_PENALTY:-}" ] && cmd+=( --presence-penalty "$PRESENCE_PENALTY" )
 [ -n "${REPEAT_PENALTY:-}" ] && cmd+=( --repeat-penalty "$REPEAT_PENALTY" )
 
 # Replace this process with llama-server
