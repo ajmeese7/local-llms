@@ -31,6 +31,17 @@ profile_supported() {
     return 1
 }
 
+flag_enabled() {
+    case "${1:-}" in
+        1|[Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Yy]|[Oo][Nn])
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 load_active_model_profile() {
     local active_model_file="$1"
     local profile_line
@@ -132,6 +143,17 @@ if ! model_file_is_ready "$MODEL"; then
     esac
 fi
 
+if [ -n "${MMPROJ:-}" ] && ! model_file_is_ready "$MMPROJ"; then
+    case "$(model_file_state "$MMPROJ")" in
+        empty)
+            die "Multimodal projector file exists but is empty: $MMPROJ"
+            ;;
+        *)
+            die "Multimodal projector file not found: $MMPROJ"
+            ;;
+    esac
+fi
+
 if [ ! -x "$LLAMA_SERVER_BIN" ]; then
     die "llama-server not found at $LLAMA_SERVER_BIN"
 fi
@@ -139,6 +161,12 @@ fi
 echo "Using model profile: $active_profile"
 echo "Using model overlay: $overlay_file"
 echo "Final model path: $MODEL"
+if flag_enabled "${JINJA:-}"; then
+    echo "Using Jinja chat templates"
+fi
+if [ -n "${MMPROJ:-}" ]; then
+    echo "Using multimodal projector: $MMPROJ"
+fi
 if [ -n "${TEMPERATURE:-}" ] || [ -n "${TOP_P:-}" ] || [ -n "${TOP_K:-}" ] || [ -n "${MIN_P:-}" ] || [ -n "${PRESENCE_PENALTY:-}" ] || [ -n "${REPEAT_PENALTY:-}" ]; then
     echo "Using runtime overrides: temp=${TEMPERATURE:-<default>} top_p=${TOP_P:-<default>} top_k=${TOP_K:-<default>} min_p=${MIN_P:-<default>} presence_penalty=${PRESENCE_PENALTY:-<default>} repeat_penalty=${REPEAT_PENALTY:-<default>}"
 fi
@@ -158,6 +186,9 @@ cmd=(
     --cache-type-v "$CACHE_TYPE_V"
 )
 append_llama_api_key_flag cmd "${API_KEY:-}"
+
+flag_enabled "${JINJA:-}" && cmd+=( --jinja )
+[ -n "${MMPROJ:-}" ] && cmd+=( --mmproj "$MMPROJ" )
 
 # Some profiles publish known-good decoding defaults. Only pass them through
 # when the selected overlay sets them.

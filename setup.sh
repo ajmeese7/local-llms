@@ -7,7 +7,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$SCRIPT_DIR/config"
 LLAMA_DIR="$HOME/.local/share/llama.cpp"
-MODELS_DIR="$HOME/models"
 SERVICE_SRC="$CONFIG_DIR/llama-server.service"
 LAUNCHER_SRC="$CONFIG_DIR/llama-launcher.sh"
 COMMON_HELPERS_SRC="$CONFIG_DIR/runtime-common.sh"
@@ -172,6 +171,7 @@ resolve_runtime_model_path() {
 
     API_KEY=""
     MODEL=""
+    MMPROJ=""
     SUPPORTED_MODEL_PROFILES=""
     DEFAULT_MODEL_PROFILE=""
     # shellcheck source=/dev/null
@@ -185,6 +185,29 @@ resolve_runtime_model_path() {
 
     [ -n "${MODEL:-}" ] || return 1
     printf '%s\n' "$MODEL"
+}
+
+download_hf_artifact() {
+    local label="$1"
+    local artifact_path="$2"
+    local hf_repo="$3"
+    local hf_file="$4"
+
+    [ -n "$hf_repo" ] || {
+        warn "Cannot download $label because no Hugging Face repo is configured."
+        return 1
+    }
+    [ -n "$hf_file" ] || {
+        warn "Cannot download $label because no Hugging Face file is configured."
+        return 1
+    }
+
+    mkdir -p "$(dirname "$artifact_path")"
+    info "Downloading $hf_file (this may take a while)..."
+    curl -L --fail --progress-bar \
+        "https://huggingface.co/${hf_repo}/resolve/main/${hf_file}" \
+        -o "$artifact_path"
+    ok "$label downloaded"
 }
 
 # ── Step 1: Prerequisites ───────────────────────────────────────────────────
@@ -365,12 +388,7 @@ if [ -n "$matched_config" ] && [ -n "${MODEL:-}" ]; then
         empty)
             warn "Model file exists but is empty: $MODEL"
             if confirm "Re-download model to $MODEL?"; then
-                mkdir -p "$MODELS_DIR"
-                info "Downloading $HF_FILE (this may take a while)..."
-                curl -L --fail --progress-bar \
-                    "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" \
-                    -o "$MODEL"
-                ok "Model downloaded"
+                download_hf_artifact "Model" "$MODEL" "$HF_REPO" "$HF_FILE"
             else
                 warn "Skipping model download. The service will fail without a valid GGUF."
             fi
@@ -378,17 +396,38 @@ if [ -n "$matched_config" ] && [ -n "${MODEL:-}" ]; then
         missing)
             info "Model: ${HF_REPO}/${HF_FILE}"
             if confirm "Download model to $MODEL?"; then
-                mkdir -p "$MODELS_DIR"
-                info "Downloading $HF_FILE (this may take a while)..."
-                curl -L --fail --progress-bar \
-                    "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" \
-                    -o "$MODEL"
-                ok "Model downloaded"
+                download_hf_artifact "Model" "$MODEL" "$HF_REPO" "$HF_FILE"
             else
                 warn "Skipping model download. The service will fail without it."
             fi
             ;;
     esac
+
+    if [ -n "${MMPROJ:-}" ]; then
+        mmproj_repo="${MMPROJ_HF_REPO:-$HF_REPO}"
+        case "$(model_file_state "$MMPROJ")" in
+            installed)
+                mmproj_size=$(du -h "$MMPROJ" | cut -f1)
+                ok "Multimodal projector already downloaded: $MMPROJ ($mmproj_size)"
+                ;;
+            empty)
+                warn "Multimodal projector file exists but is empty: $MMPROJ"
+                if confirm "Re-download multimodal projector to $MMPROJ?"; then
+                    download_hf_artifact "Multimodal projector" "$MMPROJ" "$mmproj_repo" "${MMPROJ_HF_FILE:-}"
+                else
+                    warn "Skipping projector download. The service will fail while MMPROJ points at an empty file."
+                fi
+                ;;
+            missing)
+                info "Multimodal projector: ${mmproj_repo}/${MMPROJ_HF_FILE:-}"
+                if confirm "Download multimodal projector to $MMPROJ?"; then
+                    download_hf_artifact "Multimodal projector" "$MMPROJ" "$mmproj_repo" "${MMPROJ_HF_FILE:-}"
+                else
+                    warn "Skipping projector download. The service will fail while MMPROJ points at a missing file."
+                fi
+                ;;
+        esac
+    fi
 else
     warn "No GPU config matched — skipping model download."
 fi
@@ -464,6 +503,9 @@ if confirm "Reload systemd and enable+start the llama-server service?"; then
     elif ! model_file_is_ready "$runtime_model_path"; then
         warn "Selected runtime model is not installed: $runtime_model_path"
         warn "Use $DEST_DIR/select-model.sh to download that profile or switch to an installed one before restarting the service."
+    elif [ -n "${MMPROJ:-}" ] && ! model_file_is_ready "$MMPROJ"; then
+        warn "Selected runtime projector is not installed: $MMPROJ"
+        warn "Use $DEST_DIR/select-model.sh to download that profile's projector or unset MMPROJ before restarting the service."
     else
         sudo systemctl daemon-reload
         sudo systemctl enable llama-server

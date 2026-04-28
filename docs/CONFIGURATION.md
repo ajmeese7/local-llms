@@ -30,7 +30,7 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 
 | GPU | Config | VRAM | Default Profile | Supported Profiles |
 |---|---|---|---|---|
-| RTX 5090 | [`config/rtx-5090.conf`](../config/rtx-5090.conf) | 32GB | `qwen36-27b` | `qwen36-27b`, `mythos` |
+| RTX 5090 | [`config/rtx-5090.conf`](../config/rtx-5090.conf) | 32GB | `qwen36-27b` | `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `mythos` |
 | RTX 5060 Ti | [`config/rtx-5060.conf`](../config/rtx-5060.conf) | 16GB | `qwen35-9b` | `qwen35-9b` |
 
 ## Adding a New GPU
@@ -52,6 +52,9 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 | `SUPPORTED_MODEL_PROFILES` | Space-separated list of profiles allowed on that GPU |
 | `MODEL` | Path to the GGUF model file from the overlay |
 | `HF_REPO` / `HF_FILE` | Hugging Face repo and filename used by `setup.sh` |
+| `JINJA` | Optional per-model toggle for `llama-server --jinja`; use `on` for models whose chat/tool templates should be rendered with Jinja |
+| `MMPROJ` | Optional path to a multimodal projector GGUF; when set, the launcher passes `--mmproj` and validates the file exists |
+| `MMPROJ_HF_REPO` / `MMPROJ_HF_FILE` | Optional Hugging Face metadata used by the selector to download `MMPROJ`; `MMPROJ_HF_REPO` defaults to `HF_REPO` when omitted |
 | `ALIAS` | Model name reported by the API |
 | `TEMPERATURE` / `TOP_P` / `TOP_K` / `MIN_P` / `PRESENCE_PENALTY` / `REPEAT_PENALTY` | Optional per-model decoding overrides from the overlay |
 | `HOST` | Bind address |
@@ -65,9 +68,11 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 
 ## Model Overlays
 
-Model-specific settings live in overlay files like `qwen36-27b.conf`, `qwen35-9b.conf`, and `mythos.conf`. These files define the model path, Hugging Face metadata, and `ALIAS`. When a specific artifact needs different runtime limits than the GPU-wide default, an overlay can also lower settings such as `CONTEXT_LENGTH`; overlays should not redefine secrets such as `API_KEY`.
+Model-specific settings live in overlay files like `qwen36-27b.conf`, `qwen35-9b.conf`, and `mythos.conf`. These files define the model path, Hugging Face metadata, chat-template behavior, optional multimodal projector metadata, and `ALIAS`. When a specific artifact needs different runtime limits than the GPU-wide default, an overlay can also override settings such as `CONTEXT_LENGTH`; overlays should not redefine secrets such as `API_KEY`.
 
 Overlays can also define optional decoding knobs such as `TEMPERATURE` and `TOP_P`. That is the supported way to keep a model profile aligned with its published runtime guidance without moving GPU-memory-sensitive settings out of the base config.
+
+For model cards that recommend `llama-cli --jinja`, set `JINJA="on"` in the overlay. For model cards that also recommend `--mmproj`, set `MMPROJ` to the local projector path and `MMPROJ_HF_FILE` to the projector filename. The launcher fails fast if a configured projector is missing or empty, and the selector can download it when the Hugging Face metadata is present.
 
 To switch models:
 
@@ -87,7 +92,8 @@ The selector writes `/etc/llama-server/active-model.conf`, and the launcher load
 ## Model-Specific Notes
 
 - `mythos` is a supported RTX 5090 profile. It uses the `Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF` language-model GGUF directly in this service.
-- `qwen36-27b` is the RTX 5090 default profile. It uses the `ggml-org/Qwen3.6-27B-GGUF` Q8_0 artifact derived from the upstream `Qwen/Qwen3.6-27B` release, and the overlay lowers `CONTEXT_LENGTH` to `32768` to keep that larger quant practical on a 32 GB card.
+- `qwen36-27b` is the RTX 5090 default profile. It uses the `unsloth/Qwen3.6-27B-GGUF` `Qwen3.6-27B-UD-Q5_K_XL.gguf` artifact and enables Jinja chat-template handling.
+- `qwen36-27B-AEON` and `qwen36-35B-A3B` are RTX 5090 experiment profiles that also enable Jinja. The 35B A3B overlay includes commented `MMPROJ` metadata for the matching projector artifact.
 - `qwen35-9b` is the RTX 5060 Ti default profile.
 - `LilaRest/gemma-4-31B-it-NVFP4-turbo` is still a separate `vLLM` server path, not a `llama.cpp` overlay.
 

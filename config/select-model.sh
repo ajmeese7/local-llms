@@ -146,8 +146,11 @@ load_overlay_metadata() {
 
     HOME="$RUNTIME_HOME"
     MODEL=""
+    MMPROJ=""
     HF_REPO=""
     HF_FILE=""
+    MMPROJ_HF_REPO=""
+    MMPROJ_HF_FILE=""
     ALIAS=""
     # shellcheck source=/dev/null
     source "$overlay_file"
@@ -163,43 +166,63 @@ load_overlay_model_path() {
     printf '%s\n' "$MODEL"
 }
 
-download_profile_model() {
-    local profile="$1"
-    local model_state
+download_artifact_file() {
+    local label="$1"
+    local artifact_path="$2"
+    local hf_repo="$3"
+    local hf_file="$4"
+    local artifact_state
     local prompt
 
-    load_overlay_metadata "$profile" || die "Could not load metadata for profile $profile"
-    [ -n "$HF_REPO" ] || die "Profile $profile does not define HF_REPO"
-    [ -n "$HF_FILE" ] || die "Profile $profile does not define HF_FILE"
-
-    model_state="$(model_file_state "$MODEL")"
-    case "$model_state" in
+    artifact_state="$(model_file_state "$artifact_path")"
+    case "$artifact_state" in
         installed)
             return 0
             ;;
         empty)
-            prompt="Re-download $profile to $MODEL?"
+            prompt="Re-download $label to $artifact_path?"
             ;;
         missing)
-            prompt="Download $profile to $MODEL?"
+            prompt="Download $label to $artifact_path?"
             ;;
         *)
-            die "Unknown model state '$model_state' for $MODEL"
+            die "Unknown artifact state '$artifact_state' for $artifact_path"
             ;;
     esac
+
+    [ -n "$hf_repo" ] || die "$label is not installed and no Hugging Face repo is configured"
+    [ -n "$hf_file" ] || die "$label is not installed and no Hugging Face file is configured"
 
     if ! confirm "$prompt"; then
         return 1
     fi
 
-    run_as_service_user 'mkdir -p "$(dirname "$1")"' "$MODEL"
-    run_as_service_user 'curl -L --fail --progress-bar "https://huggingface.co/$2/resolve/main/$3" -o "$1"' "$MODEL" "$HF_REPO" "$HF_FILE"
+    run_as_service_user 'mkdir -p "$(dirname "$1")"' "$artifact_path"
+    run_as_service_user 'curl -L --fail --progress-bar "https://huggingface.co/$2/resolve/main/$3" -o "$1"' "$artifact_path" "$hf_repo" "$hf_file"
 
-    if ! model_file_is_ready "$MODEL"; then
-        die "Download completed but model is still unavailable: $MODEL"
+    if ! model_file_is_ready "$artifact_path"; then
+        die "Download completed but artifact is still unavailable: $artifact_path"
     fi
 
-    echo "Downloaded model: $MODEL"
+    echo "Downloaded $label: $artifact_path"
+    return 0
+}
+
+download_profile_model() {
+    local profile="$1"
+    local mmproj_repo
+
+    load_overlay_metadata "$profile" || die "Could not load metadata for profile $profile"
+    [ -n "$HF_REPO" ] || die "Profile $profile does not define HF_REPO"
+    [ -n "$HF_FILE" ] || die "Profile $profile does not define HF_FILE"
+
+    download_artifact_file "$profile model" "$MODEL" "$HF_REPO" "$HF_FILE" || return 1
+
+    if [ -n "${MMPROJ:-}" ]; then
+        mmproj_repo="${MMPROJ_HF_REPO:-$HF_REPO}"
+        download_artifact_file "$profile mmproj" "$MMPROJ" "$mmproj_repo" "${MMPROJ_HF_FILE:-}" || return 1
+    fi
+
     return 0
 }
 
@@ -261,8 +284,8 @@ for profile in $SUPPORTED_MODEL_PROFILES; do
     if [ "$profile" = "${current_profile:-}" ]; then
         marker=" (current)"
     fi
-    if model_path="$(load_overlay_model_path "$profile")"; then
-        case "$(model_file_state "$model_path")" in
+    if load_overlay_metadata "$profile"; then
+        case "$(model_file_state "$MODEL")" in
             installed)
                 install_marker="installed"
                 ;;
@@ -273,6 +296,9 @@ for profile in $SUPPORTED_MODEL_PROFILES; do
                 install_marker="missing"
                 ;;
         esac
+        if [ -n "${MMPROJ:-}" ] && ! model_file_is_ready "$MMPROJ"; then
+            install_marker="$install_marker, mmproj $(model_file_state "$MMPROJ")"
+        fi
     fi
     printf '  %d) %s [%s]%s\n' "$index" "$profile" "$install_marker" "$marker"
     index=$((index + 1))
@@ -304,6 +330,11 @@ if selected_model_path="$(load_overlay_model_path "$selected_profile")"; then
     case "$(model_file_state "$selected_model_path")" in
         installed)
             echo "Model path: $selected_model_path"
+            load_overlay_metadata "$selected_profile"
+            if [ -n "${MMPROJ:-}" ] && ! model_file_is_ready "$MMPROJ"; then
+                echo "Multimodal projector path: $MMPROJ"
+                download_profile_model "$selected_profile" || die "Selection cancelled; active profile unchanged."
+            fi
             ;;
         empty|missing)
             echo "Model path: $selected_model_path"

@@ -8,7 +8,9 @@ With Q4_K_M quantization, models up to about the high-20B/low-30B range fit comf
 
 | Model | Runtime | Quant | Size | Notes |
 |---|---|---|---|---|
-| Qwen3.6-27B | llama.cpp | Q8_0 | 28.6GB | Default RTX 5090 profile in this repo; uses shorter 32K context |
+| Qwen3.6-27B | llama.cpp | Q5_K_XL | varies by artifact | Default RTX 5090 profile in this repo; enables Jinja and uses a 262K context override |
+| Qwen3.6-27B AEON | llama.cpp | Q6_K | varies by artifact | RTX 5090 experiment profile; enables Jinja and uses a 262K context override |
+| Qwen3.6-35B-A3B HauhauCS | llama.cpp | Q5_K_P | varies by artifact | RTX 5090 experiment profile; enables Jinja and keeps projector metadata commented until multimodal use is wanted |
 | MYTHOS-26B-A4B-PRISM-PRO-DQ | llama.cpp | PRISM-DQ GGUF | ~17GB | Supported RTX 5090 profile via `mythos` |
 | Gemma 4 31B IT NVFP4 Turbo | vLLM | NVFP4 | ~18.5 GiB GPU memory | Best treated as a separate Blackwell-only server |
 | Llama-3.1-70B | llama.cpp | Q4_K_M | ~40GB | Needs CPU offload for some layers |
@@ -60,6 +62,8 @@ That exposes a second OpenAI-compatible endpoint on `http://127.0.0.1:8001/v1`.
 ## Practical Notes
 
 - If you run out of VRAM, reduce `CONTEXT_LENGTH` before switching to a smaller model. The `q4_0` KV cache also helps.
+- If a model card shows `llama-cli --jinja`, set `JINJA="on"` in that profile overlay. The Qwen overlays in this repo already do this.
+- If a model card shows `--mmproj`, set `MMPROJ` and `MMPROJ_HF_FILE` in the overlay before selecting that profile. The launcher will pass `--mmproj`, and the selector can download the projector when the metadata is present.
 
 ## Related Guides
 
