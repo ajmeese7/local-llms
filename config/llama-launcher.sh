@@ -167,6 +167,14 @@ fi
 if [ -n "${MMPROJ:-}" ]; then
     echo "Using multimodal projector: $MMPROJ"
 fi
+if flag_enabled "${KV_UNIFIED:-}"; then
+    echo "Using unified KV cache"
+fi
+if flag_enabled "${SPEC_DEFAULT:-}"; then
+    echo "Using default speculative decoding config"
+elif [ -n "${SPEC_TYPE:-}" ] || [ -n "${SPEC_NGRAM_SIZE_N:-}" ] || [ -n "${SPEC_NGRAM_SIZE_M:-}" ] || [ -n "${SPEC_NGRAM_MIN_HITS:-}" ] || [ -n "${DRAFT_MAX:-}" ] || [ -n "${DRAFT_MIN:-}" ]; then
+    echo "Using speculative decoding overrides: spec_type=${SPEC_TYPE:-<default>} spec_ngram_size_n=${SPEC_NGRAM_SIZE_N:-<default>} spec_ngram_size_m=${SPEC_NGRAM_SIZE_M:-<default>} spec_ngram_min_hits=${SPEC_NGRAM_MIN_HITS:-<default>} draft_max=${DRAFT_MAX:-<default>} draft_min=${DRAFT_MIN:-<default>}"
+fi
 if [ -n "${TEMPERATURE:-}" ] || [ -n "${TOP_P:-}" ] || [ -n "${TOP_K:-}" ] || [ -n "${MIN_P:-}" ] || [ -n "${PRESENCE_PENALTY:-}" ] || [ -n "${REPEAT_PENALTY:-}" ]; then
     echo "Using runtime overrides: temp=${TEMPERATURE:-<default>} top_p=${TOP_P:-<default>} top_k=${TOP_K:-<default>} min_p=${MIN_P:-<default>} presence_penalty=${PRESENCE_PENALTY:-<default>} repeat_penalty=${REPEAT_PENALTY:-<default>}"
 fi
@@ -189,6 +197,17 @@ append_llama_api_key_flag cmd "${API_KEY:-}"
 
 flag_enabled "${JINJA:-}" && cmd+=( --jinja )
 [ -n "${MMPROJ:-}" ] && cmd+=( --mmproj "$MMPROJ" )
+flag_enabled "${KV_UNIFIED:-}" && cmd+=( --kv-unified )
+if flag_enabled "${SPEC_DEFAULT:-}"; then
+    cmd+=( --spec-default )
+else
+    [ -n "${SPEC_TYPE:-}" ] && cmd+=( --spec-type "$SPEC_TYPE" )
+    [ -n "${SPEC_NGRAM_SIZE_N:-}" ] && cmd+=( --spec-ngram-size-n "$SPEC_NGRAM_SIZE_N" )
+    [ -n "${SPEC_NGRAM_SIZE_M:-}" ] && cmd+=( --spec-ngram-size-m "$SPEC_NGRAM_SIZE_M" )
+    [ -n "${SPEC_NGRAM_MIN_HITS:-}" ] && cmd+=( --spec-ngram-min-hits "$SPEC_NGRAM_MIN_HITS" )
+    [ -n "${DRAFT_MAX:-}" ] && cmd+=( --draft-max "$DRAFT_MAX" )
+    [ -n "${DRAFT_MIN:-}" ] && cmd+=( --draft-min "$DRAFT_MIN" )
+fi
 
 # Some profiles publish known-good decoding defaults. Only pass them through
 # when the selected overlay sets them.

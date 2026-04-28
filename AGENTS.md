@@ -17,7 +17,7 @@
 ## Current Model Layout
 
 - RTX 5090 default profile: `qwen36-27b`
-- RTX 5090 supported profiles: `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `mythos`
+- RTX 5090 supported profiles: `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `qwen36-35B-A3B-q4-ngram`, `mythos`
 - RTX 5060 Ti default profile: `qwen35-9b`
 - RTX 5060 Ti supported profiles: `qwen35-9b`
 
@@ -27,6 +27,8 @@
 - This repo's default `qwen36-27b` `llama.cpp` path uses `unsloth/Qwen3.6-27B-GGUF`, currently `Qwen3.6-27B-UD-Q5_K_XL.gguf`.
 - The Qwen overlays enable `JINJA="on"` so the launcher passes `--jinja`.
 - The launcher supports optional multimodal projector files with `MMPROJ` and `MMPROJ_HF_FILE`; keep projector behavior in model overlays.
+- The launcher supports optional `ngram-mod` speculative decoding via overlay fields: `SPEC_TYPE`, `SPEC_NGRAM_SIZE_N`, `DRAFT_MAX`, `DRAFT_MIN`, or `SPEC_DEFAULT`.
+- The `qwen36-35B-A3B-q4-ngram` profile is experimental and assumes a recent enough `llama.cpp` build for `ngram-mod`; `SPEC_DEFAULT` requires a newer build than explicit flags.
 - The `qwen36-27b` overlay raises `CONTEXT_LENGTH` to `262144`; reduce context first if the selected quant does not fit comfortably.
 
 ## Files Worth Checking First

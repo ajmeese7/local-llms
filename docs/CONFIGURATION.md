@@ -30,7 +30,7 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 
 | GPU | Config | VRAM | Default Profile | Supported Profiles |
 |---|---|---|---|---|
-| RTX 5090 | [`config/rtx-5090.conf`](../config/rtx-5090.conf) | 32GB | `qwen36-27b` | `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `mythos` |
+| RTX 5090 | [`config/rtx-5090.conf`](../config/rtx-5090.conf) | 32GB | `qwen36-27b` | `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `qwen36-35B-A3B-q4-ngram`, `mythos` |
 | RTX 5060 Ti | [`config/rtx-5060.conf`](../config/rtx-5060.conf) | 16GB | `qwen35-9b` | `qwen35-9b` |
 
 ## Adding a New GPU
@@ -65,6 +65,10 @@ The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `G
 | `PARALLEL_SLOTS` | Concurrent request slots |
 | `FLASH_ATTENTION` | Enables faster inference and lower memory use |
 | `CACHE_TYPE_K` / `CACHE_TYPE_V` | KV cache quantization |
+| `KV_UNIFIED` | Optional per-model toggle for `llama-server --kv-unified`; use `on` when an overlay wants one unified KV buffer across slots |
+| `SPEC_DEFAULT` | Optional per-model toggle for `llama-server --spec-default`; requires a new enough `llama.cpp` build |
+| `SPEC_TYPE` / `SPEC_NGRAM_SIZE_N` / `SPEC_NGRAM_SIZE_M` / `SPEC_NGRAM_MIN_HITS` | Optional speculative decoding controls passed through to `llama-server` when `SPEC_DEFAULT` is not enabled |
+| `DRAFT_MAX` / `DRAFT_MIN` | Optional speculative draft length controls passed through to `llama-server` when `SPEC_DEFAULT` is not enabled |
 
 ## Model Overlays
 
@@ -73,6 +77,8 @@ Model-specific settings live in overlay files like `qwen36-27b.conf`, `qwen35-9b
 Overlays can also define optional decoding knobs such as `TEMPERATURE` and `TOP_P`. That is the supported way to keep a model profile aligned with its published runtime guidance without moving GPU-memory-sensitive settings out of the base config.
 
 For model cards that recommend `llama-cli --jinja`, set `JINJA="on"` in the overlay. For model cards that also recommend `--mmproj`, set `MMPROJ` to the local projector path and `MMPROJ_HF_FILE` to the projector filename. The launcher fails fast if a configured projector is missing or empty, and the selector can download it when the Hugging Face metadata is present.
+
+For long-context workloads with repeated text or code, overlays can opt into llama.cpp speculative decoding. The explicit form is `SPEC_TYPE="ngram-mod"` plus `SPEC_NGRAM_SIZE_N`, `DRAFT_MAX`, and `DRAFT_MIN`. Newer llama.cpp builds also support `SPEC_DEFAULT="on"`, which appends `--spec-default` instead of the explicit speculative flags.
 
 To switch models:
 
@@ -93,7 +99,8 @@ The selector writes `/etc/llama-server/active-model.conf`, and the launcher load
 
 - `mythos` is a supported RTX 5090 profile. It uses the `Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF` language-model GGUF directly in this service.
 - `qwen36-27b` is the RTX 5090 default profile. It uses the `unsloth/Qwen3.6-27B-GGUF` `Qwen3.6-27B-UD-Q5_K_XL.gguf` artifact and enables Jinja chat-template handling.
-- `qwen36-27B-AEON` and `qwen36-35B-A3B` are RTX 5090 experiment profiles that also enable Jinja. The 35B A3B overlay includes commented `MMPROJ` metadata for the matching projector artifact.
+- `qwen36-27B-AEON` and `qwen36-35B-A3B` are RTX 5090 experiment profiles that also enable Jinja. The 35B A3B overlay includes `MMPROJ` metadata for the matching projector artifact when multimodal use is wanted.
+- `qwen36-35B-A3B-q4-ngram` is an RTX 5090 experimental profile for the HauHauCS Q4_K_P artifact. It uses 262K context, parallel 4, f16 KV cache, unified KV cache, and explicit `ngram-mod` speculative settings.
 - `qwen35-9b` is the RTX 5060 Ti default profile.
 - `LilaRest/gemma-4-31B-it-NVFP4-turbo` is still a separate `vLLM` server path, not a `llama.cpp` overlay.
 
