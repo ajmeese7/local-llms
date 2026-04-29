@@ -48,6 +48,7 @@ The main operational entrypoints are:
 - [`config/runtime-common.sh`](config/runtime-common.sh): shared shell helpers used by setup-time API verification and launcher-time optional `--api-key` handling.
 - [`config/select-model.sh`](config/select-model.sh): writes `/etc/llama-server/active-model.conf` for the next restart.
 - [`scripts/benchmark.sh`](scripts/benchmark.sh): benchmark helper for active API aliases, API timing, `llama-bench`, and compare mode.
+- [`scripts/bench.sh`](scripts/bench.sh): packages benchmark suite output into the static [`bench/`](bench) report hub and serves it locally.
 
 ## Suggested Reading Paths
 
@@ -75,6 +76,7 @@ This repo includes a helper script for repeatable local benchmark runs:
 
 ```bash
 ./scripts/benchmark.sh --help
+./scripts/bench.sh --help
 ```
 
 Use [docs/BENCHMARKING.md](docs/BENCHMARKING.md) for the benchmark workflow and [docs/SWE-BENCH.md](docs/SWE-BENCH.md) for software-task evaluation.

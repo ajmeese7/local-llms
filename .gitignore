@@ -1,10 +1,15 @@
 # AI
-WIP.md
-COMMIT_MSG.txt
-benchmark-results/
 superpowers/
+COMMIT_MSG.txt
 .pi/
+
+# Development
+WIP.md
+design/
 
 # Drivers
 NVIDIA-*
 *.run
+
+# Repo artifacts
+benchmark-results/

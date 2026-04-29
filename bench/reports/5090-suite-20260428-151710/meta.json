@@ -1,0 +1,70 @@
+{
+  "id": "5090-suite-20260428-151710",
+  "title": "RTX 5090 - Five-Profile Suite",
+  "subtitle": "Two Qwen3.6 27B variants, two 35B-A3B variants including ngram speculation, and MYTHOS-26B-A4B across 5 prompts.",
+  "date": "2026-04-28T15:17:10-04:00",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "vram_gb": 32
+  },
+  "server": {
+    "engine": "llama.cpp",
+    "binary": "llama-server",
+    "api": "OpenAI-compatible /chat/completions",
+    "stream": false,
+    "base_url": "http://127.0.0.1:9999/v1"
+  },
+  "profiles": [
+    {
+      "profile": "qwen36-27b",
+      "alias": "Qwen3.6-27B",
+      "model_file": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+      "context_length": 262144,
+      "parallel_slots": 1,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q4_0",
+      "has_mmproj": false
+    },
+    {
+      "profile": "qwen36-27B-AEON",
+      "alias": "Qwen3.6-27B (Uncensored)",
+      "model_file": "qwen3.6-27b-uncensored-q6_k.gguf",
+      "context_length": 262144,
+      "parallel_slots": 1,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q4_0",
+      "has_mmproj": false
+    },
+    {
+      "profile": "qwen36-35B-A3B",
+      "alias": "Qwen3.6-35B-A3B",
+      "model_file": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q5_K_P.gguf",
+      "context_length": 131072,
+      "parallel_slots": 1,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q4_0",
+      "has_mmproj": true
+    },
+    {
+      "profile": "qwen36-35B-A3B-q4-ngram",
+      "alias": "Qwen3.6-35B-A3B-Q4-ngram",
+      "model_file": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+      "context_length": 262144,
+      "parallel_slots": 4,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "has_mmproj": false
+    },
+    {
+      "profile": "mythos",
+      "alias": "MYTHOS-26B-A4B",
+      "model_file": "mythos-26b-a4b-prism-pro-dq.gguf",
+      "context_length": 131072,
+      "parallel_slots": 1,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q4_0",
+      "has_mmproj": false
+    }
+  ],
+  "notes": "Packaged from benchmark-results for the static benchmark hub."
+}

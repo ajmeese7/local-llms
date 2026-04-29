@@ -1,8 +1,9 @@
 # Benchmarking
 
-Use [`scripts/benchmark.sh`](../scripts/benchmark.sh). This guide intentionally avoids raw runtime commands and one-off API recipes. If the repo has benchmark automation, the docs should use that automation.
+Use [`scripts/benchmark.sh`](../scripts/benchmark.sh) for raw benchmark runs and [`scripts/bench.sh`](../scripts/bench.sh) for publishable report packaging. This guide intentionally avoids raw runtime commands and one-off API recipes. If the repo has benchmark automation, the docs should use that automation.
 
 Results are written under `./benchmark-results/`.
+Publishable report data is written under `./bench/reports/`.
 
 ## What Works From This Repo
 
@@ -12,6 +13,7 @@ Results are written under `./benchmark-results/`.
 | API latency and output speed | `api` | Running `llama-server`, `curl`, `python3` |
 | Saved API run comparison | `compare` | API benchmark result directories, `python3` |
 | Raw GGUF runtime speed | `llama-bench` | `llama.cpp` built by `setup.sh` |
+| Publishable benchmark hub | `../scripts/bench.sh add` / `serve` | A suite run with `results.jsonl`, `python3` |
 
 `setup.sh` builds `llama.cpp` under `~/.local/share/llama.cpp`. That build normally provides `llama-server` and `llama-bench`. If `llama-bench` is missing, rerun `./setup.sh` and choose the rebuild path.
 
@@ -97,6 +99,34 @@ After saving two or more API runs, compare them with the helper:
 ```
 
 The compare mode intentionally reads only structured `api` outputs. It does not parse `llama-bench` logs.
+
+## Publishable Report Hub
+
+Package a suite run into the static benchmark hub:
+
+```bash
+./scripts/bench.sh add ./benchmark-results/5090-suite-20260428-151710 \
+  --title "RTX 5090 - Five-Profile Suite" \
+  --subtitle "Qwen3.6 and MYTHOS profiles across coding, assistant, creative, and long-context prompts."
+```
+
+Then validate and serve it:
+
+```bash
+./scripts/bench.sh validate
+./scripts/bench.sh serve
+```
+
+Open `http://127.0.0.1:8765/`.
+
+The app reads:
+
+- `bench/reports/reports.json`: report registry
+- `bench/reports/<id>/meta.json`: title, hardware, server, and profile manifest
+- `bench/reports/<id>/results.jsonl`: per-profile prompt results
+- `bench/reports/<id>/profiles/*.conf`: model overlays used by the run
+
+The Configs tab parses the `.conf` files and highlights profile-family differences such as context length, KV cache, multimodal projector settings, and speculative decoding flags.
 
 ## Fair Comparisons
 

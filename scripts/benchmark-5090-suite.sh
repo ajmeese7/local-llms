@@ -838,3 +838,4 @@ printf 'finished_at=%s\n' "$(date --iso-8601=seconds)" >> "$RUN_DIR/run-info.txt
 note "Benchmark suite complete"
 note "Markdown report: $REPORT_MD"
 note "HTML report: $REPORT_HTML"
+note "Bench hub package: $ROOT_DIR/scripts/bench.sh add $RUN_DIR"
