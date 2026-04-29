@@ -35,7 +35,7 @@ Subcommands:
 
   validate
     Validate reports/reports.json plus each listed report's meta.json and
-    results.jsonl.
+    results.jsonl/profile config files.
 
     Options:
       --bench-dir PATH       Benchmark app directory, default: ./bench
@@ -52,10 +52,6 @@ EOF
 
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
-}
-
-json_escape() {
-    python3 -c 'import json, sys; print(json.dumps(sys.stdin.read()))'
 }
 
 normalize_id() {
@@ -109,6 +105,24 @@ copy_profile_confs() {
             ! -name 'rtx-*.conf' ! -name 'runtime-common.sh' ! -name 'active-model.conf' \
             -exec cp {} "$report_dir/profiles/" \;
     fi
+
+    local gpu base_name base_file
+    gpu="$(read_info_value "$run_dir/run-info.txt" "gpu" || true)"
+    case "$gpu" in
+        *5090*) base_name="rtx-5090.conf" ;;
+        *5060*) base_name="rtx-5060.conf" ;;
+        *) base_name="" ;;
+    esac
+
+    if [ -n "$base_name" ]; then
+        base_file="$(find "$run_dir/profiles" -path "*/config/$base_name" -type f | head -1 || true)"
+        if [ -z "$base_file" ] && [ -f "$CONFIG_DIR/$base_name" ]; then
+            base_file="$CONFIG_DIR/$base_name"
+        fi
+        if [ -n "$base_file" ]; then
+            cp "$base_file" "$report_dir/profiles/_base.conf"
+        fi
+    fi
 }
 
 write_meta() {
@@ -120,7 +134,6 @@ write_meta() {
     local date="$6"
 
     python3 - "$run_dir" "$report_dir/meta.json" "$id" "$title" "$subtitle" "$date" <<'PY'
-import csv
 import json
 import re
 import sys
@@ -150,30 +163,6 @@ if len(gpu_parts) >= 3:
     if m:
         vram_gb = round(int(m.group(1)) / 1024)
 
-profiles = []
-manifest = run_dir / "manifest.tsv"
-if manifest.exists():
-    with manifest.open(encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        seen = set()
-        for row in reader:
-            if row.get("status") != "completed":
-                continue
-            profile = row.get("profile") or ""
-            if not profile or profile in seen:
-                continue
-            seen.add(profile)
-            profiles.append({
-                "profile": profile,
-                "alias": row.get("alias") or profile,
-                "model_file": Path(row.get("model") or "").name,
-                "context_length": int(row["context"]) if (row.get("context") or "").isdigit() else None,
-                "parallel_slots": int(row["parallel"]) if (row.get("parallel") or "").isdigit() else None,
-                "cache_type_k": row.get("cache_k") or None,
-                "cache_type_v": row.get("cache_v") or None,
-                "has_mmproj": bool(row.get("mmproj")),
-            })
-
 meta = {
     "id": report_id,
     "title": title or report_id,
@@ -190,7 +179,6 @@ meta = {
         "stream": False,
         "base_url": info.get("base_url") or None,
     },
-    "profiles": profiles,
     "notes": "Packaged from benchmark-results for the static benchmark hub.",
 }
 
@@ -323,6 +311,7 @@ for report_id in reports:
     if meta.get("id") != report_id:
         errors.append(f"{report_id}: meta id does not match registry id")
     rows = 0
+    profiles = set()
     for index, line in enumerate(results_path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
@@ -334,9 +323,14 @@ for report_id in reports:
         for key in ("profile", "prompt_id", "time_total_sec", "tokens_per_sec", "quality_score", "quality_max"):
             if key not in row:
                 errors.append(f"{report_id}: line {index} missing {key}")
+        if row.get("profile"):
+            profiles.add(row["profile"])
         rows += 1
     if rows == 0:
         errors.append(f"{report_id}: results.jsonl has no rows")
+    for profile in sorted(profiles):
+        if not (report_dir / "profiles" / f"{profile}.conf").exists():
+            errors.append(f"{report_id}: missing profiles/{profile}.conf")
 
 if errors:
     for error in errors:

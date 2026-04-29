@@ -21,8 +21,9 @@ function formatContext(value) {
   return n >= 1000 ? `${Math.round(n / 1024)}k` : String(n);
 }
 
-function profileMeta(meta, profile) {
-  return (meta?.profiles || []).find(p => p.profile === profile) || {};
+function profileConfigMeta(profiles, profile) {
+  const conf = profiles?.bundle?.byId?.get(profile);
+  return window.BenchData.metadataFromConf(conf, profiles?.bundle?.baseConf);
 }
 
 function SummarySection({ data, meta, copy, recommendations }) {
@@ -126,13 +127,13 @@ function RecCard({ rec }) {
 }
 
 /* ====================== PROFILES ====================== */
-function ProfilesSection({ data, meta }) {
+function ProfilesSection({ data, meta, profiles }) {
   const [sortKey, setSortKey] = _useState("quality");
   const [sortDir, setSortDir] = _useState(-1);
   const [highlight, setHighlight] = _useState("balanced");
 
   function sortValue(profile, key) {
-    const pm = profileMeta(meta, profile.profile);
+    const pm = profileConfigMeta(profiles, profile.profile);
     if (key === "context") return pm.context_length || 0;
     if (key === "parallel") return pm.parallel_slots || 0;
     if (key === "kv") return `${pm.cache_type_k || ""}/${pm.cache_type_v || ""}`;
@@ -146,7 +147,7 @@ function ProfilesSection({ data, meta }) {
       return ((av || 0) - (bv || 0)) * sortDir;
     });
     return sorted;
-  }, [data.profiles, meta, sortKey, sortDir]);
+  }, [data.profiles, profiles, sortKey, sortDir]);
 
   function clickSort(k) {
     if (sortKey === k) setSortDir(d => -d);
@@ -191,7 +192,7 @@ function ProfilesSection({ data, meta }) {
           </thead>
           <tbody>
             {rows.map(p => {
-              const pm = profileMeta(meta, p.profile);
+              const pm = profileConfigMeta(profiles, p.profile);
               let rowCls = "";
               if (highlight === "balanced" && p.role === "balanced") rowCls = "highlight";
               else if (highlight === "fastest" && p.role === "fastest") rowCls = "fastest-row";

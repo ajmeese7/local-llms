@@ -267,7 +267,7 @@ function extractQuant(name) {
 }
 
 /* ---------- Profile aggregation across reports ---------- */
-function buildProfileBundle(confs /* [{profile_id, fields, order, derived}] */) {
+function buildProfileBundle(confs /* [{profile_id, fields, order, derived}] */, baseConf = null) {
   // Group by HF_REPO so the diff view can find related profiles.
   const groups = new Map();
   for (const c of confs) {
@@ -280,7 +280,25 @@ function buildProfileBundle(confs /* [{profile_id, fields, order, derived}] */) 
     members,
     isFamily: !repo.startsWith("__solo__:") && members.length > 1,
   }));
-  return { confs, byId: new Map(confs.map(c => [c.profile_id, c])), families };
+  return { confs, baseConf, byId: new Map(confs.map(c => [c.profile_id, c])), families };
+}
+
+function metadataFromConf(conf, baseConf = null) {
+  if (!conf) return {};
+  const f = { ...(baseConf?.fields || {}), ...(conf.fields || {}) };
+  const modelPath = f.MODEL || "";
+  const modelFile = modelPath.split("/").pop() || modelPath || f.HF_FILE || "";
+  return {
+    profile: conf.profile_id,
+    alias: f.ALIAS || conf.profile_id,
+    model_file: modelFile,
+    context_length: f.CONTEXT_LENGTH ? parseInt(f.CONTEXT_LENGTH, 10) : null,
+    parallel_slots: f.PARALLEL_SLOTS ? parseInt(f.PARALLEL_SLOTS, 10) : null,
+    cache_type_k: f.CACHE_TYPE_K || null,
+    cache_type_v: f.CACHE_TYPE_V || null,
+    has_mmproj: Boolean(f.MMPROJ),
+    quant: extractQuant(modelFile || f.HF_FILE || ""),
+  };
 }
 
 /* Diff two confs and return a list of {key, a, b, differs} */
@@ -320,9 +338,17 @@ async function loadReportSummary(id, base = "reports/") {
 }
 
 async function loadProfilesForReport(report) {
-  if (!report.dataset) return { confs: [], bundle: buildProfileBundle([]) };
+  if (!report.dataset) return { confs: [], baseConf: null, bundle: buildProfileBundle([]) };
   const ids = report.dataset.profiles.map(p => p.profile);
   const confs = [];
+  let baseConf = null;
+  try {
+    const baseR = await fetch(`${report.base}${report.id}/profiles/_base.conf`);
+    if (baseR.ok) {
+      const text = await baseR.text();
+      baseConf = parseConf(text, `_base.conf`);
+    }
+  } catch {}
   for (const id of ids) {
     try {
       const r = await fetch(`${report.base}${report.id}/profiles/${id}.conf`);
@@ -332,7 +358,7 @@ async function loadProfilesForReport(report) {
       }
     } catch {}
   }
-  return { confs, bundle: buildProfileBundle(confs) };
+  return { confs, baseConf, bundle: buildProfileBundle(confs, baseConf) };
 }
 
 /* ============================================================
@@ -362,14 +388,17 @@ function loadMyRunDataset(id) {
   const rows = parseJsonl(run.jsonl);
   if (!rows.length) return null;
   const dataset = buildDataset(rows);
-  const confs = (run.confs || []).map(c => parseConf(c.text, c.filename));
+  const parsed = (run.confs || []).map(c => parseConf(c.text, c.filename));
+  const baseConf = parsed.find(c => c.profile_id === "_base") || null;
+  const confs = parsed.filter(c => c.profile_id !== "_base");
   return {
     id: run.id,
     meta: run.meta || { id: run.id, title: run.title || run.id },
     dataset,
     source: "local",
     confs,
-    bundle: buildProfileBundle(confs),
+    baseConf,
+    bundle: buildProfileBundle(confs, baseConf),
   };
 }
 
@@ -391,6 +420,7 @@ function buildLeaderboard(reports /* [{dataset, meta}] */) {
 /* Public hub API */
 Object.assign(window.BenchData, {
   parseConf, extractQuant, buildProfileBundle, diffConfs,
+  metadataFromConf,
   loadRegistry, loadReportSummary, loadProfilesForReport,
   listMyRuns, saveMyRun, deleteMyRun, loadMyRunDataset,
   buildLeaderboard,

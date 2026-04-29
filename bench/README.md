@@ -10,8 +10,9 @@ Static benchmark report hub.
 
 Report folders live under `reports/<id>/`:
 
-- `meta.json`: title, date, hardware, server, profile manifest
+- `meta.json`: title, date, hardware, server, notes
 - `results.jsonl`: per-prompt benchmark rows
 - `profiles/*.conf`: model overlays used by the run
+- `profiles/_base.conf`: GPU base config, used to resolve inherited defaults
 
 `reports/reports.json` controls which runs appear on the home page.

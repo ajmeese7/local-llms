@@ -167,7 +167,7 @@ function App() {
               <SummarySection data={activeReport.dataset} meta={activeReport.meta} copy={copy} recommendations={recs} />
             </div>
             <div style={{display: route.tab === "profiles" ? "block" : "none"}}>
-              <ProfilesSection data={activeReport.dataset} meta={activeReport.meta} />
+              <ProfilesSection data={activeReport.dataset} meta={activeReport.meta} profiles={activeProfiles} />
             </div>
             <div style={{display: route.tab === "prompts" ? "block" : "none"}}>
               <PromptsSection data={activeReport.dataset} />

@@ -122,11 +122,11 @@ Open `http://127.0.0.1:8765/`.
 The app reads:
 
 - `bench/reports/reports.json`: report registry
-- `bench/reports/<id>/meta.json`: title, hardware, server, and profile manifest
+- `bench/reports/<id>/meta.json`: title, date, hardware, server, and notes
 - `bench/reports/<id>/results.jsonl`: per-profile prompt results
 - `bench/reports/<id>/profiles/*.conf`: model overlays used by the run
 
-The Configs tab parses the `.conf` files and highlights profile-family differences such as context length, KV cache, multimodal projector settings, and speculative decoding flags.
+`profiles/_base.conf` stores the GPU base config when the packager can resolve it. The Profiles tab merges `_base.conf` with each overlay for inherited defaults, and the Configs tab parses the overlays to highlight profile-family differences such as context length, KV cache, multimodal projector settings, and speculative decoding flags.
 
 ## Fair Comparisons
 
