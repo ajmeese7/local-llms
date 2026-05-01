@@ -1,24 +1,81 @@
-import csv,statistics,sys
+#!/usr/bin/env python3
+"""Compare API benchmark run directories and emit a CSV summary."""
+
+from __future__ import annotations
+
+import csv
+import statistics
+import sys
 from pathlib import Path
-output=sys.argv[1]; run_dirs=[Path(p) for p in sys.argv[2:]]
-def parse_request(path):
- d={}
- if not path.exists(): return d
- for line in path.read_text(encoding='utf-8').splitlines():
-  if '=' in line:
-   k,v=line.split('=',1); d[k.strip()]=v.strip()
- return d
-rows=[]
-for rd in run_dirs:
- st=rd/'summary.tsv'
- if not st.exists(): raise SystemExit(f"run directory is missing summary.tsv: {rd}")
- req=parse_request(rd/'request.txt')
- data=list(csv.DictReader(st.open(encoding='utf-8'),delimiter='\t'))
- ok=[r for r in data if r.get('http_code')=='200']
- tt=[float(r['time_total']) for r in ok if r.get('time_total')]
- tps=[float(r['tokens_per_sec']) for r in ok if r.get('tokens_per_sec')]
- rows.append({'run_dir':str(rd),'model':req.get('model',''),'avg_time_total_sec':f"{statistics.mean(tt):.3f}" if tt else '','avg_completion_tokens_per_sec':f"{statistics.mean(tps):.3f}" if tps else ''})
-fields=['run_dir','model','avg_time_total_sec','avg_completion_tokens_per_sec']
-out=sys.stdout if output in ('','-') else open(output,'w',encoding='utf-8',newline='')
-w=csv.DictWriter(out,fieldnames=fields); w.writeheader(); w.writerows(rows)
-if out is not sys.stdout: out.close()
+
+
+def parse_request_file(path: Path) -> dict[str, str]:
+    data: dict[str, str] = {}
+    if not path.exists():
+        return data
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        data[key.strip()] = value.strip()
+
+    return data
+
+
+def mean(values: list[float]) -> float | None:
+    return statistics.mean(values) if values else None
+
+
+def summarize_run(run_dir: Path) -> dict[str, str]:
+    summary_tsv = run_dir / "summary.tsv"
+    request_txt = run_dir / "request.txt"
+
+    if not summary_tsv.exists():
+        raise SystemExit(f"run directory is missing summary.tsv: {run_dir}")
+
+    request_meta = parse_request_file(request_txt)
+    rows = list(csv.DictReader(summary_tsv.open(encoding="utf-8"), delimiter="\t"))
+    ok_rows = [row for row in rows if row.get("http_code") == "200"]
+
+    avg_time_total = mean([float(row["time_total"]) for row in ok_rows if row.get("time_total")])
+    avg_tokens_per_sec = mean(
+        [float(row["tokens_per_sec"]) for row in ok_rows if row.get("tokens_per_sec")]
+    )
+
+    return {
+        "run_dir": str(run_dir),
+        "model": request_meta.get("model", ""),
+        "avg_time_total_sec": f"{avg_time_total:.3f}" if avg_time_total is not None else "",
+        "avg_completion_tokens_per_sec": (
+            f"{avg_tokens_per_sec:.3f}" if avg_tokens_per_sec is not None else ""
+        ),
+    }
+
+
+def main() -> None:
+    output_path = sys.argv[1]
+    run_dirs = [Path(value) for value in sys.argv[2:]]
+
+    rows = [summarize_run(run_dir) for run_dir in run_dirs]
+    fieldnames = [
+        "run_dir",
+        "model",
+        "avg_time_total_sec",
+        "avg_completion_tokens_per_sec",
+    ]
+
+    if output_path in ("", "-"):
+        writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+        return
+
+    with open(output_path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()
