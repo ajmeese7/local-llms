@@ -44,12 +44,14 @@ The detailed guides now live under [`docs/`](docs/README.md).
 The main operational entrypoints are:
 
 - [`setup.sh`](setup.sh): interactive installer that builds provider binaries, installs runtime files into `/etc/llama-server`, restarts the service, and waits for the local API to respond with bounded readiness checks.
-- [`config/llama-launcher.sh`](config/llama-launcher.sh): systemd entrypoint that detects the GPU, resolves the active model profile, loads the overlay, and execs `llama-server`.
+- [`service/bin/service.sh`](service/bin/service.sh): service module CLI; `launch` starts the runtime launcher.
+- [`service/bin/launcher.sh`](service/bin/launcher.sh): systemd/runtime launcher that detects GPU, resolves active model profile, and execs `llama-server`.
 - [`config/runtime-common.sh`](config/runtime-common.sh): shared shell helpers used by setup-time API verification and launcher-time optional `--api-key` handling.
-- [`config/provider-common.sh`](config/provider-common.sh): maps runtime providers to source checkouts and binaries.
+- [`service/lib/provider.sh`](service/lib/provider.sh): provider abstraction for runtime provider selection and capability checks.
 - [`config/select-model.sh`](config/select-model.sh): writes `/etc/llama-server/active-model.conf` for the next restart.
 - [`scripts/provider.sh`](scripts/provider.sh): installs or rebuilds supported providers such as `llama.cpp` and `ik_llama.cpp`.
-- [`scripts/benchmark.sh`](scripts/benchmark.sh): benchmark helper for active API aliases, API timing, `llama-bench`, and compare mode.
+- [`eval/bin/eval.sh`](eval/bin/eval.sh): eval module CLI that consumes only the OpenAI-compatible API.
+- [`eval/bin/benchmark.sh`](eval/bin/benchmark.sh): benchmark orchestration (compat wrapper remains at `scripts/benchmark.sh`).
 - [`scripts/bench.sh`](scripts/bench.sh): packages benchmark suite output into the static [`bench/`](bench) report hub and serves it locally.
 
 ## Suggested Reading Paths
