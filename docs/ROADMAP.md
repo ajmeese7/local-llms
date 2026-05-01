@@ -88,8 +88,3 @@ The bash launcher and v1 unit are still authoritative. Switching to v2 is its ow
 - `docs/BENCHMARKING.md` describes the bash harness.
 - `docs/SETUP.md` references `setup.sh` flows that change.
 - `README.md` claims the project is "shell-native".
-- `docs/REDESIGN_V2_PLAN.md` is the original ChatGPT draft. Add a header noting it was superseded.
-
-## Migration
-
-- Old runs in `benchmark-results/` use a different on-disk shape than `bench/reports/<id>/`. Either ship a one-shot migrator or document them as historical and freeze the directory.
