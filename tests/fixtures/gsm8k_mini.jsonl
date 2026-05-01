@@ -1,0 +1,4 @@
+{"id": "gsm8k-1", "question": "Janet has 3 apples. She buys 5 more. How many apples does she have?", "answer": "Janet starts with 3 apples and buys 5 more.\n3 + 5 = 8\n#### 8"}
+{"id": "gsm8k-2", "question": "A store sells pencils for $2 each. If Tom buys 7, how much does he spend?", "answer": "Each pencil is $2 and Tom buys 7.\n2 * 7 = 14\n#### 14"}
+{"id": "gsm8k-3", "question": "Sara has 100 marbles. She loses a quarter of them. How many remain?", "answer": "A quarter of 100 is 25.\n100 - 25 = 75\n#### 75"}
+{"id": "gsm8k-4", "question": "If a train travels 60 miles in 2 hours, what is its average speed in mph?", "answer": "Speed = distance / time = 60 / 2 = 30.\n#### 30"}

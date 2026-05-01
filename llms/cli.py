@@ -397,7 +397,21 @@ def _load_adapter(name: str) -> BenchmarkAdapter:
         from llms.eval.adapters.local_smoke import LocalSmokeAdapter
 
         return LocalSmokeAdapter()
-    raise typer.BadParameter(f"unknown adapter '{name}' (have: local_smoke)")
+    if name == "mmlu":
+        from llms.eval.adapters.mmlu import MMLUAdapter
+
+        return MMLUAdapter()
+    if name == "gsm8k":
+        from llms.eval.adapters.gsm8k import GSM8KAdapter
+
+        return GSM8KAdapter()
+    if name == "niah":
+        from llms.eval.adapters.niah import NIAHAdapter
+
+        return NIAHAdapter()
+    raise typer.BadParameter(
+        f"unknown adapter '{name}' (have: local_smoke, mmlu, gsm8k, niah)"
+    )
 
 
 @eval_app.command("run")
