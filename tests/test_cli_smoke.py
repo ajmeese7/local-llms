@@ -25,6 +25,6 @@ def test_help_lists_subcommands() -> None:
 
 def test_unimplemented_subcommands_exit_two() -> None:
     """Subcommands that haven't shipped their phase yet must signal not-yet."""
-    for cmd in (["endpoint", "status"], ["eval", "run"]):
+    for cmd in (["eval", "run"],):
         result = runner.invoke(app, cmd)
         assert result.exit_code == 2, f"{cmd} should exit 2 until implemented"
