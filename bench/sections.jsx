@@ -401,8 +401,8 @@ function MethodologySection({ copy }) {
     { id: "methodology.cleanliness",  icon: "fa-broom", title: "Reasoning leakage", body: copy["methodology.cleanliness"] },
   ];
   return (
-    <section id="methodology" data-screen-label="04 Methodology">
-      <SectionHead num="06" title="Methodology & Caveats" sub="// how the numbers were produced — and what they don't mean" />
+    <section id="methodology" data-screen-label="08 Methodology">
+      <SectionHead num="08" title="Methodology & Caveats" sub="// how the numbers were produced — and what they don't mean" />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {cards.map(c => (
           <div key={c.id} className="me-card p-4 md:p-5">

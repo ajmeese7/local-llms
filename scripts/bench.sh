@@ -46,7 +46,7 @@ Subcommands:
     Options:
       --bench-dir PATH       Benchmark app directory, default: ./bench
       --host HOST            Host, default: 127.0.0.1
-      --port PORT            Port, default: 8765
+      --port PORT            Port, default: 4445
 EOF
 }
 
@@ -347,7 +347,7 @@ cmd_serve() {
 
     local bench_dir="$BENCH_DIR_DEFAULT"
     local host="127.0.0.1"
-    local port="8765"
+    local port="4445"
 
     while [ "$#" -gt 0 ]; do
         case "$1" in

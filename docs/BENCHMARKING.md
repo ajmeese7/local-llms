@@ -155,7 +155,7 @@ Then validate and serve it:
 ./scripts/bench.sh serve
 ```
 
-Open `http://127.0.0.1:8765/`.
+Open `http://127.0.0.1:4445/`.
 
 The app reads:
 

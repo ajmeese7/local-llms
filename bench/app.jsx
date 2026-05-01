@@ -96,6 +96,7 @@ function App() {
     ["profiles", "Profiles"],
     ["prompts", "Prompts"],
     ["configs", "Configs"],
+    ["guide", "Guide"],
     ["methodology", "Methodology"],
   ];
 
@@ -174,6 +175,9 @@ function App() {
             </div>
             <div style={{display: route.tab === "configs" ? "block" : "none"}}>
               <ConfigsSection data={activeReport.dataset} profiles={activeProfiles} />
+            </div>
+            <div style={{display: route.tab === "guide" ? "block" : "none"}}>
+              <GuideSection profiles={activeProfiles} />
             </div>
             <div style={{display: route.tab === "methodology" ? "block" : "none"}}>
               <MethodologySection copy={copy} />

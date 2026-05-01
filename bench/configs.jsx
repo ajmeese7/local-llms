@@ -219,7 +219,7 @@ function ConfigsSection({ data, profiles }) {
 
   if (!bundle || bundle.confs.length === 0) {
     return (
-      <section data-screen-label="04 Configs">
+      <section data-screen-label="06 Configs">
         <SectionHead num="06" title="Profile Configs" sub="// llama-server overlays per profile" />
         <div className="me-card p-8 text-center font-mono text-[12px] text-me-fg-3">
           No profile <code>.conf</code> files were found for this run.
@@ -235,7 +235,7 @@ function ConfigsSection({ data, profiles }) {
   );
 
   return (
-    <section data-screen-label="04 Configs">
+    <section data-screen-label="06 Configs">
       <SectionHead
         num="06"
         title="Profile Configs"
