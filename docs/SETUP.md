@@ -84,7 +84,7 @@ nano config/rtx-5090.conf  # example for RTX 5090
 sudo /etc/llama-server/select-model.sh
 ```
 
-The setup script auto-detects your GPU, builds `llama.cpp`, offers to download the resolved model, installs the runtime configs and scripts, and offers to enable the systemd service during Step 7 if you confirm. If the resolved active profile points at a missing or empty GGUF, setup now skips service activation and tells you to use the selector to download that model or switch to an installed profile first.
+The setup script auto-detects your GPU, builds provider binaries, offers to download the resolved model, installs the runtime configs and scripts, and offers to enable the systemd service during Step 7 if you confirm. If the resolved active profile points at a missing or empty GGUF, setup now skips service activation and tells you to use the selector to download that model or switch to an installed profile first.
 
 `API_KEY` is optional. Leave it unset to run without bearer auth, or set it before treating the service as reachable on your LAN or beyond.
 

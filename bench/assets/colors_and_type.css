@@ -1,0 +1,164 @@
+/* ============================================================
+   Meese Enterprises — Colors & Type
+   Neon-cyberpunk techno-futuristic palette.
+   Anchored on absolute black with neon magenta + cyan accents.
+   ============================================================ */
+
+/* --- Fonts --- */
+@font-face {
+	font-family: "Hermes";
+	src: url("fonts/Hermes.otf") format("opentype");
+	font-display: swap;
+}
+@font-face {
+	font-family: "Bios";
+	src: url("fonts/Bios-Regular.otf") format("opentype");
+	font-display: swap;
+}
+/* Google Fonts fallback — pulled in by the website code */
+@import url("https://fonts.googleapis.com/css2?family=Cabin:wght@400;500;600;700&family=Open+Sans:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+	/* ---- Core palette ---- */
+	--me-black:            #050505;   /* darkPrimary — pure void */
+	--me-black-2:          #0A0A0A;   /* darkSecondary — 1-step lift */
+	--me-black-3:          #111114;   /* surface raise */
+	--me-white:            #FFFFFF;   /* lightPrimary */
+	--me-muted:            #f0e6f6;   /* lavender wash */
+
+	/* ---- Neon accents (the brand "signal" colors) ---- */
+	--me-magenta:          #D600FF;   /* primaryAccent @ 100% */
+	--me-magenta-60:       rgba(214, 0, 255, 0.60);  /* lightSecondary */
+	--me-magenta-40:       rgba(214, 0, 255, 0.40);  /* ::selection */
+	--me-cyan:             #00B8FF;   /* secondaryAccent @ 100% */
+	--me-cyan-60:          rgba(0, 184, 255, 0.60);
+
+	/* ---- Semantic ---- */
+	--me-bg:               var(--me-black);
+	--me-bg-alt:           var(--me-black-2);
+	--me-surface:          var(--me-black-3);
+	--me-fg:               var(--me-white);
+	--me-fg-2:             #C9C9D1;   /* secondary text on dark */
+	--me-fg-3:             #7A7A85;   /* tertiary / meta */
+	--me-fg-invert:        #020101;   /* on light bg */
+
+	--me-border:           rgba(255,255,255,0.08);
+	--me-border-strong:    rgba(255,255,255,0.18);
+	--me-border-neon:      var(--me-magenta-60);
+
+	--me-success:          #19F0A8;
+	--me-warning:          #FFC857;
+	--me-danger:           #FF3864;
+
+	/* ---- Signature neon shadows (the brand's "chromatic split") ---- */
+	--me-text-shadow-chroma:   -1px 0 var(--me-magenta-60), 1px 0 var(--me-cyan-60);
+	--me-text-shadow-chroma-lg:-2px -1px 1px var(--me-magenta-60), 2px 1px 1px var(--me-cyan-60);
+	--me-text-shadow-chroma-xl:-2px -2px var(--me-magenta-60), 2px 2px var(--me-cyan-60);
+	--me-text-glow:            0 0 3px var(--me-white);
+
+	--me-box-glow-magenta: 0 0 24px rgba(214, 0, 255, 0.35), 0 0 1px rgba(214, 0, 255, 0.9);
+	--me-box-glow-cyan:    0 0 24px rgba(0, 184, 255, 0.35), 0 0 1px rgba(0, 184, 255, 0.9);
+	--me-box-glow-split:   -4px -4px 18px rgba(214, 0, 255, 0.35), 4px 4px 18px rgba(0, 184, 255, 0.35);
+
+	/* ---- Card shadows (light-UI inherited from website) ---- */
+	--me-card-shadow:      0 2px 2px rgba(0,0,0,0.20);
+	--me-card-shadow-hover:0 12px 16px rgba(0,0,0,0.20);
+
+	/* ---- Radii ---- */
+	--me-r-xs: 4px;
+	--me-r-sm: 8px;
+	--me-r-md: 12px;
+	--me-r-lg: 20px;   /* logo badge */
+	--me-r-xl: 25px;
+	--me-r-pill: 999px;
+
+	/* ---- Spacing (4px base) ---- */
+	--me-s-1: 4px;
+	--me-s-2: 8px;
+	--me-s-3: 12px;
+	--me-s-4: 16px;
+	--me-s-5: 24px;
+	--me-s-6: 32px;
+	--me-s-7: 48px;
+	--me-s-8: 64px;
+	--me-s-9: 96px;
+
+	/* ---- Type families ---- */
+	--me-font-display:   "Bios", "Orbitron", "Courier New", monospace;     /* CYBERPUNK SIGNAGE — all-caps hero */
+	--me-font-logo:      "Hermes", "Bios", "Orbitron", monospace;           /* logo wordmark */
+	--me-font-body:      "Cabin", "Open Sans", system-ui, sans-serif;       /* body copy */
+	--me-font-mono:      "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+
+	/* ---- Type scale ---- */
+	--me-t-hero:   90px;   /* companyName */
+	--me-t-h1:    56px;
+	--me-t-h2:    40px;
+	--me-t-h3:    30px;    /* companyType / chineseTagline */
+	--me-t-h4:    24px;    /* tagline */
+	--me-t-body:  16px;
+	--me-t-small: 14px;
+	--me-t-micro: 12px;
+
+	/* ---- Motion ---- */
+	--me-ease:      cubic-bezier(0.22, 0.61, 0.36, 1);
+	--me-ease-out:  ease-out;
+	--me-ease-snap: cubic-bezier(0.65, -0.55, 0.25, 1.5);
+	--me-t-fast:    0.1s;
+	--me-t-base:    0.25s;
+	--me-t-slow:    0.4s;
+	--me-t-slower:  0.5s;
+}
+
+/* ==================== Selection ==================== */
+::selection { background: var(--me-magenta-40); color: var(--me-white); }
+
+/* ==================== Element defaults ==================== */
+html, body {
+	font-family: var(--me-font-body);
+	font-size: var(--me-t-body);
+	line-height: 1.55;
+	color: var(--me-fg);
+	background: var(--me-bg);
+}
+
+/* ==================== Semantic type ==================== */
+.me-hero,
+.me-display {
+	font-family: var(--me-font-display);
+	font-size: var(--me-t-hero);
+	line-height: 1.0;
+	letter-spacing: 0.01em;
+	color: transparent;
+	text-shadow: var(--me-text-shadow-chroma-lg);
+	text-transform: uppercase;
+}
+
+.me-h1 { font-family: var(--me-font-display); font-size: var(--me-t-h1); line-height: 1.1; letter-spacing: 0.04em; text-transform: uppercase; }
+.me-h2 { font-family: var(--me-font-display); font-size: var(--me-t-h2); line-height: 1.15; letter-spacing: 0.06em; text-transform: uppercase; }
+.me-h3 { font-family: var(--me-font-display); font-size: var(--me-t-h3); line-height: 1.2;  letter-spacing: 0.5ch; text-transform: uppercase; }
+.me-h4 { font-family: var(--me-font-body);    font-size: var(--me-t-h4); line-height: 1.3; font-weight: 600; }
+
+.me-p  { font-family: var(--me-font-body); font-size: var(--me-t-body); line-height: 1.6; }
+.me-p-lg { font-size: 18px; line-height: 1.6; }
+.me-small { font-size: var(--me-t-small); color: var(--me-fg-2); }
+.me-micro { font-size: var(--me-t-micro); color: var(--me-fg-3); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.me-code, code, pre {
+	font-family: var(--me-font-mono);
+	font-size: 0.9em;
+}
+.me-tagline {
+	font-family: var(--me-font-mono);
+	font-size: var(--me-t-h4);
+	letter-spacing: -1px;
+	word-spacing: -6.5px;
+	text-shadow: var(--me-text-glow);
+	color: var(--me-fg);
+}
+
+/* ==================== Signature text effects ==================== */
+.me-chroma          { color: transparent; text-shadow: var(--me-text-shadow-chroma); }
+.me-chroma-lg       { color: transparent; text-shadow: var(--me-text-shadow-chroma-lg); }
+.me-chroma-xl       { color: transparent; text-shadow: var(--me-text-shadow-chroma-xl); }
+.me-glow            { color: var(--me-fg); text-shadow: var(--me-text-glow); }
+.me-scanlines       { background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(255,255,255,0.04) 2px, rgba(255,255,255,0.04) 3px); }

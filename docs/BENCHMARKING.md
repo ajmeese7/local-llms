@@ -1,8 +1,9 @@
 # Benchmarking
 
-Use [`scripts/benchmark.sh`](../scripts/benchmark.sh). This guide intentionally avoids raw runtime commands and one-off API recipes. If the repo has benchmark automation, the docs should use that automation.
+Use [`scripts/benchmark.sh`](../scripts/benchmark.sh) for raw benchmark runs and [`scripts/bench.sh`](../scripts/bench.sh) for publishable report packaging. This guide intentionally avoids raw runtime commands and one-off API recipes. If the repo has benchmark automation, the docs should use that automation.
 
 Results are written under `./benchmark-results/`.
+Publishable report data is written under `./bench/reports/`.
 
 ## What Works From This Repo
 
@@ -11,9 +12,11 @@ Results are written under `./benchmark-results/`.
 | Active API aliases | `models` | Running `llama-server`, `curl`, `python3` |
 | API latency and output speed | `api` | Running `llama-server`, `curl`, `python3` |
 | Saved API run comparison | `compare` | API benchmark result directories, `python3` |
-| Raw GGUF runtime speed | `llama-bench` | `llama.cpp` built by `setup.sh` |
+| Raw GGUF runtime speed | `llama-bench` | Provider built by `setup.sh` or `scripts/provider.sh` |
+| Publishable benchmark hub | `../scripts/bench.sh add` / `serve` | A suite run with `results.jsonl`, `python3` |
+| Backend provider install | `../scripts/provider.sh install` | `git`, `cmake`, CUDA toolkit |
 
-`setup.sh` builds `llama.cpp` under `~/.local/share/llama.cpp`. That build normally provides `llama-server` and `llama-bench`. If `llama-bench` is missing, rerun `./setup.sh` and choose the rebuild path.
+`setup.sh` builds `llama.cpp` under `~/.local/share/llama.cpp` and can optionally build `ik_llama.cpp` under `~/.local/share/ik_llama.cpp`. Each provider build normally provides `llama-server` and `llama-bench`. If `llama-bench` is missing, rerun `./setup.sh` or `./scripts/provider.sh install PROVIDER` and choose the rebuild path.
 
 ## Before Running
 
@@ -70,15 +73,52 @@ For a second local endpoint, keep the same helper and change only the base URL:
   --label endpoint-8001-api
 ```
 
+## Backend Provider Comparison
+
+Install `ik_llama.cpp`:
+
+```bash
+./scripts/provider.sh install ik_llama.cpp --rebuild
+```
+
+Run the suite once per provider and package both runs:
+
+```bash
+./scripts/benchmark-5090-suite.sh \
+  --provider llama.cpp \
+  --run-dir ./benchmark-results/5090-llama-cpp
+
+./scripts/benchmark-5090-suite.sh \
+  --provider ik_llama.cpp \
+  --run-dir ./benchmark-results/5090-ik-llama-cpp
+
+./scripts/bench.sh add ./benchmark-results/5090-llama-cpp \
+  --title "RTX 5090 - llama.cpp"
+
+./scripts/bench.sh add ./benchmark-results/5090-ik-llama-cpp \
+  --title "RTX 5090 - ik_llama.cpp"
+
+./scripts/bench.sh serve
+```
+
+The benchmark suite writes `provider=<name>` to `run-info.txt`, and the report packager stores that backend name in `meta.json` under `server.engine`.
+
+The suite skips profile/provider pairs blocked by `BLOCKED_LLAMA_PROVIDERS` or missing from `PROVEN_LLAMA_PROVIDERS`. Skipped profiles are recorded in `manifest.tsv` and the generated markdown report.
+
+The suite defaults to a 180 second per-prompt API timeout and aborts the current profile after the first timed-out prompt. Use `--api-timeout SEC` and `--timeout-failures N` when intentionally testing very slow long-context behavior.
+
 ## Raw llama.cpp Benchmark
 
 ```bash
 ./scripts/benchmark.sh llama-bench \
+  --provider llama.cpp \
   --runs 3 \
   --label active-llama-bench
 ```
 
 Without `--model-file`, the helper resolves the active runtime model from the GPU config, `/etc/llama-server/active-model.conf`, and the selected model overlay. Use this when comparing GGUF runtime throughput without HTTP overhead.
+
+Use `--provider ik_llama.cpp` to run `llama-bench` from the `ik_llama.cpp` checkout.
 
 Each run stores a raw `llama-bench` log. Inspect the `pp` and `tg` rows:
 
@@ -97,6 +137,34 @@ After saving two or more API runs, compare them with the helper:
 ```
 
 The compare mode intentionally reads only structured `api` outputs. It does not parse `llama-bench` logs.
+
+## Publishable Report Hub
+
+Package a suite run into the static benchmark hub:
+
+```bash
+./scripts/bench.sh add ./benchmark-results/5090-suite-20260428-151710 \
+  --title "RTX 5090 - Five-Profile Suite" \
+  --subtitle "Qwen3.6 and MYTHOS profiles across coding, assistant, creative, and long-context prompts."
+```
+
+Then validate and serve it:
+
+```bash
+./scripts/bench.sh validate
+./scripts/bench.sh serve
+```
+
+Open `http://127.0.0.1:4445/`.
+
+The app reads:
+
+- `bench/reports/reports.json`: report registry
+- `bench/reports/<id>/meta.json`: title, date, hardware, server, and notes
+- `bench/reports/<id>/results.jsonl`: per-profile prompt results
+- `bench/reports/<id>/profiles/*.conf`: model overlays used by the run
+
+`profiles/_base.conf` stores the GPU base config when the packager can resolve it. The Profiles tab merges `_base.conf` with each overlay for inherited defaults, and the Configs tab parses the overlays to highlight profile-family differences such as context length, KV cache, multimodal projector settings, and speculative decoding flags.
 
 ## Fair Comparisons
 

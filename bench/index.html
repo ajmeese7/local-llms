@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Meese · Bench — Local LLM Benchmark Hub</title>
+<link rel="stylesheet" href="assets/colors_and_type.css" />
+<link rel="stylesheet" href="benchmark.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      screens: { sm: '480px', md: '720px', lg: '1024px', xl: '1280px', nav: '1180px' },
+      extend: {
+        colors: {
+          'me-bg': '#050505', 'me-bg-alt': '#0A0A0A', 'me-surface': '#111114',
+          'me-fg': '#FFFFFF', 'me-fg-2': '#C9C9D1', 'me-fg-3': '#7A7A85',
+          'me-magenta': '#D600FF', 'me-magenta-60': 'rgba(214,0,255,0.6)',
+          'me-cyan': '#00B8FF', 'me-cyan-60': 'rgba(0,184,255,0.6)',
+          'me-success': '#19F0A8', 'me-warning': '#FFC857', 'me-danger': '#FF3864',
+          'me-border': 'rgba(255,255,255,0.08)', 'me-border-strong': 'rgba(255,255,255,0.18)',
+        },
+        fontFamily: {
+          'display': ['Bios','Orbitron','Courier New','monospace'],
+          'logo':    ['Hermes','Bios','monospace'],
+          'body':    ['Cabin','Open Sans','system-ui','sans-serif'],
+          'mono':    ['JetBrains Mono','ui-monospace','SFMono-Regular','Consolas','monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style type="text/tailwindcss">
+  @layer base {
+    body {
+      @apply bg-me-bg text-me-fg font-body;
+      background-image:
+        repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(255,255,255,0.018) 2px, rgba(255,255,255,0.018) 3px),
+        radial-gradient(ellipse at 20% -10%, rgba(214,0,255,0.08), transparent 50%),
+        radial-gradient(ellipse at 90% 0%, rgba(0,184,255,0.06), transparent 55%);
+      background-attachment: fixed;
+    }
+    a { @apply text-me-cyan no-underline hover:[text-shadow:0_0_6px_rgba(0,184,255,0.6)]; }
+    ::selection { background: rgba(214,0,255,0.4); color: #fff; }
+  }
+  @layer components {
+    .me-eyebrow { @apply font-mono text-[10px] tracking-[0.18em] uppercase text-me-fg-3; }
+    .me-label   { @apply font-mono text-[9px]  tracking-[0.18em] uppercase text-me-fg-3; }
+    .me-section-head { @apply mt-10 md:mt-14 mb-5 pb-3 border-b border-me-border flex flex-col md:flex-row md:items-baseline md:gap-4; }
+    .me-section-head h2 { @apply font-display text-[18px] md:text-[22px] tracking-[0.16em] uppercase text-me-fg m-0; }
+    .me-section-head h2 .num { @apply text-me-magenta text-[14px] mr-2.5; text-shadow: 0 0 6px var(--me-magenta-60); }
+    .me-section-head .sub { @apply font-mono text-[11px] md:text-[12px] text-me-fg-3 mt-1 md:mt-0; }
+    .me-card { @apply bg-me-bg-alt border border-me-border; }
+    .me-chip { @apply bg-transparent border border-me-border text-me-fg-2 font-mono text-[11px] tracking-[0.06em] px-2.5 py-1 cursor-pointer transition-colors hover:text-me-fg hover:border-me-border-strong; }
+    .me-chip.on { @apply bg-me-fg text-me-bg border-me-fg; }
+    .me-chip.cyan { @apply bg-me-cyan text-me-bg border-me-cyan; }
+    .me-flag { @apply font-mono text-[10px] tracking-[0.1em] uppercase px-2 py-[3px] border border-me-border text-me-fg-3 inline-block; }
+    .me-flag.clean { @apply text-me-success border-me-success/40; }
+    .me-flag.leak { @apply text-me-warning border-me-warning/40; }
+    .me-flag.danger { @apply text-me-danger border-me-danger/40; }
+    .me-miniflag { @apply font-mono text-[9px] tracking-[0.12em] uppercase px-1.5 py-[2px] mr-1 inline-block border border-me-border text-me-fg-3; }
+    .me-miniflag.clean { @apply text-me-success border-me-success/40; }
+    .me-miniflag.leak { @apply text-me-warning border-me-warning/40; }
+    .me-miniflag.danger { @apply text-me-danger border-me-danger/40; }
+    .qbar { @apply inline-flex items-center gap-1.5; }
+    .qbar .qnum { @apply text-me-fg; }
+    .qbar .qtrack { @apply w-[60px] h-[5px] bg-white/5 relative; }
+    .qbar .qfill { @apply absolute inset-y-0 left-0 bg-me-warning; }
+    .qbar.low .qfill { @apply bg-me-danger; }
+    .qbar.full .qfill { @apply bg-me-success; }
+    .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  }
+</style>
+<script>
+  window.REPORT_OVERRIDES = window.REPORT_OVERRIDES || {};
+</script>
+</head>
+<body class="overflow-x-hidden">
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="sections.jsx"></script>
+<script type="text/babel" src="configs.jsx"></script>
+<script type="text/babel" src="guide.jsx"></script>
+<script type="text/babel" src="home.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
