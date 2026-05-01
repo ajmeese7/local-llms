@@ -523,6 +523,26 @@ def eval_list(output_root: Path = EVAL_OUTPUT_OPT) -> None:
     console.print(table)
 
 
+@eval_app.command("report")
+def eval_report(
+    output_root: Path = EVAL_OUTPUT_OPT,
+    emit_hub: bool = typer.Option(
+        True, "--emit-hub/--no-emit-hub", help="Write reports.json registry the SPA loads."
+    ),
+) -> None:
+    """Refresh the hub registry under `output_root/reports.json`."""
+    from llms.eval.report.registry import build_registry, emit_registry
+
+    if emit_hub:
+        target = emit_registry(output_root)
+        registry = json.loads(target.read_text())
+        console.print(f"[green]✓[/] wrote {target} ({len(registry['reports'])} runs)")
+        return
+
+    registry = build_registry(output_root)
+    print(json.dumps(registry, indent=2, sort_keys=True))
+
+
 @eval_app.command("show")
 def eval_show(
     run_id: str = typer.Argument(...),
