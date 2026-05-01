@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from llms import __version__
+from llms.eval.adapter import BenchmarkAdapter
 from llms.serving.config.errors import ConfigError
 from llms.serving.config.lint import lint as lint_configs
 from llms.serving.config.loader import load_bundle
@@ -23,7 +24,7 @@ from llms.serving.providers.registry import list_providers
 from llms.serving.runtime.systemd import restart_hint
 from llms.serving.state.store import StateStore
 from llms.serving.telemetry.aggregate import summarize
-from llms.serving.telemetry.log import default_log_path
+from llms.serving.telemetry.log import TelemetryWriter, default_log_path
 
 app = typer.Typer(
     name="llms",
@@ -287,9 +288,7 @@ def endpoint_rollback(
 @endpoint_app.command("stats")
 def endpoint_stats(
     log_path: Path | None = LOG_OPT,
-    window: str = typer.Option(
-        "24h", "--window", "-w", help="Window duration (e.g. 1h, 24h, 7d)."
-    ),
+    window: str = typer.Option("24h", "--window", "-w", help="Window duration (e.g. 1h, 24h, 7d)."),
 ) -> None:
     """Aggregate per-request telemetry over a time window."""
     delta = _parse_window(window)
@@ -309,9 +308,7 @@ def endpoint_stats(
     table.add_column("Value", justify="right")
     table.add_row("requests", str(summary.request_count))
     table.add_row("errors", str(summary.error_count))
-    table.add_row(
-        "p50 latency", _fmt_ms(summary.p50_latency_ms)
-    )
+    table.add_row("p50 latency", _fmt_ms(summary.p50_latency_ms))
     table.add_row("p95 latency", _fmt_ms(summary.p95_latency_ms))
     table.add_row("p50 ttft", _fmt_ms(summary.p50_ttft_ms))
     table.add_row("p95 ttft", _fmt_ms(summary.p95_ttft_ms))
@@ -383,14 +380,156 @@ def endpoint_revisions(
     console.print(table)
 
 
-# ── eval (still stubbed) ────────────────────────────────────────────────────
+# ── eval ────────────────────────────────────────────────────────────────────
+
+EVAL_OUTPUT_OPT = typer.Option(
+    Path("bench/reports"),
+    "--output",
+    "-o",
+    help="Where to write per-run artifacts (manifest, jsonl, html).",
+)
+
+
+def _load_adapter(name: str) -> BenchmarkAdapter:
+    """Return an adapter instance for `name`. Imported lazily to keep
+    `llms --help` responsive when the eval extras aren't installed."""
+    if name == "local_smoke":
+        from llms.eval.adapters.local_smoke import LocalSmokeAdapter
+
+        return LocalSmokeAdapter()
+    raise typer.BadParameter(f"unknown adapter '{name}' (have: local_smoke)")
 
 
 @eval_app.command("run")
-def eval_run() -> None:
-    """Execute a benchmark run from a manifest (Phase 4)."""
-    console.print("[yellow]not implemented yet (Phase 4)[/]")
-    raise typer.Exit(code=2)
+def eval_run(
+    adapter_name: str = typer.Argument(..., help="Adapter name (e.g. local_smoke)."),
+    endpoint: str = typer.Option(
+        ..., "--endpoint", "-e", help="Endpoint name from config/endpoints/."
+    ),
+    config_root: Path = CONFIG_OPT,
+    state_db: Path | None = STATE_OPT,
+    hardware: str | None = HW_OPT,
+    gpu_override: str | None = typer.Option(None, "--gpu-name"),
+    base_url: str | None = typer.Option(
+        None,
+        "--base-url",
+        help="Override the endpoint URL (default: derived from endpoint config).",
+    ),
+    output_root: Path = EVAL_OUTPUT_OPT,
+    subset: str | None = typer.Option(None, "--subset", help="Adapter-specific subset selector."),
+    seed: int = typer.Option(0, "--seed"),
+    hash_model: bool = typer.Option(
+        False, "--hash-model", help="SHA-256 the model file (slow, but pins the manifest)."
+    ),
+    write_telemetry: bool = typer.Option(
+        True, "--telemetry/--no-telemetry", help="Append per-request rows to the request log."
+    ),
+    notes: str = typer.Option("", "--notes"),
+) -> None:
+    """Drive an adapter against an endpoint and write the run to disk."""
+    from llms.eval.endpoint_url import base_url_from_runtime
+    from llms.eval.runner import run_eval
+
+    hw = _resolve_hardware_name(config_root, hardware, gpu_override)
+    bundle = load_bundle(config_root)
+    if endpoint not in bundle.endpoints:
+        err_console.print(f"[red]✗[/] unknown endpoint '{endpoint}'")
+        raise typer.Exit(code=2)
+    runtime = resolve_runtime(bundle, endpoint_name=endpoint, hardware_name=hw)
+    target_url = base_url or base_url_from_runtime(runtime)
+
+    try:
+        adapter = _load_adapter(adapter_name)
+    except typer.BadParameter as exc:
+        err_console.print(f"[red]✗[/] {exc}")
+        raise typer.Exit(code=2) from exc
+
+    telemetry = TelemetryWriter() if write_telemetry else None
+    console.print(
+        f"running [bold]{adapter_name}[/] against [cyan]{target_url}[/] "
+        f"(endpoint=[bold]{endpoint}[/], hardware=[bold]{hw}[/])"
+    )
+    outcome = run_eval(
+        adapter=adapter,
+        runtime=runtime,
+        endpoint_name=endpoint,
+        base_url=target_url,
+        output_root=output_root,
+        subset=subset,
+        seed=seed,
+        hash_model=hash_model,
+        telemetry=telemetry,
+        notes=notes,
+    )
+    summary = outcome.summary
+    accuracy = f"{summary.accuracy.point:.3f}" if summary.accuracy is not None else "—"
+    console.print(
+        f"[green]✓[/] {summary.item_count} items, accuracy={accuracy}, "
+        f"parse_failures={summary.parse_failure_count}, errors={summary.error_count}"
+    )
+    console.print(f"  artifacts: [dim]{outcome.manifest_path.parent}[/]")
+
+
+@eval_app.command("list")
+def eval_list(output_root: Path = EVAL_OUTPUT_OPT) -> None:
+    """List runs under the output directory."""
+    from llms.eval.manifest import Manifest
+
+    if not output_root.exists():
+        console.print(f"[yellow]no runs under {output_root}[/]")
+        return
+    rows: list[tuple[str, str, str, str, str]] = []
+    for run_dir in sorted(output_root.iterdir()):
+        manifest_file = run_dir / "manifest.json"
+        if not manifest_file.is_file():
+            continue
+        manifest = Manifest.read(manifest_file)
+        rows.append(
+            (
+                manifest.run_id,
+                f"{manifest.adapter.name}@{manifest.adapter.version}",
+                manifest.endpoint_name,
+                manifest.timestamp,
+                manifest.comparability_key[:8],
+            )
+        )
+
+    if not rows:
+        console.print(f"[yellow]no runs in {output_root}[/]")
+        return
+
+    table = Table(title=f"Eval runs in {output_root}")
+    table.add_column("Run id")
+    table.add_column("Adapter")
+    table.add_column("Endpoint")
+    table.add_column("Timestamp")
+    table.add_column("Compat")
+    for r in rows:
+        table.add_row(*r)
+    console.print(table)
+
+
+@eval_app.command("show")
+def eval_show(
+    run_id: str = typer.Argument(...),
+    output_root: Path = EVAL_OUTPUT_OPT,
+) -> None:
+    """Print the run summary for `run_id`."""
+    from llms.eval.manifest import Manifest
+
+    summary_file = output_root / run_id / "summary.json"
+    manifest_file = output_root / run_id / "manifest.json"
+    if not summary_file.is_file() or not manifest_file.is_file():
+        err_console.print(f"[red]✗[/] no run named '{run_id}' under {output_root}")
+        raise typer.Exit(code=2)
+    manifest = Manifest.read(manifest_file)
+    summary = json.loads(summary_file.read_text())
+    console.print(
+        f"[bold]{run_id}[/] · adapter={manifest.adapter.name}@{manifest.adapter.version} "
+        f"· endpoint={manifest.endpoint_name}"
+    )
+    console.print(f"compat: {manifest.comparability_key}")
+    console.print(json.dumps(summary, indent=2, sort_keys=True))
 
 
 # ── provider ────────────────────────────────────────────────────────────────
