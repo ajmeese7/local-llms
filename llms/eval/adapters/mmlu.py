@@ -98,7 +98,9 @@ class MMLUAdapter:
         del item
         text = raw_response.strip()
         if not text:
-            return ParsedAnswer(raw=raw_response, value=None, parse_failed=True, parse_error="empty response")
+            return ParsedAnswer(
+                raw=raw_response, value=None, parse_failed=True, parse_error="empty response"
+            )
         match = _LETTER_REGEX.search(text.upper())
         if match is None:
             return ParsedAnswer(

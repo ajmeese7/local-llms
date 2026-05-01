@@ -1,7 +1,7 @@
 /* ============================================================
    app.jsx
-   v2 hub shell. Hash routing:
-     #/                 home (run list)
+   Hub shell. Hash routing:
+     #/                 home (run list + reading guide)
      #/run/<id>         run detail
    ============================================================ */
 
@@ -25,6 +25,7 @@ function buildHash(route) {
 function App() {
   const [route, setRoute] = useS(() => parseHash(location.hash));
   const [reports, setReports] = useS([]);
+  const [profilesSnapshot, setProfilesSnapshot] = useS(null);
   const [generatedAt, setGeneratedAt] = useS(null);
   const [activeRun, setActiveRun] = useS(null);
   const [loading, setLoading] = useS(false);
@@ -42,9 +43,13 @@ function App() {
   }
 
   const refresh = useC(async () => {
-    const reg = await window.BenchData.loadIndex();
+    const [reg, snapshot] = await Promise.all([
+      window.BenchData.loadIndex(),
+      window.BenchData.loadProfilesSnapshot(),
+    ]);
     setReports(reg.reports || []);
     setGeneratedAt(reg.generated_at || null);
+    setProfilesSnapshot(snapshot);
   }, []);
 
   useE(() => { refresh(); }, [refresh]);
@@ -76,7 +81,7 @@ function App() {
           href="#/"
           onClick={(e) => { e.preventDefault(); navigate({ view: "home" }); }}
           className="nav-logo text-[18px] nav:text-[22px] tracking-[0.08em] uppercase select-none cursor-pointer">
-          local-llms · bench
+          Meese · Bench
         </a>
         <div className="ml-auto font-mono text-[11px] text-me-fg-3 flex items-center gap-3">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-me-success [box-shadow:0_0_6px_var(--me-success)]"></span>
@@ -95,6 +100,7 @@ function App() {
         {route.view === "home" && (
           <HomePage
             reports={reports}
+            profilesSnapshot={profilesSnapshot}
             generatedAt={generatedAt}
             onOpen={(id) => navigate({ view: "run", id })}
             onRefresh={refresh} />
@@ -111,7 +117,9 @@ function App() {
         )}
 
         <footer className="mt-16 pt-6 border-t border-me-border font-mono text-[10px] md:text-[11px] text-me-fg-3 text-center tracking-wider">
-          local-llms hub · v2 schema
+          <span className="font-logo tracking-wider text-me-fg-2">MEESE · ENTERPRISES</span>
+          &nbsp;//&nbsp; benchmark hub &nbsp;//&nbsp;
+          <a href="#" onClick={e => { e.preventDefault(); navigator.clipboard.writeText(location.href); }}>copy permalink</a>
         </footer>
       </div>
     </>

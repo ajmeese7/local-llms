@@ -48,7 +48,9 @@ def test_render_prompt_passes_through() -> None:
 def test_score_substring_match() -> None:
     adapter = _adapter()
     item = Item(id="x", category="t", prompt="q", expected="XJ-71823")
-    parsed = ParsedAnswer(raw="The code is XJ-71823 right there.", value="The code is XJ-71823 right there.")
+    parsed = ParsedAnswer(
+        raw="The code is XJ-71823 right there.", value="The code is XJ-71823 right there."
+    )
     score = adapter.score(parsed, item)
     assert score.correct is True
     assert score.partial == 1.0

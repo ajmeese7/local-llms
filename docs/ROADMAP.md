@@ -1,6 +1,6 @@
-# local-llms v2 roadmap
+# Roadmap
 
-What is left after the v2 push. Not a project plan, just a list so things don't slip.
+What is left after the current push. Not a project plan, just a list so things don't slip.
 
 ## Deferred adapters
 
@@ -14,7 +14,7 @@ Needs sandboxed python execution, which is the real complexity (the rest of the 
 - Sandbox: `firejail` subprocess on Linux (works in WSL2). Forbid network, restrict writes to `/tmp`, hard timeout. Leave a `--sandbox=docker` flag stub for hardening later.
 - Tests: replay a known-good completion per fixture problem to prove the sandbox + scorer agree.
 
-### SWE-ReBench v2
+### SWE-ReBench
 
 The big one. Needs Docker, real test runners, log parsing.
 
@@ -23,7 +23,7 @@ The big one. Needs Docker, real test runners, log parsing.
   - Provision a Docker container with the right toolchain per repo (canonical SWE-bench images cover most of it).
   - Apply failing-state checkout, send issue + relevant code to the model, ask for a patch.
   - Apply the patch (fuzzy patch tools when models drift line numbers), run the test suite, score by pass count.
-- Subset for v2: 50 items. Full pass is multi-hour even on a 5090.
+- Subset target: 50 items. Full pass is multi-hour even on a 5090.
 - Robust patch extraction matters: models emit chat-formatted diffs (markdown fences, line annotations) that need cleanup.
 - Defer until HumanEval is green; sandbox patterns carry over.
 
@@ -36,17 +36,7 @@ The big one. Needs Docker, real test runners, log parsing.
   - Render OpenAI chat content as `[{type:"text", ...}, {type:"image_url", image_url:{url:"data:image/png;base64,..."}}]`.
   - Encode HF images to base64 PNG.
 - Otherwise identical MCQ pattern to MMLU.
-- Subset for v2: 100 items. Full set is large and most of it does not discriminate among local 7B-70B models.
-
-## Phase 7 cutover
-
-The bash launcher and v1 unit are still authoritative. Switching to v2 is its own risk surface.
-
-- `llms install`: copies `config/llama-server.v2.service` to `/etc/systemd/system/`, runs `daemon-reload`, stops v1, enables + starts v2. Captures `git rev-parse HEAD` from the provider checkout into a metadata file so `manifest.provider.git_commit` populates.
-- `llms uninstall`: roll back to v1 cleanly. Useful for testing without bricking the GPU.
-- Trim `setup.sh` to bootstrap python toolchain (uv, py 3.12) + call `llms install`. Drop the bash builder paths.
-- Move v1 shell to `archive/` once their CLI replacements ship: `config/llama-launcher.sh`, `config/select-model.sh`, `scripts/benchmark.sh`, `scripts/benchmark-5090-suite.sh`, `scripts/bench.sh`.
-- `.github/workflows/ci.yml`: pre-commit + pytest. Nothing GPU-dependent (eval runner uses `httpx.MockTransport`).
+- Subset target: 100 items. Full set is large and most of it does not discriminate among local 7B-70B models.
 
 ## Quality of life
 
@@ -70,10 +60,7 @@ The bash launcher and v1 unit are still authoritative. Switching to v2 is its ow
 
 - Provider git commit capture: `manifest.provider.git_commit` is None in every shipped run. Fix is `llms provider install` (does not exist yet) writing `git rev-parse HEAD` to the install dir during build.
 - `llms config lint --with-files`: optionally check `model_path` and `mmproj_path` exist. Default off because configs are typically authored on a host that does not hold the models.
-
-## Known parity gap with bash launcher
-
-- Float formatting: python renders `temperature: 1.0` as `--temp 1`. Bash kept the literal `1.0`. `llama-server` accepts both. Only matters for diffing journalctl across the cutover.
+- Port `scripts/provider.sh` to `llms provider install|build|list`. The shell script is the only remaining build path that does not have a python equivalent.
 
 ## Test gaps
 
@@ -81,10 +68,6 @@ The bash launcher and v1 unit are still authoritative. Switching to v2 is its ow
 - Wheel build: editable install resolves bundled `prompts/local_smoke/v1.json` correctly via `importlib.resources`. Wheel build inclusion not verified. Add a CI step that builds the wheel and runs `python -m llms eval run local_smoke --base-url http://stub` against a fixture.
 - Snapshot regen: command-renderer snapshots in `tests/serving/snapshots/` regenerate via `pytest --snapshot-update`. Document the workflow.
 
-## Stale docs to update post-cutover
+## CI
 
-- `AGENTS.md` lists `config/llama-launcher.sh` and the `.conf` files as the source of truth.
-- `docs/CONFIGURATION.md` describes v1 shell config layering.
-- `docs/BENCHMARKING.md` describes the bash harness.
-- `docs/SETUP.md` references `setup.sh` flows that change.
-- `README.md` claims the project is "shell-native".
+- `.github/workflows/ci.yml`: pre-commit + pytest. Nothing GPU-dependent (eval runner uses `httpx.MockTransport`).

@@ -409,9 +409,7 @@ def _load_adapter(name: str) -> BenchmarkAdapter:
         from llms.eval.adapters.niah import NIAHAdapter
 
         return NIAHAdapter()
-    raise typer.BadParameter(
-        f"unknown adapter '{name}' (have: local_smoke, mmlu, gsm8k, niah)"
-    )
+    raise typer.BadParameter(f"unknown adapter '{name}' (have: local_smoke, mmlu, gsm8k, niah)")
 
 
 @eval_app.command("run")
@@ -526,17 +524,27 @@ def eval_list(output_root: Path = EVAL_OUTPUT_OPT) -> None:
 @eval_app.command("report")
 def eval_report(
     output_root: Path = EVAL_OUTPUT_OPT,
+    config_root: Path = CONFIG_OPT,
     emit_hub: bool = typer.Option(
-        True, "--emit-hub/--no-emit-hub", help="Write reports.json registry the SPA loads."
+        True, "--emit-hub/--no-emit-hub", help="Write the SPA's reports.json + profiles.json."
     ),
 ) -> None:
-    """Refresh the hub registry under `output_root/reports.json`."""
-    from llms.eval.report.registry import build_registry, emit_registry
+    """Refresh the hub registry under `output_root/`."""
+    from llms.eval.report.registry import (
+        build_registry,
+        emit_profiles_snapshot,
+        emit_registry,
+    )
 
     if emit_hub:
-        target = emit_registry(output_root)
-        registry = json.loads(target.read_text())
-        console.print(f"[green]✓[/] wrote {target} ({len(registry['reports'])} runs)")
+        registry_path = emit_registry(output_root)
+        profiles_path = emit_profiles_snapshot(output_root, config_root)
+        registry = json.loads(registry_path.read_text())
+        profiles = json.loads(profiles_path.read_text())
+        console.print(
+            f"[green]✓[/] wrote {registry_path} ({len(registry['reports'])} runs) "
+            f"and {profiles_path} ({len(profiles['profiles'])} profiles)"
+        )
         return
 
     registry = build_registry(output_root)

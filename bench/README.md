@@ -1,15 +1,16 @@
 # bench
 
-Static SPA over v2 eval runs. No build step (Babel-in-browser, React via CDN).
+Static SPA over eval runs. No build step (Babel-in-browser, React via CDN).
 
 ## Layout
 
 ```
 bench/
   index.html
-  app.jsx data.jsx components.jsx home.jsx sections.jsx
+  app.jsx data.jsx components.jsx home.jsx sections.jsx guide.jsx
   reports/
     reports.json                     # registry index
+    profiles.json                    # config snapshot for the guide cards
     <run-id>/
       manifest.json                  # full run fingerprint
       summary.json                   # aggregated metrics
@@ -19,15 +20,13 @@ bench/
 
 ## Workflow
 
-Real runs land in `reports/<run-id>/` straight from `llms eval run`. The
-SPA needs `reports/reports.json` to know they exist; refresh after a run:
+`llms eval run` writes one directory per run under `reports/`. The SPA needs `reports.json` (and `profiles.json` for the guide) to know what is available; refresh after a run:
 
 ```
 uv run llms eval report
 ```
 
-To populate the hub with mock-transport demo data (no live llama-server
-needed):
+To populate the hub with mock-transport demo data without a live llama-server:
 
 ```
 uv run python scripts/seed_hub.py
@@ -44,15 +43,8 @@ Then open <http://127.0.0.1:5173/>.
 
 ## Schema
 
-Loaded by `data.jsx`:
+- `loadIndex()` reads `reports/reports.json`, built by `llms eval report` from each run's `manifest.json` + `summary.json`.
+- `loadProfilesSnapshot()` reads `reports/profiles.json`, a flat snapshot of the active config tree the guide section renders.
+- `loadRun(id)` lazily fetches the run's `manifest.json`, `summary.json`, `results.jsonl`. The detail view at `#/run/<id>` renders summary cards, by-category breakdown, per-item table, and a manifest disclosure.
 
-- `loadIndex()` reads `reports/reports.json` (a registry built from each
-  run's `manifest.json` + `summary.json`).
-- `loadRun(id)` lazily fetches the run's `manifest.json`, `summary.json`,
-  `results.jsonl`. The SPA renders a flat run list at `#/` and a per-run
-  detail view at `#/run/<id>` with summary cards, by-category breakdown,
-  per-item table, and a manifest disclosure.
-
-The "Comparable groups" panel groups runs by their `comparability_key`
-(SHA-256 of model + provider + decode + prompt + dataset + adapter
-fingerprints).
+The home page shows a flat run list with adapter and track filters, a comparable-groups panel that groups runs sharing a `comparability_key`, and the model reading guide.

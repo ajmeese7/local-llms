@@ -1,9 +1,10 @@
 /* ============================================================
    data.jsx
-   v2 schema loaders. No React. Pure functions and fetch glue.
+   Schema loaders. No React. Pure functions and fetch glue.
 
    The hub reads:
      reports/reports.json                  registry index
+     reports/profiles.json                 profile/provider snapshot
      reports/<id>/manifest.json            full run fingerprint
      reports/<id>/summary.json             aggregated metrics
      reports/<id>/results.jsonl            per-item rows (lazy)

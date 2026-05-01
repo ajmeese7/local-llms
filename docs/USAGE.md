@@ -1,21 +1,18 @@
 # Usage
 
-## Built-in Web UI
+## Built-in web UI
 
 `llama-server` includes a chat interface. Open:
 
-```text
+```
 http://localhost:9999
 ```
 
-## OpenAI-Compatible API
+## OpenAI-compatible API
 
-```bash
-# Inspect the active model alias first
-curl http://localhost:9999/v1/models \
-  -H "Content-Type: application/json"
+```
+curl http://localhost:9999/v1/models -H "Content-Type: application/json"
 
-# Then use the alias returned by /v1/models in chat completions
 curl http://localhost:9999/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -24,13 +21,11 @@ curl http://localhost:9999/v1/chat/completions \
   }'
 ```
 
-If you set `API_KEY` in the GPU base config, add `-H "Authorization: Bearer <your-key>"` to those requests.
+If the active endpoint sets `overrides.api_key` (or the hardware sets `defaults.api_key`), add `-H "Authorization: Bearer <key>"` to those requests.
 
-Any tool that speaks the OpenAI API can target `http://<your-ip>:9999/v1`. The active model comes from the GPU config plus `/etc/llama-server/active-model.conf`, not from the GPU config alone. Some overlays also set runtime decoding defaults, so the effective behavior is the combination of the GPU base config and the selected model overlay.
+Any tool that speaks the OpenAI API can target `http://<host>:9999/v1`. The active model is whichever endpoint `llms endpoint activate` last pointed at, resolved from the YAML tree at launch time.
 
-`API_KEY` is optional. Leave it unset to run without bearer auth, or set it in the GPU base config before treating the service as reachable on your LAN.
-
-## Compatible Applications
+## Compatible applications
 
 | Application | Type | Notes |
 |---|---|---|
@@ -38,45 +33,40 @@ Any tool that speaks the OpenAI API can target `http://<your-ip>:9999/v1`. The a
 | [Chatbox](https://chatboxai.app/) | Desktop app | Simple, cross-platform |
 | [Continue](https://continue.dev/) | VS Code / JetBrains extension | AI coding assistant |
 
-## Useful Commands
+## Useful commands
 
-```bash
-# Service management
+```
+# Service
 systemctl status llama-server
 sudo systemctl restart llama-server
-sudo systemctl stop llama-server
-sudo systemctl start llama-server
-
-# Logs
 journalctl -u llama-server -f
-journalctl -u llama-server --since "5m ago"
 
-# Test the API
+# API smoke
 curl http://127.0.0.1:9999/v1/models
 
-# If API_KEY is set, include the bearer token
-curl http://127.0.0.1:9999/v1/models \
-  -H "Authorization: Bearer <your-key>"
+# Endpoint lifecycle
+.venv/bin/llms endpoint list
+.venv/bin/llms endpoint activate chat-default
+.venv/bin/llms endpoint rollback
+.venv/bin/llms endpoint revisions --hardware rtx-5090
 
-# Edit the GPU base config for hardware defaults and optional API key
-sudo nano /etc/llama-server/rtx-5090.conf  # example for RTX 5090
-
-# Switch the active MODEL_PROFILE
-sudo /etc/llama-server/select-model.sh
-
-# Edit the active overlay only if you are intentionally changing overlay-owned model metadata or per-model decoding overrides
-sudo nano /etc/llama-server/qwen36-27b.conf  # example overlay on RTX 5090
+# Config
+.venv/bin/llms config lint
+nano config/profiles/qwen36-27b.yaml      # then `llms config lint` and restart
 
 # Update llama.cpp
-cd ~/.local/share/llama.cpp && git pull
-cmake --build build --config Release -j4
+./scripts/provider.sh install llama.cpp --rebuild --jobs 4
 sudo systemctl restart llama-server
 
-# Benchmark helper
-./scripts/benchmark.sh --help
+# Telemetry
+.venv/bin/llms endpoint stats --window 24h
+
+# Eval
+.venv/bin/llms eval run mmlu --endpoint chat-default --max-items 50
+.venv/bin/llms eval report
 ```
 
-## Related Guides
+## Related guides
 
 - [CONFIGURATION.md](CONFIGURATION.md)
 - [MODELS.md](MODELS.md)

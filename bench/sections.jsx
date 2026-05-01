@@ -1,7 +1,7 @@
 /* ============================================================
    sections.jsx
-   v2 hub run-detail view: summary cards, by-category breakdown,
-   per-item table, manifest disclosure, link to standalone report.
+   Run-detail view: summary cards, by-category breakdown, per-item
+   table, manifest disclosure, link to standalone report.
    ============================================================ */
 
 const { useState: useDetailS, useMemo: useDetailM } = React;

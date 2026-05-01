@@ -1,114 +1,91 @@
 # Configuration
 
-## Runtime Layers
+The config tree is YAML under `config/`. Each kind lives in its own directory; `llms config lint` validates the whole tree against Pydantic schemas plus cross-reference + capability checks.
 
-The runtime configuration is layered:
+```
+config/
+  hardware/<name>.yaml      # GPU class, detection regex, host/port floor, default endpoint
+  providers/<name>.yaml     # inference backend (llama.cpp, ik_llama.cpp), capability flags
+  profiles/<name>.yaml      # one model: path, decode params, provider compatibility
+  endpoints/<name>.yaml     # binds (profile, provider); active endpoint resolves to one of these
+  llama-server.service      # systemd unit; calls .venv/bin/llms launcher exec
+```
 
-1. The launcher detects the GPU and sources the matching GPU config such as `rtx-5090.conf`.
-2. The launcher checks `/etc/llama-server/active-model.conf` for the selected `MODEL_PROFILE`.
-3. If no active profile is set, it falls back to `DEFAULT_MODEL_PROFILE` from the GPU config.
-4. It validates the profile against `SUPPORTED_MODEL_PROFILES`.
-5. It sources the matching overlay file such as `qwen36-27b.conf` or `mythos.conf`.
-6. It launches `llama-server` with the combined values from the GPU config and overlay, including any optional per-model runtime overrides.
+## Resolution
 
-The standalone selector at `/etc/llama-server/select-model.sh` uses the same GPU matching and supported-profile metadata, then writes `active-model.conf` for the next service restart. Shared readiness-probe and auth-flag behavior lives in `config/runtime-common.sh`, which is copied into `/etc/llama-server/` alongside the launcher and selector.
+The launcher resolves the runtime in this order:
 
-## Runtime Scripts
+1. Detect the GPU via `nvidia-smi`.
+2. Pick the first `hardware` whose `gpu_match_patterns` matches the GPU name.
+3. Look up the active endpoint for that hardware in `~/.local/state/llms/state.db`. If unset, fall back to `hardware.default_endpoint`.
+4. Resolve the endpoint's `profile` and `provider` from the YAML tree.
+5. Merge with precedence `endpoint.overrides > profile > hardware.defaults`.
+6. Run preflight (model file exists, server binary executable, context within bounds).
+7. `execvp` `llama-server` with the rendered argv.
 
-| File | Role |
+## Endpoint lifecycle
+
+```
+llms endpoint list                                # show every endpoint defined
+llms endpoint status                              # show active per hardware
+llms endpoint activate chat-default               # write a revision, swap active pointer
+llms endpoint rollback                            # revert to the prior revision
+llms endpoint rollback --to-revision 7            # revert to a specific historical revision
+llms endpoint revisions --hardware rtx-5090       # show history
+```
+
+State lives in SQLite at `~/.local/state/llms/state.db`. Each `activate` and `rollback` appends a row; the active pointer is upserted in the same transaction. The CLI does not auto-restart systemd; it prints the `systemctl restart llama-server` command.
+
+## Capability checks
+
+A profile may declare `kv_unified: true`, `jinja: true`, multimodal `mmproj_path`, or speculative-decoding fields. Each provider declares which capabilities it supports. `llms config lint` raises if a profile asks for something the chosen provider does not support, before the service tries to launch it.
+
+`provider_compat` on a profile records empirical evidence:
+
+```yaml
+provider_compat:
+  proven: [llama.cpp]
+  blocked: [ik_llama.cpp]
+  notes: "ik_llama.cpp returned HTTP 500 for every prompt in the 2026-04-29 RTX 5090 suite."
+```
+
+Activating an endpoint whose profile blocks the chosen provider raises a `ProviderCompatError` at lint time.
+
+## Hardware
+
+| File | GPU pattern | Default endpoint | Defaults |
+|---|---|---|---|
+| `config/hardware/rtx-5090.yaml` | `5090` | `chat-default` | host 0.0.0.0, port 9999, gpu_layers 99, ctx 131072, KV q8/q4 |
+| `config/hardware/rtx-5060.yaml` | `5060` | `chat-9b` | host 0.0.0.0, port 9999, gpu_layers 99, ctx 32768, KV q4/q4 |
+
+To add a new GPU, drop a new YAML in `config/hardware/`. The launcher matches on the regex; no code change required.
+
+## Profile fields
+
+Every field is optional except `kind`, `name`, `alias`, and `model_path`.
+
+| Field | Purpose |
 |---|---|
-| [`setup.sh`](../setup.sh) | Interactive installer that builds provider binaries, installs runtime files, restarts `llama-server`, and polls `/v1/models` with bounded local curl timeouts |
-| [`config/llama-launcher.sh`](../config/llama-launcher.sh) | Runtime entrypoint used by systemd; detects GPU, resolves the active profile, loads the overlay, and execs `llama-server` |
-| [`config/runtime-common.sh`](../config/runtime-common.sh) | Shared shell helpers for setup-time readiness probes and optional API key handling |
-| [`config/provider-common.sh`](../config/provider-common.sh) | Provider-to-binary mapping for `llama.cpp` and `ik_llama.cpp` |
-| [`config/select-model.sh`](../config/select-model.sh) | Interactive model-profile selector that writes `/etc/llama-server/active-model.conf`, shows install state, and can download the selected model before restart |
+| `model_path` | Local GGUF path. `~` and `$HOME` are expanded. |
+| `hf_repo` / `hf_file` | Hugging Face source for the GGUF. Used by external tooling. |
+| `mmproj_path` / `mmproj_hf_file` | Multimodal projector. Provider must support `mmproj` or `config lint` raises. |
+| `jinja` | Pass `--jinja` to llama-server. |
+| `context_length` | Profile-level override of the hardware floor. |
+| `parallel_slots` | Same. |
+| `cache_type_k` / `cache_type_v` | Same. |
+| `kv_unified` | Pass `--kv-unified` when the provider supports it. |
+| `speculative.spec_type` / `ngram_size_n` / `draft_max` / `draft_min` / `default` | Speculative decoding controls. `default: true` requires `spec_default` capability. |
+| `decode.temperature` / `top_p` / `top_k` / `min_p` / `presence_penalty` / `repeat_penalty` | Per-profile decode overrides; omitted means the launcher does not pass the flag. |
+| `provider_compat.proven` / `blocked` / `notes` | Backend compatibility evidence. |
 
-## GPU Base Configs
+## Endpoint overrides
 
-The GPU config files own hardware defaults and the supported profile list. The service identity, working directory, and other unit metadata live in `config/llama-server.service`.
+Endpoints rarely need overrides. When they do, `endpoint.overrides` can adjust `host`, `port`, `api_key`, `context_length`, `parallel_slots`, `gpu_layers`, `flash_attention`, `cache_type_k`, or `cache_type_v` for that endpoint only.
 
-The checked-in `config/llama-server.service` is hardcoded to `User=ajmeese7`, `Group=ajmeese7`, and `/home/ajmeese7`. Edit those values for your own account before installing or enabling the unit on another machine.
+## Adding a profile
 
-| GPU | Config | VRAM | Default Profile | Supported Profiles |
-|---|---|---|---|---|
-| RTX 5090 | [`config/rtx-5090.conf`](../config/rtx-5090.conf) | 32GB | `qwen36-27b` | `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `qwen36-35B-A3B-q4-ngram`, `mythos` |
-| RTX 5060 Ti | [`config/rtx-5060.conf`](../config/rtx-5060.conf) | 16GB | `qwen35-9b` | `qwen35-9b` |
-
-## Adding a New GPU
-
-1. Copy an existing config:
-   ```bash
-   cp config/rtx-5090.conf config/rtx-XXXX.conf
-   ```
-2. Set `DEFAULT_MODEL_PROFILE` and `SUPPORTED_MODEL_PROFILES` for the new card.
-3. Adjust the hardware-specific values such as `CONTEXT_LENGTH`, `GPU_LAYERS`, and cache settings.
-4. Add matching logic in [`config/llama-launcher.sh`](../config/llama-launcher.sh) and [`config/select-model.sh`](../config/select-model.sh) if the GPU name pattern is new.
-5. Re-run `./setup.sh` or manually copy the updated runtime files into `/etc/llama-server/`, including [`config/runtime-common.sh`](../config/runtime-common.sh) and [`config/provider-common.sh`](../config/provider-common.sh).
-
-## Config Options
-
-| Variable | Description |
-|---|---|
-| `DEFAULT_MODEL_PROFILE` | Fallback profile when `active-model.conf` does not set one |
-| `SUPPORTED_MODEL_PROFILES` | Space-separated list of profiles allowed on that GPU |
-| `LLAMA_PROVIDER` | Runtime backend provider; supported values are `llama.cpp` and `ik_llama.cpp` |
-| `PROVEN_LLAMA_PROVIDERS` | Space-separated provider allowlist proven for that model overlay |
-| `BLOCKED_LLAMA_PROVIDERS` | Space-separated provider blocklist for known-bad model/backend pairs |
-| `PROVIDER_COMPATIBILITY_NOTES` | Short note explaining provider compatibility findings |
-| `MODEL` | Path to the GGUF model file from the overlay |
-| `HF_REPO` / `HF_FILE` | Hugging Face repo and filename used by `setup.sh` |
-| `JINJA` | Optional per-model toggle for `llama-server --jinja`; use `on` for models whose chat/tool templates should be rendered with Jinja |
-| `MMPROJ` | Optional path to a multimodal projector GGUF; when set, the launcher passes `--mmproj` and validates the file exists |
-| `MMPROJ_HF_REPO` / `MMPROJ_HF_FILE` | Optional Hugging Face metadata used by the selector to download `MMPROJ`; `MMPROJ_HF_REPO` defaults to `HF_REPO` when omitted |
-| `ALIAS` | Model name reported by the API |
-| `TEMPERATURE` / `TOP_P` / `TOP_K` / `MIN_P` / `PRESENCE_PENALTY` / `REPEAT_PENALTY` | Optional per-model decoding overrides from the overlay |
-| `HOST` | Bind address |
-| `PORT` | API port |
-| `API_KEY` | Optional bearer token for requests; leave unset or empty to disable auth |
-| `GPU_LAYERS` | Layers to offload to GPU |
-| `CONTEXT_LENGTH` | Max context length in tokens |
-| `PARALLEL_SLOTS` | Concurrent request slots |
-| `FLASH_ATTENTION` | Enables faster inference and lower memory use |
-| `CACHE_TYPE_K` / `CACHE_TYPE_V` | KV cache quantization |
-| `KV_UNIFIED` | Optional per-model toggle for `llama-server --kv-unified`; use `on` when an overlay wants one unified KV buffer across slots |
-| `SPEC_DEFAULT` | Optional per-model toggle for `llama-server --spec-default`; requires a new enough `llama.cpp` build |
-| `SPEC_TYPE` / `SPEC_NGRAM_SIZE_N` / `SPEC_NGRAM_SIZE_M` / `SPEC_NGRAM_MIN_HITS` | Optional speculative decoding controls passed through to `llama-server` when `SPEC_DEFAULT` is not enabled |
-| `DRAFT_MAX` / `DRAFT_MIN` | Optional speculative draft length controls passed through to `llama-server` when `SPEC_DEFAULT` is not enabled |
-
-## Model Overlays
-
-Model-specific settings live in overlay files like `qwen36-27b.conf`, `qwen35-9b.conf`, and `mythos.conf`. These files define the model path, Hugging Face metadata, chat-template behavior, optional multimodal projector metadata, and `ALIAS`. When a specific artifact needs different runtime limits than the GPU-wide default, an overlay can also override settings such as `CONTEXT_LENGTH`; overlays should not redefine secrets such as `API_KEY`.
-
-Overlays declare backend evidence with `PROVEN_LLAMA_PROVIDERS`, `BLOCKED_LLAMA_PROVIDERS`, and `PROVIDER_COMPATIBILITY_NOTES`. The launcher refuses blocked or unproven provider/profile pairs by default so known-bad combinations fail before loading the model. Set `ALLOW_UNPROVEN_LLAMA_PROVIDER=1` only for a deliberate retest of an unproven provider, or `ALLOW_BLOCKED_LLAMA_PROVIDER=1` for a deliberate retest of a blocked provider.
-
-Overlays can also define optional decoding knobs such as `TEMPERATURE` and `TOP_P`. That is the supported way to keep a model profile aligned with its published runtime guidance without moving GPU-memory-sensitive settings out of the base config.
-
-For model cards that recommend `llama-cli --jinja`, set `JINJA="on"` in the overlay. For model cards that also recommend `--mmproj`, set `MMPROJ` to the local projector path and `MMPROJ_HF_FILE` to the projector filename. The launcher fails fast if a configured projector is missing or empty, and the selector can download it when the Hugging Face metadata is present.
-
-For long-context workloads with repeated text or code, overlays can opt into llama.cpp speculative decoding. The explicit form is `SPEC_TYPE="ngram-mod"` plus `SPEC_NGRAM_SIZE_N`, `DRAFT_MAX`, and `DRAFT_MIN`. Newer llama.cpp builds also support `SPEC_DEFAULT="on"`, which appends `--spec-default` instead of the explicit speculative flags.
-
-To switch models:
-
-1. Run the selector:
-   ```bash
-   sudo /etc/llama-server/select-model.sh
-   ```
-2. Choose one of the profiles listed for the detected GPU.
-3. If the selected profile is marked `missing` or `empty file`, let the selector download or re-download it before restart.
-4. Restart the service if the selector does not do it automatically:
-   ```bash
-   sudo systemctl restart llama-server
-   ```
-
-The selector writes `/etc/llama-server/active-model.conf`, and the launcher loads that file on startup. Manual edits are possible, but the selector is the supported workflow.
-
-## Model-Specific Notes
-
-- `mythos` is a supported RTX 5090 profile. It uses the `Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF` language-model GGUF directly in this service.
-- `qwen36-27b` is the RTX 5090 default profile. It uses the `unsloth/Qwen3.6-27B-GGUF` `Qwen3.6-27B-UD-Q5_K_XL.gguf` artifact and enables Jinja chat-template handling.
-- `qwen36-27B-AEON` and `qwen36-35B-A3B` are RTX 5090 experiment profiles that also enable Jinja. The 35B A3B overlay includes `MMPROJ` metadata for the matching projector artifact when multimodal use is wanted.
-- `qwen36-35B-A3B-q4-ngram` is an RTX 5090 experimental profile for the HauHauCS Q4_K_P artifact. It uses 262K context, parallel 4, f16 KV cache, unified KV cache, and explicit `ngram-mod` speculative settings.
-- `qwen35-9b` is the RTX 5060 Ti default profile.
-- `LilaRest/gemma-4-31B-it-NVFP4-turbo` is still a separate `vLLM` server path, not a `llama.cpp` overlay.
-
-See [MODELS.md](MODELS.md) for the exact commands and runtime distinctions.
+1. Drop a YAML in `config/profiles/`.
+2. Drop an endpoint YAML in `config/endpoints/` referencing the new profile.
+3. Add the endpoint name to the relevant hardware's `supported_endpoints` list.
+4. `uv run llms config lint`.
+5. `uv run llms endpoint activate <name>` and restart the service.

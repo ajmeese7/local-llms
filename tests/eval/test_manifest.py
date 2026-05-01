@@ -18,7 +18,12 @@ from llms.eval.manifest import (
 
 def _model() -> ModelFingerprint:
     return ModelFingerprint(
-        profile="p", alias="P", model_path="/m/p.gguf", model_sha256="abc", hf_repo=None, hf_file=None
+        profile="p",
+        alias="P",
+        model_path="/m/p.gguf",
+        model_sha256="abc",
+        hf_repo=None,
+        hf_file=None,
     )
 
 
@@ -58,10 +63,18 @@ def _adapter() -> AdapterFingerprint:
 
 def test_comparability_key_deterministic() -> None:
     a = compute_comparability_key(
-        model=_model(), provider=_provider(), decode=_decode(), dataset=_dataset(), adapter=_adapter()
+        model=_model(),
+        provider=_provider(),
+        decode=_decode(),
+        dataset=_dataset(),
+        adapter=_adapter(),
     )
     b = compute_comparability_key(
-        model=_model(), provider=_provider(), decode=_decode(), dataset=_dataset(), adapter=_adapter()
+        model=_model(),
+        provider=_provider(),
+        decode=_decode(),
+        dataset=_dataset(),
+        adapter=_adapter(),
     )
     assert a == b
     assert len(a) == 64  # sha256 hex

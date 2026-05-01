@@ -1,12 +1,12 @@
 /* ============================================================
    home.jsx
-   v2 hub home: a flat run list with adapter / track filters and a
-   small comparability grouping aside. Click a row to open a run.
+   Hub home: a flat run list with adapter / track filters and a
+   small comparability grouping aside, then the model reading guide.
    ============================================================ */
 
 const { useState: useHomeS, useMemo: useHomeM } = React;
 
-function HomePage({ reports, onOpen, onRefresh, generatedAt }) {
+function HomePage({ reports, profilesSnapshot, onOpen, onRefresh, generatedAt }) {
   const [adapterFilter, setAdapterFilter] = useHomeS(null);
   const [trackFilter, setTrackFilter] = useHomeS(null);
 
@@ -30,7 +30,7 @@ function HomePage({ reports, onOpen, onRefresh, generatedAt }) {
   return (
     <>
       <header className="mb-8 md:mb-10">
-        <Eyebrow>// local-llms hub</Eyebrow>
+        <Eyebrow>// Meese · Bench</Eyebrow>
         <h1 className="font-display text-[28px] md:text-[40px] tracking-[0.06em] uppercase mt-1.5 mb-3">
           Eval runs
         </h1>
@@ -64,6 +64,8 @@ function HomePage({ reports, onOpen, onRefresh, generatedAt }) {
       )}
 
       <ComparabilityIndex buckets={buckets} onOpen={onOpen} />
+
+      <GuideSection profilesSnapshot={profilesSnapshot} />
     </>
   );
 }

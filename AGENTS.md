@@ -1,55 +1,59 @@
 # AGENTS
 
-## Repo Purpose
+## Repo purpose
 
-- Local OpenAI-compatible inference service built around `llama.cpp`, `systemd`, and NVIDIA GPUs.
-- Main workflow: detect GPU -> load GPU base config -> resolve active/default model profile -> source model overlay -> launch `llama-server`.
+- Local OpenAI-compatible inference service built around `llama.cpp`, `systemd`, NVIDIA GPUs.
+- Two planes: serving (config, lifecycle, launcher, telemetry) and evaluation (adapters, manifests, scoring, hub).
+- Workflow: GPU detect → resolve active endpoint from config → preflight → exec llama-server.
 
-## What Matters In Most Sessions
+## What matters in most sessions
 
-- GPU base configs live in `config/rtx-5090.conf` and `config/rtx-5060.conf`.
-- Model overlays live in `config/*.conf`.
-- Runtime selection is written to `/etc/llama-server/active-model.conf` by `config/select-model.sh`.
-- The launcher is `config/llama-launcher.sh`.
-- The installer is `setup.sh`.
-- The benchmark helper is `scripts/benchmark.sh`.
+- The launcher is python: `llms.serving.launcher.exec_launcher`. systemd calls `.venv/bin/llms launcher exec`.
+- Config is YAML under `config/{hardware,providers,profiles,endpoints}/`; `llms config lint` validates the tree.
+- Endpoint state lives in SQLite at `~/.local/state/llms/state.db`; `llms endpoint activate <name>` writes a revision.
+- Benchmark adapters live in `llms/eval/adapters/`. The runner writes per-run artifacts under `bench/reports/<id>/`.
+- The static hub at `bench/` is intended to be published; the home page indexes runs and renders the model reading guide.
 
-## Current Model Layout
+## Current config layout
 
-- RTX 5090 default profile: `qwen36-27b`
-- RTX 5090 supported profiles: `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `qwen36-35B-A3B-q4-ngram`, `mythos`
-- RTX 5060 Ti default profile: `qwen35-9b`
-- RTX 5060 Ti supported profiles: `qwen35-9b`
+Profiles in `config/profiles/`: `qwen36-27b`, `qwen36-27B-AEON`, `qwen36-35B-A3B`, `qwen36-35B-A3B-q4-ngram`, `qwen35-9b`, `mythos`, `carnice-v2-27b`.
 
-## Important Model Facts
+Endpoints in `config/endpoints/`: `chat-default`, `chat-aeon`, `chat-mythos`, `chat-a3b`, `chat-a3b-ngram`, `chat-carnice`, `chat-9b`.
 
-- Upstream `Qwen/Qwen3.6-27B` is a Transformers/Safetensors release, not a GGUF.
-- This repo's default `qwen36-27b` `llama.cpp` path uses `unsloth/Qwen3.6-27B-GGUF`, currently `Qwen3.6-27B-UD-Q5_K_XL.gguf`.
-- The Qwen overlays enable `JINJA="on"` so the launcher passes `--jinja`.
-- The launcher supports optional multimodal projector files with `MMPROJ` and `MMPROJ_HF_FILE`; keep projector behavior in model overlays.
-- Runtime backend selection uses `LLAMA_PROVIDER`; supported providers are `llama.cpp` and `ik_llama.cpp`.
-- The launcher supports optional `ngram-mod` speculative decoding via overlay fields: `SPEC_TYPE`, `SPEC_NGRAM_SIZE_N`, `DRAFT_MAX`, `DRAFT_MIN`, or `SPEC_DEFAULT`.
-- The `qwen36-35B-A3B-q4-ngram` profile is experimental and assumes a recent enough `llama.cpp` build for `ngram-mod`; `SPEC_DEFAULT` requires a newer build than explicit flags.
-- The `qwen36-27b` overlay raises `CONTEXT_LENGTH` to `262144`; reduce context first if the selected quant does not fit comfortably.
+Hardware in `config/hardware/`: `rtx-5090`, `rtx-5060`.
 
-## Files Worth Checking First
+Providers in `config/providers/`: `llama.cpp`, `ik_llama.cpp`.
+
+## Important model facts
+
+- Upstream `Qwen/Qwen3.6-27B` is a Transformers/Safetensors release, not a GGUF. The default `qwen36-27b` profile points at `unsloth/Qwen3.6-27B-GGUF`.
+- Qwen profiles set `jinja: true` so the launcher passes `--jinja`.
+- Optional multimodal projector files: `mmproj_path` + `mmproj_hf_file` on the profile.
+- Provider capabilities are declared per-provider in YAML. `kv_unified` and `spec_default` are llama.cpp-only today.
+- `qwen36-35B-A3B-q4-ngram` uses `ngram-mod` speculative decoding; requires a recent llama.cpp build.
+- `qwen36-27b` raises `context_length` to 262144; reduce first if the selected quant does not fit.
+
+## Files worth checking first
 
 - `README.md`
-- `docs/SETUP.md`
-- `docs/CONFIGURATION.md`
-- `docs/MODELS.md`
-- `config/llama-launcher.sh`
-- `config/provider-common.sh`
-- `config/select-model.sh`
+- `docs/SETUP.md`, `docs/CONFIGURATION.md`, `docs/MODELS.md`
+- `llms/serving/launcher/render.py` and `tests/serving/snapshots/`
+- `llms/serving/config/models.py`
+- `llms/eval/manifest.py`
 
-## Normal Verification
+## Normal verification
 
-- Syntax check: `bash -n setup.sh config/llama-launcher.sh config/select-model.sh`
-- Find model/profile references: `rg -n "qwen36|qwen35-9b|mythos" .`
-- Inspect current repo changes: `git status --short`
+```
+uv run pytest tests/
+uv run mypy llms
+uv run ruff check .
+uv run llms config lint
+bash -n setup.sh scripts/provider.sh
+```
 
-## Editing Notes
+## Editing notes
 
-- Keep changes aligned with the layered config model; avoid hardcoding model behavior into the launcher when an overlay can own it.
-- `config/llama-server.service` is intentionally hardcoded to the repo owner's user/home values and docs call that out; preserve that assumption unless the user asks to generalize it.
-- Prefer updating docs when changing profile names, defaults, download URLs, or runtime expectations.
+- Profile YAML carries model behavior; the launcher and renderer stay generic. Do not hardcode model-specific flags into python.
+- `config/llama-server.service` is hardcoded to the repo owner's user/home values; preserve unless the user asks to generalize.
+- When you change a profile field, update both the Pydantic model and a snapshot test if rendering changes.
+- The hub publishes from `bench/`; do not put non-published artifacts there.

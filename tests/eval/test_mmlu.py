@@ -59,9 +59,7 @@ def test_parser_handles_lowercase() -> None:
 
 def test_parser_flags_no_letter() -> None:
     adapter = _adapter()
-    parsed = adapter.parse(
-        "I don't know", Item(id="x", category="t", prompt="q", expected="A")
-    )
+    parsed = adapter.parse("I don't know", Item(id="x", category="t", prompt="q", expected="A"))
     assert parsed.parse_failed is True
     assert parsed.value is None
 
@@ -85,9 +83,7 @@ def test_score_wrong_letter() -> None:
 def test_score_parse_failure_is_zero() -> None:
     adapter = _adapter()
     item = Item(id="x", category="t", prompt="q", expected="B")
-    score = adapter.score(
-        ParsedAnswer(raw="?", value=None, parse_failed=True), item
-    )
+    score = adapter.score(ParsedAnswer(raw="?", value=None, parse_failed=True), item)
     assert score.correct is False
     assert score.partial == 0.0
     assert score.breakdown["parse_failed"] is True

@@ -1,8 +1,7 @@
 """Per-run report emitters: markdown + a minimal self-contained HTML page.
 
-The fancy multi-run dashboard is the React hub under `bench/` (Phase 6 will
-wire that to the v2 manifest schema). This module produces just enough for
-a single run to be readable on its own.
+The multi-run dashboard is the React hub under `bench/`. This module
+produces just enough for a single run to be readable on its own.
 """
 
 from __future__ import annotations

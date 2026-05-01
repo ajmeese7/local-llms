@@ -1,185 +1,95 @@
 # Benchmarking
 
-Use [`scripts/benchmark.sh`](../scripts/benchmark.sh) for raw benchmark runs and [`scripts/bench.sh`](../scripts/bench.sh) for publishable report packaging. This guide intentionally avoids raw runtime commands and one-off API recipes. If the repo has benchmark automation, the docs should use that automation.
+The eval plane drives an OpenAI-compatible endpoint and writes a per-run directory under `bench/reports/`. Every run includes a manifest with model + provider + decode + dataset + adapter fingerprints so two runs can be compared apples-to-apples.
 
-Results are written under `./benchmark-results/`.
-Publishable report data is written under `./bench/reports/`.
+## Running
 
-## What Works From This Repo
-
-| Benchmark | Command | Requires |
-|---|---|---|
-| Active API aliases | `models` | Running `llama-server`, `curl`, `python3` |
-| API latency and output speed | `api` | Running `llama-server`, `curl`, `python3` |
-| Saved API run comparison | `compare` | API benchmark result directories, `python3` |
-| Raw GGUF runtime speed | `llama-bench` | Provider built by `setup.sh` or `scripts/provider.sh` |
-| Publishable benchmark hub | `../scripts/bench.sh add` / `serve` | A suite run with `results.jsonl`, `python3` |
-| Backend provider install | `../scripts/provider.sh install` | `git`, `cmake`, CUDA toolkit |
-
-`setup.sh` builds `llama.cpp` under `~/.local/share/llama.cpp` and can optionally build `ik_llama.cpp` under `~/.local/share/ik_llama.cpp`. Each provider build normally provides `llama-server` and `llama-bench`. If `llama-bench` is missing, rerun `./setup.sh` or `./scripts/provider.sh install PROVIDER` and choose the rebuild path.
-
-## Before Running
-
-Start from a working service:
-
-- `./setup.sh` has completed.
-- `sudo /etc/llama-server/select-model.sh` has selected an installed profile.
-- `http://127.0.0.1:9999/v1/models` responds from the local machine.
-
-If `API_KEY` is set in the runtime GPU config, either export the same value as `API_KEY` or pass `--api-key` to the helper.
-
-## Check The Active Alias
-
-```bash
-./scripts/benchmark.sh models
+```
+uv run llms eval run <adapter> --endpoint <name> [--max-items N] [--subset spec] [--seed 0]
 ```
 
-This prints the model aliases exposed by the active OpenAI-compatible endpoint. The `api` command also auto-detects the first alias, so this is mainly a sanity check.
+Each run writes:
 
-## API Benchmark
-
-```bash
-./scripts/benchmark.sh api \
-  --iterations 5 \
-  --max-tokens 256 \
-  --label active-api
+```
+bench/reports/<run-id>/
+  manifest.json    full fingerprint + comparability key
+  summary.json     accuracy with bootstrap 95% CI, by-category, latency percentiles
+  results.jsonl    one row per item: parsed answer, score, timing
+  report.md        readable summary
+  report.html      self-contained standalone page
 ```
 
-By default this targets `http://127.0.0.1:9999/v1`, auto-detects the first model alias from `/models`, sends completion requests, and stores:
+After a run, refresh the hub registry:
 
-- `request.txt`: endpoint, model, mode, iterations, token limit, temperature
-- `response-*.json`: raw responses
-- `metrics-*.txt`: curl timing data
-- `summary.tsv`: per-run metrics
-- `summary.txt`: averages across successful runs
-
-Use chat mode only when you specifically want to benchmark `/v1/chat/completions`:
-
-```bash
-./scripts/benchmark.sh api \
-  --mode chat \
-  --iterations 5 \
-  --max-tokens 256 \
-  --label active-chat-api
+```
+uv run llms eval report
 ```
 
-For a second local endpoint, keep the same helper and change only the base URL:
+## Adapters
 
-```bash
-./scripts/benchmark.sh api \
-  --base-url http://127.0.0.1:8001/v1 \
-  --iterations 5 \
-  --max-tokens 256 \
-  --label endpoint-8001-api
+| Adapter | Track | Source | What it measures |
+|---|---|---|---|
+| `local_smoke` | `smoke` | bundled 5-prompt set | Keyword rubric covering coding, ops, creative, long-context |
+| `mmlu` | `general_capability` | `cais/mmlu`, split=test | 4-choice MCQ across 57 academic subjects |
+| `gsm8k` | `general_capability` | `gsm8k`, split=test | Grade-school math, exact-match on the final integer |
+| `niah` | `reliability_factuality` | synthesized in package | Long-context recall: a unique secret code embedded in filler text |
+
+Deferred adapters (HumanEval, SWE-ReBench, MMMU) are tracked in [ROADMAP.md](ROADMAP.md).
+
+`local_smoke` is the fastest sanity check; the response satisfies it deterministically when the model behaves. `mmlu` and `gsm8k` need the `eval` extra (`uv sync --extra eval`) to fetch the HuggingFace datasets. `niah` needs nothing external.
+
+## Comparability
+
+Every manifest carries `comparability_key`: a SHA-256 over the model fingerprint, provider build, decode params, prompt template version, dataset slice, adapter version, and scorer version. Two runs with matching keys are directly comparable. The hub groups them in the "Comparable groups" panel.
+
+`--seed` is included in the manifest but not in the comparability key, since changing the seed should not invalidate a comparison; only changes that affect the score should.
+
+## Endpoint URL override
+
+The runner derives the endpoint URL from the resolved runtime config (`http://<host>:<port>`). Pass `--base-url` to point at a hosted endpoint, a colocated llama-server on a non-default port, or a remote inference box.
+
+## Browsing runs
+
+```
+uv run llms eval list
+uv run llms eval show <run-id>
+uv run llms eval report                    # rebuild bench/reports/{reports,profiles}.json
 ```
 
-## Backend Provider Comparison
+The static hub at `bench/` reads those JSON files. Serve locally:
 
-Install `ik_llama.cpp`:
-
-```bash
-./scripts/provider.sh install ik_llama.cpp --rebuild
+```
+cd bench && python -m http.server 5173
 ```
 
-Run the suite once per provider and package both runs:
+To populate the hub with mock-transport demo data without a live llama-server:
 
-```bash
-./scripts/benchmark-5090-suite.sh \
-  --provider llama.cpp \
-  --run-dir ./benchmark-results/5090-llama-cpp
-
-./scripts/benchmark-5090-suite.sh \
-  --provider ik_llama.cpp \
-  --run-dir ./benchmark-results/5090-ik-llama-cpp
-
-./scripts/bench.sh add ./benchmark-results/5090-llama-cpp \
-  --title "RTX 5090 - llama.cpp"
-
-./scripts/bench.sh add ./benchmark-results/5090-ik-llama-cpp \
-  --title "RTX 5090 - ik_llama.cpp"
-
-./scripts/bench.sh serve
+```
+uv run python scripts/seed_hub.py
+uv run llms eval report
 ```
 
-The benchmark suite writes `provider=<name>` to `run-info.txt`, and the report packager stores that backend name in `meta.json` under `server.engine`.
+## Telemetry
 
-The suite skips profile/provider pairs blocked by `BLOCKED_LLAMA_PROVIDERS` or missing from `PROVEN_LLAMA_PROVIDERS`. Skipped profiles are recorded in `manifest.tsv` and the generated markdown report.
+The runner appends per-request rows to `~/.local/state/llms/requests.jsonl`. Aggregate windows:
 
-The suite defaults to a 180 second per-prompt API timeout and aborts the current profile after the first timed-out prompt. Use `--api-timeout SEC` and `--timeout-failures N` when intentionally testing very slow long-context behavior.
-
-## Raw llama.cpp Benchmark
-
-```bash
-./scripts/benchmark.sh llama-bench \
-  --provider llama.cpp \
-  --runs 3 \
-  --label active-llama-bench
+```
+uv run llms endpoint stats --window 24h
 ```
 
-Without `--model-file`, the helper resolves the active runtime model from the GPU config, `/etc/llama-server/active-model.conf`, and the selected model overlay. Use this when comparing GGUF runtime throughput without HTTP overhead.
+## Building providers separately
 
-Use `--provider ik_llama.cpp` to run `llama-bench` from the `ik_llama.cpp` checkout.
+If you only want the build path (no full setup):
 
-Each run stores a raw `llama-bench` log. Inspect the `pp` and `tg` rows:
-
-- `pp`: prompt processing throughput
-- `tg`: token generation throughput
-
-## Compare API Runs
-
-After saving two or more API runs, compare them with the helper:
-
-```bash
-./scripts/benchmark.sh compare \
-  --run-dir ./benchmark-results/20260414-101500-active-api \
-  --run-dir ./benchmark-results/20260414-102200-active-chat-api \
-  --output ./benchmark-results/model-comparison.md
+```
+./scripts/provider.sh install llama.cpp
+./scripts/provider.sh install ik_llama.cpp --rebuild --jobs 4
 ```
 
-The compare mode intentionally reads only structured `api` outputs. It does not parse `llama-bench` logs.
+## Fair comparisons
 
-## Publishable Report Hub
+The comparability key catches most reproducibility failures, but a few things to lock down by hand when running comparisons:
 
-Package a suite run into the static benchmark hub:
-
-```bash
-./scripts/bench.sh add ./benchmark-results/5090-suite-20260428-151710 \
-  --title "RTX 5090 - Five-Profile Suite" \
-  --subtitle "Qwen3.6 and MYTHOS profiles across coding, assistant, creative, and long-context prompts."
-```
-
-Then validate and serve it:
-
-```bash
-./scripts/bench.sh validate
-./scripts/bench.sh serve
-```
-
-Open `http://127.0.0.1:4445/`.
-
-The app reads:
-
-- `bench/reports/reports.json`: report registry
-- `bench/reports/<id>/meta.json`: title, date, hardware, server, and notes
-- `bench/reports/<id>/results.jsonl`: per-profile prompt results
-- `bench/reports/<id>/profiles/*.conf`: model overlays used by the run
-
-`profiles/_base.conf` stores the GPU base config when the packager can resolve it. The Profiles tab merges `_base.conf` with each overlay for inherited defaults, and the Configs tab parses the overlays to highlight profile-family differences such as context length, KV cache, multimodal projector settings, and speculative decoding flags.
-
-## Fair Comparisons
-
-Keep these fixed when comparing models or endpoints:
-
-- Prompt text
-- `--mode`
-- `--max-tokens`
-- Temperature
-- Concurrency, if you add it later
-- GPU, driver, CUDA version, context length, and quantization
-- Active `MODEL_PROFILE`
-
-Some overlays carry decoding defaults. Record the active profile with the result when comparing it to another model.
-
-## What This Guide Does Not Cover
-
-This guide is for benchmarks the repo can run through its own helper. External quality suites are separate projects with their own setup, dependencies, and failure modes. They should not be mixed into this basic throughput guide unless this repo grows first-class scripts for installing and running them.
+- Same GPU, driver, CUDA version, llama.cpp commit. The provider git commit field on the manifest is currently `null`; capture it manually until `llms provider install` populates it.
+- Same context length and quantization (already in the comparability key).
+- Same prompt template version. The adapter pins this; bumping it produces a different key and the hub flags incomparable runs.

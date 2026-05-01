@@ -38,7 +38,7 @@ Expected runtime requirements:
 - `--quantization modelopt`
 - Blackwell GPU with at least 20 GB VRAM
 
-This remains a strong RTX 5090 experiment, but it belongs on a separate `vLLM` server rather than inside the `/etc/llama-server` model overlay workflow.
+This remains a strong RTX 5090 experiment, but it belongs on a separate `vLLM` server rather than inside this `llama-server`-based service.
 
 Quick start with Docker:
 
