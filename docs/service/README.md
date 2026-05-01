@@ -19,3 +19,4 @@
 ## Tests
 
 - `service/tests/test_cli.sh`
+- `scripts/check-syntax.sh`

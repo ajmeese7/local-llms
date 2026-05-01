@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-bash -n "$ROOT/eval/bin/eval.sh" "$ROOT/eval/lib/openai_api.sh"
+"$ROOT/scripts/check-syntax.sh" >/dev/null
+"$ROOT/eval/bin/eval.sh" help | grep -q "OpenAI-compatible"
 "$ROOT/eval/bin/eval.sh" version | grep -q '^eval '
+# Ensure eval module does not invoke launcher/provider scripts directly
+! rg -n "llama-launcher|provider-common|select-model|service/bin/launcher" "$ROOT/eval" >/dev/null

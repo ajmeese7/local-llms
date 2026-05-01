@@ -10,7 +10,7 @@
 
 - `eval/bin/eval.sh list-models`
 - `eval/bin/eval.sh chat-smoke <model>`
-- `eval/bin/benchmark.sh ...`
+- `eval/bin/benchmark.sh ...` (pure Bash; no embedded Python calls)
 
 ## Config
 
@@ -24,3 +24,4 @@
 ## Tests
 
 - `eval/tests/test_cli.sh`
+- `scripts/check-syntax.sh`
