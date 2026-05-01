@@ -10,7 +10,7 @@
 
 - `eval/bin/eval.sh list-models`
 - `eval/bin/eval.sh chat-smoke <model>`
-- `eval/bin/benchmark.sh ...` (pure Bash; no embedded Python calls)
+- `eval/bin/benchmark.sh ...`
 
 ## Config
 
