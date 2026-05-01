@@ -182,26 +182,7 @@ fetch_models_json() {
 }
 
 extract_model_ids() {
-    python3 -c '
-import json
-import sys
-
-try:
-    payload = json.load(sys.stdin)
-except json.JSONDecodeError as exc:
-    raise SystemExit(f"could not parse /v1/models response as JSON: {exc}")
-
-ids = [
-    item.get("id")
-    for item in payload.get("data", [])
-    if isinstance(item, dict) and item.get("id")
-]
-
-if not ids:
-    raise SystemExit("no model ids found in /v1/models response")
-
-print("\n".join(ids))
-'
+    python3 "$ROOT_DIR/eval/python/extract_model_ids.py"
 }
 
 detect_first_api_model() {
@@ -289,26 +270,7 @@ build_request_body() {
     local max_tokens="$4"
     local temperature="$5"
 
-    python3 - "$mode" "$model" "$prompt" "$max_tokens" "$temperature" <<'PY'
-import json
-import sys
-
-mode, model, prompt, max_tokens, temperature = sys.argv[1:]
-payload = {
-    "model": model,
-    "max_tokens": int(max_tokens),
-    "temperature": float(temperature),
-}
-
-if mode == "chat":
-    payload["messages"] = [{"role": "user", "content": prompt}]
-elif mode == "completions":
-    payload["prompt"] = prompt
-else:
-    raise SystemExit(f"unsupported mode: {mode}")
-
-print(json.dumps(payload))
-PY
+    python3 "$ROOT_DIR/eval/python/build_request_body.py" "$mode" "$model" "$prompt" "$max_tokens" "$temperature"
 }
 
 append_api_row() {
@@ -320,137 +282,14 @@ append_api_row() {
     local response_file="$6"
     local mode="$7"
 
-    python3 - "$tsv_file" "$run_id" "$http_code" "$time_total" "$time_starttransfer" "$response_file" "$mode" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-tsv_path = Path(sys.argv[1])
-run_id = sys.argv[2]
-http_code = sys.argv[3]
-time_total = float(sys.argv[4])
-time_starttransfer = float(sys.argv[5])
-response_path = Path(sys.argv[6])
-mode = sys.argv[7]
-
-prompt_tokens = ""
-completion_tokens = ""
-total_tokens = ""
-output_chars = ""
-tokens_per_sec = ""
-
-if response_path.exists():
-    try:
-        data = json.loads(response_path.read_text())
-        usage = data.get("usage") or {}
-        prompt_tokens = usage.get("prompt_tokens", "")
-        completion_tokens = usage.get("completion_tokens", "")
-        total_tokens = usage.get("total_tokens", "")
-
-        text = ""
-        choices = data.get("choices") or []
-        if choices:
-            choice = choices[0]
-            if mode == "chat":
-                message = choice.get("message") or {}
-                content = message.get("content", "")
-                if isinstance(content, list):
-                    text = "".join(
-                        part.get("text", "")
-                        for part in content
-                        if isinstance(part, dict)
-                    )
-                else:
-                    text = str(content)
-            else:
-                text = str(choice.get("text", ""))
-        output_chars = len(text)
-
-        if completion_tokens not in ("", None) and time_total > 0:
-            tokens_per_sec = round(float(completion_tokens) / time_total, 3)
-    except Exception:
-        pass
-
-with tsv_path.open("a", encoding="utf-8") as handle:
-    handle.write(
-        "\t".join(
-            [
-                run_id,
-                http_code,
-                f"{time_total:.3f}",
-                f"{time_starttransfer:.3f}",
-                str(prompt_tokens),
-                str(completion_tokens),
-                str(total_tokens),
-                str(output_chars),
-                str(tokens_per_sec),
-            ]
-        )
-        + "\n"
-    )
-PY
+    python3 "$ROOT_DIR/eval/python/append_api_row.py" "$tsv_file" "$run_id" "$http_code" "$time_total" "$time_starttransfer" "$response_file" "$mode"
 }
 
 summarize_api_runs() {
     local tsv_file="$1"
     local summary_file="$2"
 
-    python3 - "$tsv_file" "$summary_file" <<'PY'
-import csv
-import statistics
-import sys
-from pathlib import Path
-
-tsv_path = Path(sys.argv[1])
-summary_path = Path(sys.argv[2])
-
-rows = []
-with tsv_path.open(encoding="utf-8") as handle:
-    reader = csv.DictReader(handle, delimiter="\t")
-    for row in reader:
-        rows.append(row)
-
-if not rows:
-    raise SystemExit("no API benchmark rows found")
-
-ok_rows = [row for row in rows if row["http_code"] == "200"]
-
-def avg_float(key):
-    values = [float(row[key]) for row in ok_rows if row[key]]
-    return statistics.mean(values) if values else None
-
-def avg_int(key):
-    values = [int(float(row[key])) for row in ok_rows if row[key]]
-    return statistics.mean(values) if values else None
-
-lines = []
-lines.append(f"runs: {len(rows)}")
-lines.append(f"successful_runs: {len(ok_rows)}")
-
-if ok_rows:
-    avg_total = avg_float("time_total")
-    avg_ttft = avg_float("time_starttransfer")
-    avg_prompt_tokens = avg_int("prompt_tokens")
-    avg_completion_tokens = avg_int("completion_tokens")
-    avg_total_tokens = avg_int("total_tokens")
-    avg_tokens_per_sec = avg_float("tokens_per_sec")
-
-    if avg_total is not None:
-        lines.append(f"avg_time_total_sec: {avg_total:.3f}")
-    if avg_ttft is not None:
-        lines.append(f"avg_ttft_sec: {avg_ttft:.3f}")
-    if avg_prompt_tokens is not None:
-        lines.append(f"avg_prompt_tokens: {avg_prompt_tokens:.1f}")
-    if avg_completion_tokens is not None:
-        lines.append(f"avg_completion_tokens: {avg_completion_tokens:.1f}")
-    if avg_total_tokens is not None:
-        lines.append(f"avg_total_tokens: {avg_total_tokens:.1f}")
-    if avg_tokens_per_sec is not None:
-        lines.append(f"avg_completion_tokens_per_sec: {avg_tokens_per_sec:.3f}")
-
-summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-print("\n".join(lines))
-PY
+    python3 "$ROOT_DIR/eval/python/summarize_api_runs.py" "$tsv_file" "$summary_file"
 }
 
 run_api_benchmark() {
@@ -619,13 +458,7 @@ run_llama_bench() {
         status=${PIPESTATUS[0]}
         set -e
         end_ts="$(date +%s.%N)"
-        elapsed="$(python3 - "$start_ts" "$end_ts" <<'PY'
-import sys
-start_value = float(sys.argv[1])
-end_value = float(sys.argv[2])
-print(f"{end_value - start_value:.3f}")
-PY
-)"
+        elapsed="$(python3 "$ROOT_DIR/eval/python/elapsed_seconds.py" "$start_ts" "$end_ts")"
 
         printf '%s\t%s\t%s\t%s\n' "$i" "$elapsed" "$status" "$log_file" >>"$tsv_file"
 
@@ -653,140 +486,7 @@ run_compare() {
 
     [ "${#run_dirs[@]}" -gt 0 ] || die "at least one --run-dir is required"
 
-    python3 - "$output" "${run_dirs[@]}" <<'PY'
-import csv
-import statistics
-import sys
-from pathlib import Path
-
-output_path = sys.argv[1]
-run_dirs = [Path(value) for value in sys.argv[2:]]
-
-
-def parse_request_file(path: Path) -> dict:
-    data = {}
-    if not path.exists():
-        return data
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        data[key.strip()] = value.strip()
-    return data
-
-
-def mean(values):
-    return statistics.mean(values) if values else None
-
-
-rows = []
-for run_dir in run_dirs:
-    summary_tsv = run_dir / "summary.tsv"
-    request_txt = run_dir / "request.txt"
-
-    if not summary_tsv.exists():
-        raise SystemExit(f"run directory is missing summary.tsv: {run_dir}")
-
-    request_meta = parse_request_file(request_txt)
-
-    with summary_tsv.open(encoding="utf-8") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        records = list(reader)
-
-    if not records or "time_total" not in records[0]:
-        raise SystemExit(
-            f"run directory does not look like an API benchmark result: {run_dir}"
-        )
-
-    ok_records = [record for record in records if record["http_code"] == "200"]
-
-    avg_total = mean([float(record["time_total"]) for record in ok_records if record["time_total"]])
-    avg_ttft = mean(
-        [
-            float(record["time_starttransfer"])
-            for record in ok_records
-            if record["time_starttransfer"]
-        ]
-    )
-    avg_tok_s = mean(
-        [float(record["tokens_per_sec"]) for record in ok_records if record["tokens_per_sec"]]
-    )
-    avg_completion_tokens = mean(
-        [
-            float(record["completion_tokens"])
-            for record in ok_records
-            if record["completion_tokens"]
-        ]
-    )
-    success_rate = (
-        (len(ok_records) / len(records)) * 100.0
-        if records
-        else 0.0
-    )
-
-    rows.append(
-        {
-            "label": run_dir.name,
-            "model": request_meta.get("model", ""),
-            "mode": request_meta.get("mode", ""),
-            "iterations": request_meta.get("iterations", str(len(records))),
-            "avg_total": avg_total,
-            "avg_ttft": avg_ttft,
-            "avg_tok_s": avg_tok_s,
-            "avg_completion_tokens": avg_completion_tokens,
-            "success_rate": success_rate,
-            "path": str(run_dir),
-        }
-    )
-
-header = [
-    "Run",
-    "Model",
-    "Mode",
-    "Iterations",
-    "Success %",
-    "Avg latency (s)",
-    "Avg TTFT (s)",
-    "Avg output tok/s",
-    "Avg completion toks",
-]
-
-lines = []
-lines.append("| " + " | ".join(header) + " |")
-lines.append("|" + "|".join(["---"] * len(header)) + "|")
-
-for row in rows:
-    lines.append(
-        "| "
-        + " | ".join(
-            [
-                row["label"],
-                row["model"],
-                row["mode"],
-                row["iterations"],
-                f'{row["success_rate"]:.1f}',
-                "" if row["avg_total"] is None else f'{row["avg_total"]:.3f}',
-                "" if row["avg_ttft"] is None else f'{row["avg_ttft"]:.3f}',
-                "" if row["avg_tok_s"] is None else f'{row["avg_tok_s"]:.3f}',
-                ""
-                if row["avg_completion_tokens"] is None
-                else f'{row["avg_completion_tokens"]:.1f}',
-            ]
-        )
-        + " |"
-    )
-
-lines.append("")
-for row in rows:
-    lines.append(f'- `{row["label"]}` source: `{row["path"]}`')
-
-markdown = "\n".join(lines) + "\n"
-
-if output_path:
-    Path(output_path).write_text(markdown, encoding="utf-8")
-
-print(markdown, end="")
-PY
+    python3 "$ROOT_DIR/eval/python/compare_runs.py" "$output" "${run_dirs[@]}"
 }
 
 main() {
