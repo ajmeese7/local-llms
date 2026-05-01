@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from llms import __version__
+from llms.serving.config.lint import lint as lint_configs
+from llms.serving.providers.registry import list_providers
 
 app = typer.Typer(
     name="llms",
@@ -47,11 +52,30 @@ def root(
     """Entry callback. Subcommands are registered above."""
 
 
+CONFIG_OPT = typer.Option(
+    Path("config"),
+    "--config",
+    "-c",
+    help="Path to the config tree (defaults to ./config).",
+    exists=True,
+    file_okay=False,
+    dir_okay=True,
+)
+
+
 @config_app.command("lint")
-def config_lint() -> None:
-    """Validate every YAML in config/ against its schema (Phase 1)."""
-    console.print("[yellow]not implemented yet (Phase 1)[/]")
-    raise typer.Exit(code=2)
+def config_lint(config_root: Path = CONFIG_OPT) -> None:
+    """Validate every YAML in the config tree against its schema."""
+    bundle, problems = lint_configs(config_root)
+    if problems:
+        for problem in problems:
+            console.print(f"[red]✗[/] {problem}")
+        raise typer.Exit(code=1)
+    counts = (
+        f"{len(bundle.hardware)} hardware, {len(bundle.providers)} providers, "
+        f"{len(bundle.profiles)} profiles, {len(bundle.endpoints)} endpoints"
+    )
+    console.print(f"[green]✓[/] config tree clean ({counts})")
 
 
 @endpoint_app.command("status")
@@ -69,10 +93,30 @@ def eval_run() -> None:
 
 
 @provider_app.command("list")
-def provider_list() -> None:
-    """List known inference providers and capabilities (Phase 1)."""
-    console.print("[yellow]not implemented yet (Phase 1)[/]")
-    raise typer.Exit(code=2)
+def provider_list(config_root: Path = CONFIG_OPT) -> None:
+    """List known inference providers and capabilities."""
+    from llms.serving.config.loader import load_bundle
+
+    bundle = load_bundle(config_root)
+    if not bundle.providers:
+        console.print(f"[yellow]no providers found under {config_root / 'providers'}[/]")
+        raise typer.Exit(code=1)
+
+    table = Table(title="Providers", show_lines=False)
+    table.add_column("Name")
+    table.add_column("Aliases")
+    table.add_column("Server bin")
+    table.add_column("Capabilities")
+    for provider in list_providers(bundle):
+        caps = provider.capabilities
+        cap_str = ",".join(sorted(name for name, value in caps.model_dump().items() if value))
+        table.add_row(
+            provider.name,
+            ",".join(provider.aliases) or "—",
+            str(provider.server_binary_path),
+            cap_str or "—",
+        )
+    console.print(table)
 
 
 if __name__ == "__main__":

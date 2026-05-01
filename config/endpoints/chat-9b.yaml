@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-9b
+description: Default RTX 5060 Ti chat endpoint serving Qwen3.5-9B.
+profile: qwen35-9b
+provider: llama.cpp

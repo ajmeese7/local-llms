@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-carnice
+description: Carnice-V2-27B on RTX 5090.
+profile: carnice-v2-27b
+provider: llama.cpp

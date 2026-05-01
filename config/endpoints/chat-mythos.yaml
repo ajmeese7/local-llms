@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-mythos
+description: MYTHOS-26B-A4B on RTX 5090.
+profile: mythos
+provider: llama.cpp

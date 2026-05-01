@@ -1,0 +1,12 @@
+kind: profile
+name: qwen36-27B-AEON
+alias: "Qwen3.6-27B (Uncensored)"
+model_path: ~/models/qwen3.6-27b-uncensored-q6_k.gguf
+hf_repo: Abiray/Qwen3.6-27B-AEON-Ultimate-Uncensored-GGUF
+hf_file: qwen3.6-27b-uncensored-q6_k.gguf
+jinja: true
+context_length: 262144
+provider_compat:
+  proven:
+    - llama.cpp
+    - ik_llama.cpp

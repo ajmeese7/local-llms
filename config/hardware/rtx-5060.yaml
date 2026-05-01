@@ -1,0 +1,18 @@
+kind: hardware
+name: rtx-5060
+description: NVIDIA RTX 5060 Ti (16GB VRAM)
+gpu_match_patterns:
+  - "5060"
+default_provider: llama.cpp
+default_endpoint: chat-9b
+supported_endpoints:
+  - chat-9b
+defaults:
+  host: 0.0.0.0
+  port: 9999
+  gpu_layers: 99
+  context_length: 32768
+  parallel_slots: 1
+  flash_attention: true
+  cache_type_k: q4_0
+  cache_type_v: q4_0

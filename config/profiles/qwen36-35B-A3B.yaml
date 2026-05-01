@@ -1,0 +1,22 @@
+kind: profile
+name: qwen36-35B-A3B
+alias: Qwen3.6-35B-A3B
+model_path: ~/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q5_K_P.gguf
+hf_repo: HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive
+hf_file: Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q5_K_P.gguf
+mmproj_path: ~/models/mmproj-Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-f16.gguf
+mmproj_hf_file: mmproj-Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-f16.gguf
+jinja: true
+context_length: 131072
+decode:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0
+  presence_penalty: 1.5
+provider_compat:
+  proven:
+    - llama.cpp
+  blocked:
+    - ik_llama.cpp
+  notes: "ik_llama.cpp timed out or ran near 1 tok/s in the 2026-04-29 RTX 5090 suite; treat as backend-incompatible until retested."
