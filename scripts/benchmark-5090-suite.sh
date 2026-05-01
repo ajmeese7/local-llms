@@ -6,10 +6,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG_DIR="$ROOT_DIR/config"
 RESULTS_ROOT="$ROOT_DIR/benchmark-results"
 SERVICE_NAME="${LLAMA_SERVICE_NAME:-llama-server}"
-LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-$HOME/.local/share/llama.cpp/build/bin/llama-server}"
+PROVIDER_HELPERS="$CONFIG_DIR/provider-common.sh"
+LLAMA_PROVIDER="${LLAMA_PROVIDER:-llama.cpp}"
+LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:9999/v1}"
-API_TIMEOUT="${API_TIMEOUT:-900}"
+API_TIMEOUT="${API_TIMEOUT:-180}"
 READY_TIMEOUT="${READY_TIMEOUT:-900}"
+TIMEOUT_FAILURE_LIMIT="${TIMEOUT_FAILURE_LIMIT:-1}"
 RUN_DIR=""
 SKIP_DOWNLOADS=0
 PROFILE_FILTER=""
@@ -31,9 +34,12 @@ Usage:
 Options:
   --run-dir PATH          Write results to PATH instead of benchmark-results/...
   --profiles "A B C"      Space-separated profile list; default: RTX 5090 supported profiles
+  --provider NAME         Backend provider: llama.cpp or ik_llama.cpp
+  --llama-server PATH     Explicit llama-server binary; overrides --provider binary path
   --skip-downloads        Do not download missing model/projector artifacts
-  --api-timeout SEC       Per-request API timeout, default: 900
+  --api-timeout SEC       Per-request API timeout, default: 180
   --ready-timeout SEC     Per-profile startup wait timeout, default: 900
+  --timeout-failures N    Abort the current profile after N timed-out prompts, default: 1
   -h, --help              Show this help
 
 The script stops the llama-server systemd service while benchmarking, launches
@@ -46,9 +52,12 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --run-dir) RUN_DIR="$2"; shift 2 ;;
         --profiles) PROFILE_FILTER="$2"; shift 2 ;;
+        --provider) LLAMA_PROVIDER="$2"; shift 2 ;;
+        --llama-server) LLAMA_SERVER_BIN="$2"; shift 2 ;;
         --skip-downloads) SKIP_DOWNLOADS=1; shift ;;
         --api-timeout) API_TIMEOUT="$2"; shift 2 ;;
         --ready-timeout) READY_TIMEOUT="$2"; shift 2 ;;
+        --timeout-failures) TIMEOUT_FAILURE_LIMIT="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
@@ -64,6 +73,11 @@ require_cmd systemctl
 require_cmd nvidia-smi
 require_cmd sudo
 
+# shellcheck source=/dev/null
+source "$PROVIDER_HELPERS"
+LLAMA_PROVIDER="$(llama_provider_normalize "$LLAMA_PROVIDER")" || die "unsupported provider: $LLAMA_PROVIDER"
+BENCHMARK_PROVIDER="$LLAMA_PROVIDER"
+[ -n "$LLAMA_SERVER_BIN" ] || LLAMA_SERVER_BIN="$(llama_provider_server_bin "$LLAMA_PROVIDER")"
 [ -x "$LLAMA_SERVER_BIN" ] || die "llama-server not executable: $LLAMA_SERVER_BIN"
 [ -f "$CONFIG_DIR/rtx-5090.conf" ] || die "missing config/rtx-5090.conf"
 
@@ -143,12 +157,17 @@ load_profile() {
     MIN_P=""
     PRESENCE_PENALTY=""
     REPEAT_PENALTY=""
+    PROVEN_LLAMA_PROVIDERS=""
+    BLOCKED_LLAMA_PROVIDERS=""
+    PROVIDER_COMPATIBILITY_NOTES=""
 
     # shellcheck source=/dev/null
     source "$CONFIG_DIR/rtx-5090.conf"
+    LLAMA_PROVIDER="$BENCHMARK_PROVIDER"
     [ -f "$CONFIG_DIR/$profile.conf" ] || die "profile overlay not found: $profile"
     # shellcheck source=/dev/null
     source "$CONFIG_DIR/$profile.conf"
+    LLAMA_PROVIDER="$BENCHMARK_PROVIDER"
     [ -n "$MODEL" ] || die "MODEL missing for profile: $profile"
     [ -n "$ALIAS" ] || die "ALIAS missing for profile: $profile"
 }
@@ -196,6 +215,22 @@ ensure_profile_artifacts() {
         mmproj_repo="${MMPROJ_HF_REPO:-$HF_REPO}"
         download_artifact "$profile mmproj" "$MMPROJ" "$mmproj_repo" "$MMPROJ_HF_FILE"
     fi
+}
+
+profile_provider_skip_reason() {
+    if llama_profile_provider_is_blocked "$BENCHMARK_PROVIDER"; then
+        printf 'provider-blocked'
+        [ -z "${PROVIDER_COMPATIBILITY_NOTES:-}" ] || printf ': %s' "$PROVIDER_COMPATIBILITY_NOTES"
+        printf '\n'
+        return 0
+    fi
+
+    if ! llama_profile_provider_is_proven "$BENCHMARK_PROVIDER"; then
+        printf 'provider-unproven: proven providers: %s\n' "${PROVEN_LLAMA_PROVIDERS:-none}"
+        return 0
+    fi
+
+    return 1
 }
 
 write_prompts() {
@@ -407,6 +442,8 @@ launch_profile_server() {
     mkdir -p "$temp_config"
     cp "$CONFIG_DIR"/*.conf "$temp_config/"
     cp "$CONFIG_DIR/runtime-common.sh" "$temp_config/"
+    cp "$CONFIG_DIR/provider-common.sh" "$temp_config/"
+    printf '\nLLAMA_PROVIDER="%s"\n' "$BENCHMARK_PROVIDER" >> "$temp_config/rtx-5090.conf"
     printf 'MODEL_PROFILE=%s\n' "$profile" > "$temp_config/active-model.conf"
 
     note "Launching $profile"
@@ -464,6 +501,8 @@ run_prompt() {
     payload="$(json_payload "$alias" "$prompt_file" "$max_tokens" "$temperature")"
 
     note "Running $profile / $prompt_id"
+    local curl_status
+    set +e
     curl -sS --noproxy "*" \
         --connect-timeout 5 \
         --max-time "$API_TIMEOUT" \
@@ -471,7 +510,9 @@ run_prompt() {
         -o "$response_file" \
         -w 'http_code=%{http_code}\ntime_total=%{time_total}\ntime_starttransfer=%{time_starttransfer}\n' \
         -d "$payload" \
-        "$BASE_URL/chat/completions" >"$metrics_file" || true
+        "$BASE_URL/chat/completions" >"$metrics_file"
+    curl_status=$?
+    set -e
 
     local http_code time_total time_starttransfer
     http_code="$(awk -F= '$1=="http_code"{print $2}' "$metrics_file" 2>/dev/null || true)"
@@ -483,17 +524,17 @@ run_prompt() {
 
     score_response "$prompt_id" "$response_file" > "$score_file"
 
-    python3 - "$profile" "$alias" "$prompt_id" "$category" "$max_tokens" "$temperature" \
+    python3 - "$profile" "$alias" "$prompt_id" "$category" "$max_tokens" "$temperature" "$BENCHMARK_PROVIDER" \
         "$http_code" "$time_total" "$time_starttransfer" "$response_file" "$score_file" "$result_file" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-profile, alias, prompt_id, category, max_tokens, temperature = sys.argv[1:7]
-http_code, time_total, ttft = sys.argv[7:10]
-response_path = Path(sys.argv[10])
-score_path = Path(sys.argv[11])
-result_path = Path(sys.argv[12])
+profile, alias, prompt_id, category, max_tokens, temperature, provider = sys.argv[1:8]
+http_code, time_total, ttft = sys.argv[8:11]
+response_path = Path(sys.argv[11])
+score_path = Path(sys.argv[12])
+result_path = Path(sys.argv[13])
 
 score = json.loads(score_path.read_text(encoding="utf-8"))
 usage = {}
@@ -517,6 +558,7 @@ except Exception:
 text = score.get("text", "")
 result = {
     "profile": profile,
+    "provider": provider,
     "alias": alias,
     "prompt_id": prompt_id,
     "category": category,
@@ -538,6 +580,12 @@ result = {
 result_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
 PY
     append_result_json "$result_file"
+
+    if [ "$curl_status" -eq 28 ]; then
+        note "$profile / $prompt_id timed out after ${API_TIMEOUT}s"
+        return 124
+    fi
+    return 0
 }
 
 record_profile_manifest() {
@@ -546,9 +594,10 @@ record_profile_manifest() {
     local reason="${3:-}"
 
     load_profile "$profile"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "$profile" "$status" "$reason" "$ALIAS" "$MODEL" "${MMPROJ:-}" \
         "${CONTEXT_LENGTH:-}" "${PARALLEL_SLOTS:-}" "${CACHE_TYPE_K:-}" "${CACHE_TYPE_V:-}" \
+        "${PROVEN_LLAMA_PROVIDERS:-}" "${BLOCKED_LLAMA_PROVIDERS:-}" "${PROVIDER_COMPATIBILITY_NOTES:-}" \
         >> "$MANIFEST"
 }
 
@@ -667,12 +716,20 @@ for item in results:
 md.append("")
 md.append("## Profile Manifest")
 md.append("")
-md.append("| Profile | Status | Alias | Model | Context | Parallel | KV K/V |")
-md.append("|---|---|---|---|---:|---:|---|")
+md.append("| Profile | Status | Alias | Model | Provider compatibility | Context | Parallel | KV K/V |")
+md.append("|---|---|---|---|---|---:|---:|---|")
 for row in manifest:
+    provider_bits = []
+    if row.get("proven_providers"):
+        provider_bits.append(f"proven: `{row.get('proven_providers')}`")
+    if row.get("blocked_providers"):
+        provider_bits.append(f"blocked: `{row.get('blocked_providers')}`")
+    if row.get("provider_notes"):
+        provider_bits.append(row.get("provider_notes"))
     md.append(
         f"| `{row.get('profile','')}` | {row.get('status','')} | "
         f"{row.get('alias','')} | `{Path(row.get('model','')).name}` | "
+        f"{'<br>'.join(provider_bits) if provider_bits else ''} | "
         f"{row.get('context','')} | {row.get('parallel','')} | "
         f"{row.get('cache_k','')}/{row.get('cache_v','')} |"
     )
@@ -773,6 +830,7 @@ write_prompts
 
 # shellcheck source=/dev/null
 source "$CONFIG_DIR/rtx-5090.conf"
+LLAMA_PROVIDER="$BENCHMARK_PROVIDER"
 if [ -n "$PROFILE_FILTER" ]; then
     PROFILES="$PROFILE_FILTER"
 else
@@ -780,12 +838,13 @@ else
 fi
 
 {
-    printf 'profile\tstatus\treason\talias\tmodel\tmmproj\tcontext\tparallel\tcache_k\tcache_v\n'
+    printf 'profile\tstatus\treason\talias\tmodel\tmmproj\tcontext\tparallel\tcache_k\tcache_v\tproven_providers\tblocked_providers\tprovider_notes\n'
 } > "$MANIFEST"
 : > "$RESULTS_JSONL"
 
 {
     printf 'started_at=%s\n' "$(date --iso-8601=seconds)"
+    printf 'provider=%s\n' "$BENCHMARK_PROVIDER"
     printf 'base_url=%s\n' "$BASE_URL"
     printf 'llama_server_bin=%s\n' "$LLAMA_SERVER_BIN"
     nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/gpu=/'
@@ -800,6 +859,13 @@ fi
 for profile in $PROFILES; do
     note "=== Profile: $profile ==="
     mkdir -p "$PROFILE_DIR/$profile"
+
+    load_profile "$profile"
+    if skip_reason="$(profile_provider_skip_reason)"; then
+        note "Skipping $profile for provider $BENCHMARK_PROVIDER: $skip_reason"
+        record_profile_manifest "$profile" "provider-skipped" "$skip_reason"
+        continue
+    fi
 
     if ! ensure_profile_artifacts "$profile"; then
         record_profile_manifest "$profile" "artifact-failed" "download-or-artifact-check-failed"
@@ -823,12 +889,29 @@ for item in json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")):
     print("\t".join([item["id"], item["category"], str(item["max_tokens"]), str(item["temperature"])]))
 PY
 
+    profile_status="completed"
+    profile_reason=""
+    timeout_failures=0
     while IFS=$'\t' read -r prompt_id category max_tokens temperature; do
+        set +e
         run_prompt "$profile" "$ALIAS" "$prompt_id" "$category" "$max_tokens" "$temperature"
+        prompt_status=$?
+        set -e
+        if [ "$prompt_status" -ne 0 ]; then
+            if [ "$prompt_status" -eq 124 ]; then
+                timeout_failures=$((timeout_failures + 1))
+                if [ "$timeout_failures" -ge "$TIMEOUT_FAILURE_LIMIT" ]; then
+                    note "Aborting remaining prompts for $profile after $timeout_failures timeout(s)"
+                    profile_status="timeout-aborted"
+                    profile_reason="prompt-timeout"
+                    break
+                fi
+            fi
+        fi
     done < "$PROFILE_DIR/$profile/prompt-plan.tsv"
 
     stop_profile_server
-    record_profile_manifest "$profile" "completed" ""
+    record_profile_manifest "$profile" "$profile_status" "$profile_reason"
     generate_reports
 done
 

@@ -5,9 +5,9 @@
 set -euo pipefail
 
 CONFIG_DIR="${LLAMA_CONFIG_DIR:-/etc/llama-server}"
-LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-$HOME/.local/share/llama.cpp/build/bin/llama-server}"
 NVIDIA_SMI_BIN="${NVIDIA_SMI_BIN:-/usr/lib/wsl/lib/nvidia-smi}"
 COMMON_HELPERS="$CONFIG_DIR/runtime-common.sh"
+PROVIDER_HELPERS="$CONFIG_DIR/provider-common.sh"
 
 die() {
     echo "ERROR: $*" >&2
@@ -17,6 +17,9 @@ die() {
 [ -f "$COMMON_HELPERS" ] || die "Shared runtime helpers not found: $COMMON_HELPERS"
 # shellcheck source=/dev/null
 source "$COMMON_HELPERS"
+[ -f "$PROVIDER_HELPERS" ] || die "Provider helpers not found: $PROVIDER_HELPERS"
+# shellcheck source=/dev/null
+source "$PROVIDER_HELPERS"
 
 profile_supported() {
     local needle="$1"
@@ -113,6 +116,9 @@ API_KEY=""
 # shellcheck source=/dev/null
 source "$config_file"
 
+LLAMA_PROVIDER="$(llama_provider_normalize "${LLAMA_PROVIDER:-llama.cpp}")" || die "Unsupported LLAMA_PROVIDER: ${LLAMA_PROVIDER:-}"
+LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-$(llama_provider_server_bin "$LLAMA_PROVIDER")}"
+
 active_profile="$(load_active_model_profile "$CONFIG_DIR/active-model.conf")"
 [ -n "$active_profile" ] || active_profile="${DEFAULT_MODEL_PROFILE:-}"
 [ -n "$active_profile" ] || die "No MODEL_PROFILE is active and no DEFAULT_MODEL_PROFILE is set in $config_file"
@@ -123,8 +129,20 @@ profile_supported "$active_profile" || die "Model profile '$active_profile' is n
 overlay_file="$CONFIG_DIR/$active_profile.conf"
 [ -f "$overlay_file" ] || die "Model overlay not found: $overlay_file"
 
+PROVEN_LLAMA_PROVIDERS=""
+BLOCKED_LLAMA_PROVIDERS=""
+PROVIDER_COMPATIBILITY_NOTES=""
+
 # shellcheck source=/dev/null
 source "$overlay_file"
+
+if llama_profile_provider_is_blocked "$LLAMA_PROVIDER" && ! flag_enabled "${ALLOW_BLOCKED_LLAMA_PROVIDER:-}"; then
+    die "Model profile '$active_profile' blocks provider '$LLAMA_PROVIDER'. ${PROVIDER_COMPATIBILITY_NOTES:-Set ALLOW_BLOCKED_LLAMA_PROVIDER=1 only for a deliberate retest.}"
+fi
+
+if ! llama_profile_provider_is_proven "$LLAMA_PROVIDER" && ! flag_enabled "${ALLOW_UNPROVEN_LLAMA_PROVIDER:-}"; then
+    die "Model profile '$active_profile' has not proven provider '$LLAMA_PROVIDER'. Proven providers: ${PROVEN_LLAMA_PROVIDERS:-none}. Set ALLOW_UNPROVEN_LLAMA_PROVIDER=1 for a deliberate retest."
+fi
 
 for required_field in MODEL ALIAS HOST PORT GPU_LAYERS CONTEXT_LENGTH PARALLEL_SLOTS FLASH_ATTENTION CACHE_TYPE_K CACHE_TYPE_V; do
     if [ -z "${!required_field:-}" ]; then
@@ -160,6 +178,8 @@ fi
 
 echo "Using model profile: $active_profile"
 echo "Using model overlay: $overlay_file"
+echo "Using provider: $LLAMA_PROVIDER"
+echo "Using server binary: $LLAMA_SERVER_BIN"
 echo "Final model path: $MODEL"
 if flag_enabled "${JINJA:-}"; then
     echo "Using Jinja chat templates"
@@ -167,11 +187,15 @@ fi
 if [ -n "${MMPROJ:-}" ]; then
     echo "Using multimodal projector: $MMPROJ"
 fi
-if flag_enabled "${KV_UNIFIED:-}"; then
+if flag_enabled "${KV_UNIFIED:-}" && llama_provider_supports_flag "$LLAMA_PROVIDER" "kv-unified"; then
     echo "Using unified KV cache"
+elif flag_enabled "${KV_UNIFIED:-}"; then
+    echo "Skipping unsupported unified KV cache for provider: $LLAMA_PROVIDER"
 fi
-if flag_enabled "${SPEC_DEFAULT:-}"; then
+if flag_enabled "${SPEC_DEFAULT:-}" && llama_provider_supports_flag "$LLAMA_PROVIDER" "spec-default"; then
     echo "Using default speculative decoding config"
+elif flag_enabled "${SPEC_DEFAULT:-}"; then
+    echo "Using expanded speculative decoding defaults for provider: $LLAMA_PROVIDER"
 elif [ -n "${SPEC_TYPE:-}" ] || [ -n "${SPEC_NGRAM_SIZE_N:-}" ] || [ -n "${SPEC_NGRAM_SIZE_M:-}" ] || [ -n "${SPEC_NGRAM_MIN_HITS:-}" ] || [ -n "${DRAFT_MAX:-}" ] || [ -n "${DRAFT_MIN:-}" ]; then
     echo "Using speculative decoding overrides: spec_type=${SPEC_TYPE:-<default>} spec_ngram_size_n=${SPEC_NGRAM_SIZE_N:-<default>} spec_ngram_size_m=${SPEC_NGRAM_SIZE_M:-<default>} spec_ngram_min_hits=${SPEC_NGRAM_MIN_HITS:-<default>} draft_max=${DRAFT_MAX:-<default>} draft_min=${DRAFT_MIN:-<default>}"
 fi
@@ -197,9 +221,13 @@ append_llama_api_key_flag cmd "${API_KEY:-}"
 
 flag_enabled "${JINJA:-}" && cmd+=( --jinja )
 [ -n "${MMPROJ:-}" ] && cmd+=( --mmproj "$MMPROJ" )
-flag_enabled "${KV_UNIFIED:-}" && cmd+=( --kv-unified )
-if flag_enabled "${SPEC_DEFAULT:-}"; then
+if flag_enabled "${KV_UNIFIED:-}" && llama_provider_supports_flag "$LLAMA_PROVIDER" "kv-unified"; then
+    cmd+=( --kv-unified )
+fi
+if flag_enabled "${SPEC_DEFAULT:-}" && llama_provider_supports_flag "$LLAMA_PROVIDER" "spec-default"; then
     cmd+=( --spec-default )
+elif flag_enabled "${SPEC_DEFAULT:-}"; then
+    cmd+=( --spec-type ngram-mod --spec-ngram-size-n 24 --draft-max 64 --draft-min 48 )
 else
     [ -n "${SPEC_TYPE:-}" ] && cmd+=( --spec-type "$SPEC_TYPE" )
     [ -n "${SPEC_NGRAM_SIZE_N:-}" ] && cmd+=( --spec-ngram-size-n "$SPEC_NGRAM_SIZE_N" )

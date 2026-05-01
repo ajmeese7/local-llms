@@ -85,9 +85,8 @@ copy_profile_confs() {
     mkdir -p "$report_dir/profiles"
 
     if [ -f "$manifest" ]; then
-        while IFS=$'\t' read -r profile status _rest; do
+        while IFS=$'\t' read -r profile _status _rest; do
             [ "$profile" != "profile" ] || continue
-            [ "$status" = "completed" ] || continue
             [ -n "$profile" ] || continue
 
             if [ -f "$run_dir/profiles/$profile/config/$profile.conf" ]; then
@@ -154,6 +153,8 @@ if info_path.exists():
 if not date:
     date = info.get("started_at", "")
 
+provider = info.get("provider") or "llama.cpp"
+
 gpu_raw = info.get("gpu", "")
 gpu_parts = [part.strip() for part in gpu_raw.split(",")]
 gpu_name = gpu_parts[0] if gpu_parts and gpu_parts[0] else ""
@@ -173,7 +174,7 @@ meta = {
         "vram_gb": vram_gb,
     },
     "server": {
-        "engine": "llama.cpp",
+        "engine": provider,
         "binary": Path(info.get("llama_server_bin") or "llama-server").name,
         "api": "OpenAI-compatible /chat/completions",
         "stream": False,

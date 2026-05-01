@@ -21,6 +21,22 @@ function formatContext(value) {
   return n >= 1000 ? `${Math.round(n / 1024)}k` : String(n);
 }
 
+function sectionIsFiniteNumber(value) {
+  if (value === null || value === undefined || value === "") return false;
+  const n = Number(value);
+  return Number.isFinite(n);
+}
+
+function sectionMetricNumber(value, fallback = 0) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function sectionFmtMetric(value, digits = 1, suffix = "") {
+  return sectionIsFiniteNumber(value) ? `${Number(value).toFixed(digits)}${suffix}` : "—";
+}
+
 function profileConfigMeta(profiles, profile) {
   const conf = profiles?.bundle?.byId?.get(profile);
   return window.BenchData.metadataFromConf(conf, profiles?.bundle?.baseConf);
@@ -52,7 +68,7 @@ function SummarySection({ data, meta, copy, recommendations }) {
           <div className="flex flex-col gap-2.5">
             <BadgeRow label="Balanced" value={data.balanced.profile} accent="magenta" />
             {data.fastest !== data.balanced && <BadgeRow label="Fastest" value={data.fastest.profile} accent="cyan" />}
-            <BadgeRow label="Top Quality" value={`${data.topQuality.profile} · ${data.topQuality.quality.toFixed(1)}%`} accent="warning" />
+            <BadgeRow label="Top Quality" value={`${data.topQuality.profile} · ${sectionFmtMetric(data.topQuality.quality, 1, "%")}`} accent="warning" />
           </div>
         </div>
       </div>
@@ -137,6 +153,7 @@ function ProfilesSection({ data, meta, profiles }) {
     if (key === "context") return pm.context_length || 0;
     if (key === "parallel") return pm.parallel_slots || 0;
     if (key === "kv") return `${pm.cache_type_k || ""}/${pm.cache_type_v || ""}`;
+    if (key === "providers") return [...(pm.proven_providers || []), ...(pm.blocked_providers || [])].join(" ");
     return profile[key];
   }
 
@@ -159,9 +176,27 @@ function ProfilesSection({ data, meta, profiles }) {
     return <MiniFlag kind={cls}>{p.cleanCount}c · {p.leakCount}l{p.emptyCount ? ` · ${p.emptyCount}e` : ""}</MiniFlag>;
   }
 
+  function providerSummary(pm) {
+    const proven = pm.proven_providers || [];
+    const blocked = pm.blocked_providers || [];
+    if (!proven.length && !blocked.length) return "—";
+    const active = meta?.server?.engine || "";
+    return (
+      <div className="flex flex-wrap gap-1" title={pm.provider_notes || ""}>
+        {proven.map(provider => (
+          <MiniFlag key={`proven-${provider}`} kind={provider === active ? "clean" : ""}>{provider}</MiniFlag>
+        ))}
+        {blocked.map(provider => (
+          <MiniFlag key={`blocked-${provider}`} kind="danger">no {provider}</MiniFlag>
+        ))}
+      </div>
+    );
+  }
+
   const headers = [
     ["profile", "Profile", false], ["alias", "Model", false],
     ["context", "Ctx", true], ["parallel", "Par", true], ["kv", "KV", false],
+    ["providers", "Providers", false],
     ["latency", "Avg Lat", true], ["tps", "tok/s", true],
     ["quality", "Quality", true], ["runCount", "Runs", true],
     ["cleanCount", "Output", true],
@@ -206,17 +241,18 @@ function ProfilesSection({ data, meta, profiles }) {
                   <td data-label="Ctx" className="numeric">{formatContext(pm.context_length)}</td>
                   <td data-label="Par" className="numeric">{pm.parallel_slots || "—"}</td>
                   <td data-label="KV">{pm.cache_type_k && pm.cache_type_v ? `${pm.cache_type_k}/${pm.cache_type_v}` : "—"}</td>
+                  <td data-label="Providers">{providerSummary(pm)}</td>
                   <td data-label="Latency" className="numeric"
-                      style={{color: p.latency < 12 ? "var(--me-success)" : p.latency < 25 ? "var(--me-warning)" : "var(--me-danger)"}}>
-                    {p.latency.toFixed(2)} s
+                      style={{color: sectionMetricNumber(p.latency, Infinity) < 12 ? "var(--me-success)" : sectionMetricNumber(p.latency, Infinity) < 25 ? "var(--me-warning)" : "var(--me-danger)"}}>
+                    {sectionFmtMetric(p.latency, 2, " s")}
                   </td>
                   <td data-label="tok/s" className="numeric"
-                      style={{color: p.tps > 100 ? "var(--me-cyan)" : "var(--me-fg)"}}>
-                    {p.tps.toFixed(2)}
+                      style={{color: sectionMetricNumber(p.tps) > 100 ? "var(--me-cyan)" : "var(--me-fg)"}}>
+                    {sectionFmtMetric(p.tps, 2)}
                   </td>
                   <td data-label="Quality" className="numeric"
-                      style={{color: p.quality >= 95 ? "var(--me-success)" : p.quality >= 90 ? "var(--me-warning)" : "var(--me-danger)"}}>
-                    {p.quality.toFixed(1)}%
+                      style={{color: sectionMetricNumber(p.quality) >= 95 ? "var(--me-success)" : sectionMetricNumber(p.quality) >= 90 ? "var(--me-warning)" : "var(--me-danger)"}}>
+                    {sectionFmtMetric(p.quality, 1, "%")}
                   </td>
                   <td data-label="Runs" className="numeric">{p.runCount}/{p.runCount}</td>
                   <td data-label="Output">{cleanSummary(p)}</td>
@@ -281,7 +317,7 @@ function PromptsSection({ data }) {
 }
 
 function PromptCard({ prompt, open, setOpen, hideThinking }) {
-  const runs = _useMemo(() => [...prompt.runs].sort((a, b) => a.time_total_sec - b.time_total_sec), [prompt.runs]);
+  const runs = _useMemo(() => [...prompt.runs].sort((a, b) => sectionMetricNumber(a.time_total_sec, Infinity) - sectionMetricNumber(b.time_total_sec, Infinity)), [prompt.runs]);
   return (
     <div className="me-card">
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-3 md:gap-4 p-3.5 md:p-4 border-b border-me-border items-start md:items-center">
@@ -318,8 +354,8 @@ function PromptCard({ prompt, open, setOpen, hideThinking }) {
                     onClick={() => setOpen(o => ({...o, [key]: !o[key]}))}>
                   <td></td>
                   <td><span className="pn">{r.profile}</span></td>
-                  <td className="numeric">{r.time_total_sec.toFixed(2)} s</td>
-                  <td className="numeric">{r.tokens_per_sec.toFixed(1)}</td>
+                  <td className="numeric">{sectionFmtMetric(r.time_total_sec, 2, " s")}</td>
+                  <td className="numeric">{sectionFmtMetric(r.tokens_per_sec, 1)}</td>
                   <td className="numeric"><QBar q={r.quality_score} qmax={r.quality_max} /></td>
                   <td>
                     <MiniFlag kind={clean === "clean" ? "clean" : clean === "empty" ? "danger" : "leak"}>

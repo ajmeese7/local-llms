@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# Interactive setup script for llama.cpp as a systemd service.
+# Interactive setup script for the local llama-server systemd service.
 # Works on native Linux and WSL2. Each step asks for confirmation before proceeding.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$SCRIPT_DIR/config"
-LLAMA_DIR="$HOME/.local/share/llama.cpp"
 SERVICE_SRC="$CONFIG_DIR/llama-server.service"
 LAUNCHER_SRC="$CONFIG_DIR/llama-launcher.sh"
 COMMON_HELPERS_SRC="$CONFIG_DIR/runtime-common.sh"
+PROVIDER_HELPERS_SRC="$CONFIG_DIR/provider-common.sh"
 DEST_DIR="/etc/llama-server"
 SERVICE_DEST="/etc/systemd/system/llama-server.service"
 
 # shellcheck source=/dev/null
 source "$COMMON_HELPERS_SRC"
+# shellcheck source=/dev/null
+source "$PROVIDER_HELPERS_SRC"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,6 +53,65 @@ install_runtime_file() {
     fi
 
     sudo cp "$src" "$dest"
+}
+
+build_provider() {
+    local provider="$1"
+    local provider_dir
+    local repo
+    local nvcc_path
+    local -a cmake_args=()
+
+    provider="$(llama_provider_normalize "$provider")" || {
+        err "Unsupported provider: $provider"
+        return 1
+    }
+    provider_dir="$(llama_provider_dir "$provider")"
+    repo="$(llama_provider_repo "$provider")"
+
+    if [ -x "$provider_dir/build/bin/llama-server" ]; then
+        ok "$provider llama-server already built at $provider_dir"
+        if ! confirm "Rebuild $provider from source? (pull latest and recompile)"; then
+            return 0
+        fi
+        info "Pulling latest $provider..."
+        cd "$provider_dir" && git pull
+    else
+        if ! confirm "Clone and build $provider from source with CUDA? (this may take a few minutes)"; then
+            warn "Skipping $provider build."
+            return 0
+        fi
+        mkdir -p "$(dirname "$provider_dir")"
+        if [ -d "$provider_dir" ]; then
+            info "Updating existing $provider clone..."
+            cd "$provider_dir" && git pull
+        else
+            info "Cloning $provider..."
+            git clone "$repo" "$provider_dir"
+        fi
+    fi
+
+    cd "$provider_dir"
+    info "Cleaning old $provider build directory..."
+    rm -rf build
+    info "Building $provider with CUDA support..."
+    nvcc_path="$(command -v nvcc)"
+    mapfile -t cmake_args < <(llama_provider_cmake_args "$provider")
+    cmake -B build "${cmake_args[@]}" \
+        -DCMAKE_C_COMPILER=gcc-12 \
+        -DCMAKE_CXX_COMPILER=g++-12 \
+        -DCMAKE_CUDA_COMPILER="$nvcc_path" \
+        -DCMAKE_CUDA_HOST_COMPILER=gcc-12
+    cmake --build build --config Release --target llama-server llama-bench -j1
+    [ -x "$(llama_provider_server_bin "$provider")" ] || {
+        err "Missing $provider llama-server after build"
+        return 1
+    }
+    [ -x "$(llama_provider_bench_bin "$provider")" ] || {
+        err "Missing $provider llama-bench after build"
+        return 1
+    }
+    ok "$provider built"
 }
 
 profile_supported() {
@@ -329,50 +390,11 @@ fi
 
 echo ""
 
-# ── Step 3: Build llama.cpp ─────────────────────────────────────────────────
+# ── Step 3: Build providers ─────────────────────────────────────────────────
 
-if [ -x "$LLAMA_DIR/build/bin/llama-server" ]; then
-    ok "llama-server already built at $LLAMA_DIR"
-    if confirm "Rebuild llama.cpp from source? (pull latest and recompile)"; then
-        info "Pulling latest llama.cpp..."
-        cd "$LLAMA_DIR" && git pull
-        info "Cleaning old build directory..."
-        rm -rf build
-        info "Building with CUDA support (this may take a few minutes)..."
-        nvcc_path="$(command -v nvcc)"
-        cmake -B build -DGGML_CUDA=ON \
-            -DCMAKE_C_COMPILER=gcc-12 \
-            -DCMAKE_CXX_COMPILER=g++-12 \
-            -DCMAKE_CUDA_COMPILER="$nvcc_path" \
-            -DCMAKE_CUDA_HOST_COMPILER=gcc-12
-        cmake --build build --config Release -j1
-        ok "llama.cpp rebuilt"
-    fi
-else
-    if confirm "Clone and build llama.cpp from source with CUDA? (this may take a few minutes)"; then
-        mkdir -p "$(dirname "$LLAMA_DIR")"
-        if [ -d "$LLAMA_DIR" ]; then
-            info "Updating existing llama.cpp clone..."
-            cd "$LLAMA_DIR" && git pull
-        else
-            info "Cloning llama.cpp..."
-            git clone https://github.com/ggerganov/llama.cpp.git "$LLAMA_DIR"
-        fi
-        cd "$LLAMA_DIR"
-        info "Cleaning old build directory..."
-        rm -rf build
-        info "Building with CUDA support..."
-        nvcc_path="$(command -v nvcc)"
-        cmake -B build -DGGML_CUDA=ON \
-            -DCMAKE_C_COMPILER=gcc-12 \
-            -DCMAKE_CXX_COMPILER=g++-12 \
-            -DCMAKE_CUDA_COMPILER="$nvcc_path" \
-            -DCMAKE_CUDA_HOST_COMPILER=gcc-12
-        cmake --build build --config Release -j1
-        ok "llama.cpp built"
-    else
-        warn "Skipping llama.cpp build. The service will fail without it."
-    fi
+build_provider "llama.cpp"
+if confirm "Install ik_llama.cpp provider for backend comparisons?"; then
+    build_provider "ik_llama.cpp"
 fi
 
 echo ""
@@ -445,7 +467,7 @@ if [ ${#config_files[@]} -eq 0 ]; then
     exit 1
 fi
 
-if confirm "Copy runtime configs and scripts to $DEST_DIR? (${#config_files[@]} config file(s) + 3 script(s))"; then
+if confirm "Copy runtime configs and scripts to $DEST_DIR? (${#config_files[@]} config file(s) + 4 script(s))"; then
     sudo mkdir -p "$DEST_DIR"
     for f in "${config_files[@]}"; do
         install_runtime_file "$f"
@@ -453,6 +475,8 @@ if confirm "Copy runtime configs and scripts to $DEST_DIR? (${#config_files[@]} 
     done
     install_runtime_file "$COMMON_HELPERS_SRC"
     ok "Copied shared runtime helpers"
+    install_runtime_file "$PROVIDER_HELPERS_SRC"
+    ok "Copied provider helpers"
     install_runtime_file "$LAUNCHER_SRC"
     sudo chmod +x "$DEST_DIR/llama-launcher.sh"
     ok "Copied launcher script"

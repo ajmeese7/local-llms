@@ -47,11 +47,27 @@ function MiniFlag({ kind = "", children }) {
   return <span className={`me-miniflag ${kind}`}>{children}</span>;
 }
 
+function isFiniteNumber(value) {
+  if (value === null || value === undefined || value === "") return false;
+  const n = Number(value);
+  return Number.isFinite(n);
+}
+
+function metricNumber(value, fallback = 0) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function fmtMetric(value, digits = 1, suffix = "") {
+  return isFiniteNumber(value) ? `${Number(value).toFixed(digits)}${suffix}` : "—";
+}
+
 /* ---------- Bar chart ---------- */
 const BAR_CFG = {
-  tps:     { title: "Average Output tok/s", key: "tps",     fmt: v => v.toFixed(1),         better: "high", cls: "" },
-  latency: { title: "Average Latency (s)",  key: "latency", fmt: v => v.toFixed(2) + " s",  better: "low",  cls: "metric-latency" },
-  quality: { title: "Quality Heuristic %",  key: "quality", fmt: v => v.toFixed(1) + "%",   better: "high", cls: "metric-quality" },
+  tps:     { title: "Average Output tok/s", key: "tps",     fmt: v => fmtMetric(v, 1),       better: "high", cls: "" },
+  latency: { title: "Average Latency (s)",  key: "latency", fmt: v => fmtMetric(v, 2, " s"), better: "low",  cls: "metric-latency" },
+  quality: { title: "Quality Heuristic %",  key: "quality", fmt: v => fmtMetric(v, 1, "%"),  better: "high", cls: "metric-quality" },
 };
 function BarChart({ profiles }) {
   const [metric, setMetric] = useState("tps");
@@ -63,14 +79,17 @@ function BarChart({ profiles }) {
 
   const ranking = useMemo(() => {
     const sorted = [...stable].sort((a, b) =>
-      cfg.better === "high" ? b[cfg.key] - a[cfg.key] : a[cfg.key] - b[cfg.key]
+      cfg.better === "high"
+        ? metricNumber(b[cfg.key], -Infinity) - metricNumber(a[cfg.key], -Infinity)
+        : metricNumber(a[cfg.key], Infinity) - metricNumber(b[cfg.key], Infinity)
     );
     const m = new Map();
     sorted.forEach((p, i) => m.set(p.profile, i));
     return m;
   }, [stable, metric]);
 
-  const max = Math.max(...stable.map(p => p[cfg.key]));
+  const finiteValues = stable.map(p => Number(p[cfg.key])).filter(Number.isFinite);
+  const max = Math.max(...finiteValues, 0);
 
   // Two-phase render: on metric change, mount the new class with width:0 first,
   // then on the next animation frame, set the real width. This guarantees a
@@ -107,7 +126,7 @@ function BarChart({ profiles }) {
       <div className="flex flex-col gap-2.5">
         {stable.map((p, i) => {
           const rank = ranking.get(p.profile);
-          const pct = phase.ready ? (p[cfg.key] / max) * 100 : 0;
+          const pct = phase.ready && max > 0 ? (metricNumber(p[cfg.key]) / max) * 100 : 0;
           const isHl = p.role === "balanced";
           // Stagger by VISUAL rank so the cascade reads top→bottom in the new order.
           const delay = phase.ready ? rank * 40 : 0;
@@ -133,12 +152,13 @@ function Scatter({ profiles }) {
   const W = 600, H = 320;
   const padL = 44, padR = 90, padT = 14, padB = 38;
 
-  const xVals = profiles.map(p => p.tps);
-  const yVals = profiles.map(p => p.quality);
-  const xMax = Math.ceil(Math.max(...xVals) / 25) * 25 + 25;
+  const plottable = profiles.filter(p => isFiniteNumber(p.tps) && isFiniteNumber(p.quality));
+  const xVals = plottable.map(p => Number(p.tps));
+  const yVals = plottable.map(p => Number(p.quality));
+  const xMax = Math.ceil(Math.max(...xVals, 0) / 25) * 25 + 25;
   const xMin = 0;
-  const yMaxRaw = Math.max(...yVals);
-  const yMinRaw = Math.min(...yVals);
+  const yMaxRaw = Math.max(...yVals, 100);
+  const yMinRaw = Math.min(...yVals, 0);
   const yMax = Math.min(100, Math.ceil(yMaxRaw / 5) * 5 + 5);
   const yMin = Math.max(0, Math.floor(yMinRaw / 5) * 5 - 5);
 
@@ -171,7 +191,7 @@ function Scatter({ profiles }) {
           </g>
           <text className="scatter-axis-title" x={(W - padR + padL) / 2} y={H - 6} textAnchor="middle">tok/s →</text>
           <text className="scatter-axis-title" x={-((H + padT) / 2)} y="14" transform="rotate(-90)" textAnchor="middle">quality %</text>
-          {profiles.map(p => {
+          {plottable.map(p => {
             const cx = xScale(p.tps), cy = yScale(p.quality);
             const cls = p.role === "balanced" ? "balanced" : p.role === "fastest" ? "fastest" : "other";
             const r = p.role === "balanced" ? 9 : p.role === "fastest" ? 8 : 6;
@@ -179,7 +199,7 @@ function Scatter({ profiles }) {
             return (
               <g key={p.profile}>
                 <circle className={`scatter-pt ${cls}`} cx={cx} cy={cy} r={r}>
-                  <title>{`${p.profile} · ${p.tps.toFixed(1)} tok/s · ${p.quality.toFixed(1)}%`}</title>
+                  <title>{`${p.profile} · ${fmtMetric(p.tps, 1)} tok/s · ${fmtMetric(p.quality, 1, "%")}`}</title>
                 </circle>
                 <text className={`scatter-label ${cls === "other" ? "" : cls}`} x={cx + dx} y={cy + dy}>{p.profile}</text>
               </g>
@@ -219,7 +239,7 @@ function CleanlinessGrid({ profiles, prompts }) {
 
 /* ---------- Quality bar ---------- */
 function QBar({ q, qmax }) {
-  const r = q / qmax;
+  const r = qmax ? q / qmax : 0;
   const cls = r < 0.6 ? "low" : r >= 1 ? "full" : "";
   return (
     <span className={`qbar ${cls}`}>

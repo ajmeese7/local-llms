@@ -111,7 +111,13 @@ function buildDataset(rows) {
   return { profiles, prompts, balanced, fastest, topQuality, totalRuns, okRuns, runDir, raw: rows };
 }
 
-function avg(xs) { return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; }
+function avg(xs) {
+  const finite = xs
+    .filter(value => value !== null && value !== undefined && value !== "")
+    .map(Number)
+    .filter(Number.isFinite);
+  return finite.length ? finite.reduce((a, b) => a + b, 0) / finite.length : 0;
+}
 
 /* ---------- Auto-generated copy (overridable) ----------
    Every authored text element has a stable `id`. The runtime
@@ -156,7 +162,12 @@ function generateNarrative(d, meta = {}) {
 }
 
 function median(xs) {
-  const s = [...xs].sort((a, b) => a - b);
+  const s = xs
+    .filter(value => value !== null && value !== undefined && value !== "")
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  if (!s.length) return 0;
   return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
 }
 
@@ -288,6 +299,7 @@ function metadataFromConf(conf, baseConf = null) {
   const f = { ...(baseConf?.fields || {}), ...(conf.fields || {}) };
   const modelPath = f.MODEL || "";
   const modelFile = modelPath.split("/").pop() || modelPath || f.HF_FILE || "";
+  const words = value => String(value || "").split(/\s+/).filter(Boolean);
   return {
     profile: conf.profile_id,
     alias: f.ALIAS || conf.profile_id,
@@ -298,6 +310,9 @@ function metadataFromConf(conf, baseConf = null) {
     cache_type_v: f.CACHE_TYPE_V || null,
     has_mmproj: Boolean(f.MMPROJ),
     quant: extractQuant(modelFile || f.HF_FILE || ""),
+    proven_providers: words(f.PROVEN_LLAMA_PROVIDERS),
+    blocked_providers: words(f.BLOCKED_LLAMA_PROVIDERS),
+    provider_notes: f.PROVIDER_COMPATIBILITY_NOTES || null,
   };
 }
 
@@ -402,14 +417,16 @@ function loadMyRunDataset(id) {
   };
 }
 
-/* Cross-run leaderboard: best tok/s seen per model alias across all runs */
+/* Cross-run leaderboard: best tok/s seen per model alias and backend */
 function buildLeaderboard(reports /* [{dataset, meta}] */) {
-  const best = new Map(); // alias -> { alias, tps, profile, runId, runTitle }
+  const best = new Map(); // alias/backend -> { alias, backend, tps, profile, runId, runTitle }
   for (const r of reports) {
     if (!r.dataset) continue;
+    const backend = r.meta?.server?.engine || "llama.cpp";
     for (const p of r.dataset.profiles) {
-      const key = p.alias || p.profile;
-      const entry = { alias: key, profile: p.profile, tps: p.tps, quality: p.quality, runId: r.id, runTitle: r.meta?.title || r.id };
+      const alias = p.alias || p.profile;
+      const key = `${alias}::${backend}`;
+      const entry = { alias, backend, profile: p.profile, tps: p.tps, quality: p.quality, runId: r.id, runTitle: r.meta?.title || r.id };
       const cur = best.get(key);
       if (!cur || entry.tps > cur.tps) best.set(key, entry);
     }

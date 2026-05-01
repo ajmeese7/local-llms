@@ -137,8 +137,10 @@ function RunCard({ report, onOpen, onDelete }) {
         <>
           <div className="grid grid-cols-3 gap-2 mb-3 font-mono text-[11px]">
             <div className="p-2 bg-white/[0.02] border border-me-border">
-              <div className="me-label">Profiles</div>
-              <div className="text-me-fg text-[14px] mt-0.5">{d.profiles.length}</div>
+              <div className="me-label">Backend</div>
+              <div className="text-me-fg text-[13px] mt-0.5 truncate" title={meta.server?.engine || "llama.cpp"}>
+                {meta.server?.engine || "llama.cpp"}
+              </div>
             </div>
             <div className="p-2 bg-white/[0.02] border border-me-border">
               <div className="me-label">Top tok/s</div>
@@ -177,15 +179,17 @@ function Leaderboard({ entries }) {
         <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0">
           <i className="fa-solid fa-trophy text-me-warning mr-2"></i> Cross-run leaderboard
         </h3>
-        <span className="font-mono text-[10px] text-me-fg-3">best tok/s per model</span>
+        <span className="font-mono text-[10px] text-me-fg-3">best tok/s per model/backend</span>
       </div>
       <div className="flex flex-col gap-1.5">
         {entries.slice(0, 10).map((e, i) => (
-          <div key={e.alias} className="grid grid-cols-[20px_1fr_60px] gap-2 items-center text-[11px] font-mono">
+          <div key={`${e.alias}-${e.backend}`} className="grid grid-cols-[20px_1fr_60px] gap-2 items-center text-[11px] font-mono">
             <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}.</span>
             <div className="min-w-0">
               <div className="text-me-fg truncate" title={e.alias}>{e.alias}</div>
-              <div className="text-me-fg-3 text-[10px] truncate" title={e.runTitle}>{e.runTitle}</div>
+              <div className="text-me-fg-3 text-[10px] truncate" title={`${e.backend} · ${e.runTitle}`}>
+                {e.backend} · {e.runTitle}
+              </div>
             </div>
             <div className="text-right">
               <div className="text-me-cyan">{e.tps.toFixed(1)}</div>

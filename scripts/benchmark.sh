@@ -6,6 +6,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG_DIR="$ROOT_DIR/config"
 RUNTIME_CONFIG_DIR="${LLAMA_CONFIG_DIR:-/etc/llama-server}"
 RESULTS_ROOT_DEFAULT="$ROOT_DIR/benchmark-results"
+PROVIDER_HELPERS="$CONFIG_DIR/provider-common.sh"
+
+# shellcheck source=/dev/null
+source "$PROVIDER_HELPERS"
 
 die() {
     printf 'error: %s\n' "$*" >&2
@@ -246,6 +250,7 @@ Subcommands:
       --model-file PATH      GGUF model path, default: active runtime model
       --runs N               Number of runs, default: 3
       --llama-bench PATH     Path to llama-bench binary
+      --provider NAME        Backend provider: llama.cpp or ik_llama.cpp
       --label NAME           Optional label for results directory
       --extra-arg ARG        Extra argument passed through to llama-bench
 
@@ -559,7 +564,8 @@ run_llama_bench() {
 
     local model_file=""
     local runs=3
-    local llama_bench_bin="$HOME/.local/share/llama.cpp/build/bin/llama-bench"
+    local provider="${LLAMA_PROVIDER:-llama.cpp}"
+    local llama_bench_bin=""
     local label="llama-bench"
     local -a extra_args=()
 
@@ -568,6 +574,7 @@ run_llama_bench() {
             --model-file) model_file="$2"; shift 2 ;;
             --runs) runs="$2"; shift 2 ;;
             --llama-bench) llama_bench_bin="$2"; shift 2 ;;
+            --provider) provider="$2"; shift 2 ;;
             --label) label="$2"; shift 2 ;;
             --extra-arg) extra_args+=("$2"); shift 2 ;;
             -h|--help) usage; exit 0 ;;
@@ -581,12 +588,20 @@ run_llama_bench() {
         note "using model file: $model_file"
     fi
 
+    provider="$(llama_provider_normalize "$provider")" || die "unsupported provider: $provider"
+    [ -n "$llama_bench_bin" ] || llama_bench_bin="$(llama_provider_bench_bin "$provider")"
+
     [ -f "$model_file" ] || die "model file not found: $model_file"
     [ -x "$llama_bench_bin" ] || die "llama-bench binary not executable: $llama_bench_bin"
 
     local run_dir
     run_dir="$(make_run_dir "$label")"
     local tsv_file="$run_dir/runs.tsv"
+    {
+        printf 'provider=%s\n' "$provider"
+        printf 'llama_bench_bin=%s\n' "$llama_bench_bin"
+        printf 'model_file=%s\n' "$model_file"
+    } > "$run_dir/run-info.txt"
     printf 'run\telapsed_sec\tstatus\tlog_file\n' >"$tsv_file"
 
     local i
