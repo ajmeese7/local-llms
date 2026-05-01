@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 import typer
@@ -21,6 +22,8 @@ from llms.serving.launcher.resolve_active import match_hardware
 from llms.serving.providers.registry import list_providers
 from llms.serving.runtime.systemd import restart_hint
 from llms.serving.state.store import StateStore
+from llms.serving.telemetry.aggregate import summarize
+from llms.serving.telemetry.log import default_log_path
 
 app = typer.Typer(
     name="llms",
@@ -84,6 +87,11 @@ HW_OPT = typer.Option(
     "--hardware",
     "-H",
     help="Hardware name (skips GPU autodetect).",
+)
+LOG_OPT = typer.Option(
+    None,
+    "--log",
+    help="Path to the request JSONL. Defaults to XDG state.",
 )
 
 
@@ -274,6 +282,67 @@ def endpoint_rollback(
         f"[green]✓[/] rolled {hw} back to [bold]{target.endpoint_name}[/] (new revision {rev.id})"
     )
     console.print(f"  hint: [dim]{restart_hint()}[/dim]")
+
+
+@endpoint_app.command("stats")
+def endpoint_stats(
+    log_path: Path | None = LOG_OPT,
+    window: str = typer.Option(
+        "24h", "--window", "-w", help="Window duration (e.g. 1h, 24h, 7d)."
+    ),
+) -> None:
+    """Aggregate per-request telemetry over a time window."""
+    delta = _parse_window(window)
+    if delta is None:
+        err_console.print(f"[red]✗[/] could not parse window '{window}'")
+        raise typer.Exit(code=2)
+
+    path = log_path or default_log_path()
+    summary = summarize(log_path=path, window=delta)
+
+    if summary.request_count == 0:
+        console.print(f"[yellow]no records in {window}[/] (looked at {path})")
+        return
+
+    table = Table(title=f"Request stats — last {window}")
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+    table.add_row("requests", str(summary.request_count))
+    table.add_row("errors", str(summary.error_count))
+    table.add_row(
+        "p50 latency", _fmt_ms(summary.p50_latency_ms)
+    )
+    table.add_row("p95 latency", _fmt_ms(summary.p95_latency_ms))
+    table.add_row("p50 ttft", _fmt_ms(summary.p50_ttft_ms))
+    table.add_row("p95 ttft", _fmt_ms(summary.p95_ttft_ms))
+    table.add_row(
+        "median tok/s",
+        f"{summary.median_tokens_per_sec:.1f}"
+        if summary.median_tokens_per_sec is not None
+        else "—",
+    )
+    console.print(table)
+
+
+def _parse_window(spec: str) -> timedelta | None:
+    """Parse "30s" / "5m" / "24h" / "7d" — single suffix only."""
+    if not spec:
+        return None
+    unit = spec[-1].lower()
+    try:
+        amount = int(spec[:-1])
+    except ValueError:
+        return None
+    return {
+        "s": timedelta(seconds=amount),
+        "m": timedelta(minutes=amount),
+        "h": timedelta(hours=amount),
+        "d": timedelta(days=amount),
+    }.get(unit)
+
+
+def _fmt_ms(value: float | None) -> str:
+    return "—" if value is None else f"{value:.1f} ms"
 
 
 @endpoint_app.command("revisions")
