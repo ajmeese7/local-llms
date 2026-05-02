@@ -1,14 +1,11 @@
 """Local smoke benchmark.
 
-Ports the keyword-rubric harness from `benchmark-5090-suite.sh:370-422`. Five
-hand-written prompts cover coding, ops troubleshooting, creative writing
-constraints, and long-context recall. Each prompt has a list of "any" check
-groups; the score is the fraction of groups that match (case-insensitive
-substring on the response). `correct` is True when every group matches.
-
-This adapter exists so the runner has something to drive end-to-end on the
-operator's own box. External-track adapters (mmlu, gsm8k, swe-rebench, ...)
-land in their own modules in Phase 5.
+Five hand-written prompts cover coding, ops troubleshooting, creative
+writing constraints, and long-context recall. Each prompt has a list of
+"any" check groups; the score is the fraction of groups that match
+(case-insensitive substring on the response). `correct` is True when every
+group matches. Useful as a fast end-to-end sanity check before running a
+real adapter.
 """
 
 from __future__ import annotations

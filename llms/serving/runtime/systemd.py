@@ -1,6 +1,6 @@
-"""systemd interaction. Phase 2 keeps it read-only: print the command the
-user must run after activate/rollback. Phase 7 (setup) wires real restarts
-behind a confirm flag.
+"""systemd interaction. Read-only today: print the command the user must
+run after activate/rollback. Auto-restart behind a confirm flag is on the
+roadmap.
 """
 
 from __future__ import annotations

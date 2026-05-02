@@ -1,6 +1,6 @@
 """Per-request telemetry writer.
 
-The eval plane (Phase 4+) is the primary producer: it knows TTFT, e2e latency,
+The eval runner is the primary producer: it knows TTFT, e2e latency,
 output tokens, and which run a request belongs to. Writers are append-only
 JSONL; readers in `aggregate.py` slurp the file and compute rollups.
 """

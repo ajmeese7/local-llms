@@ -76,7 +76,7 @@ def _provider_fingerprint(rt: RuntimeConfig) -> ProviderFingerprint:
     return ProviderFingerprint(
         name=rt.provider.name,
         server_binary=str(rt.provider.server_binary_path),
-        git_commit=None,  # populated by Phase 7 setup writing a metadata file
+        git_commit=None,  # `llms provider install` will record this; not yet implemented
         cmake_args=tuple(rt.provider.cmake_args),
     )
 
