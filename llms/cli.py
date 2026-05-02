@@ -390,9 +390,14 @@ EVAL_OUTPUT_OPT = typer.Option(
 )
 
 
-def _load_adapter(name: str) -> BenchmarkAdapter:
+def _load_adapter(name: str, *, max_items: int | None = None) -> BenchmarkAdapter:
     """Return an adapter instance for `name`. Imported lazily to keep
-    `llms --help` responsive when the eval extras aren't installed."""
+    `llms --help` responsive when the eval extras aren't installed.
+
+    `max_items` is forwarded to adapters that cap dataset size (mmlu, gsm8k).
+    For adapters with fixed-size synthesized or bundled datasets (local_smoke,
+    niah), it's ignored — those cap themselves by construction.
+    """
     if name == "local_smoke":
         from llms.eval.adapters.local_smoke import LocalSmokeAdapter
 
@@ -400,11 +405,11 @@ def _load_adapter(name: str) -> BenchmarkAdapter:
     if name == "mmlu":
         from llms.eval.adapters.mmlu import MMLUAdapter
 
-        return MMLUAdapter()
+        return MMLUAdapter(max_items=max_items)
     if name == "gsm8k":
         from llms.eval.adapters.gsm8k import GSM8KAdapter
 
-        return GSM8KAdapter()
+        return GSM8KAdapter(max_items=max_items)
     if name == "niah":
         from llms.eval.adapters.niah import NIAHAdapter
 
@@ -429,6 +434,12 @@ def eval_run(
     ),
     output_root: Path = EVAL_OUTPUT_OPT,
     subset: str | None = typer.Option(None, "--subset", help="Adapter-specific subset selector."),
+    max_items: int | None = typer.Option(
+        None,
+        "--max-items",
+        "-n",
+        help="Cap dataset size (mmlu, gsm8k). Ignored by adapters with fixed item counts.",
+    ),
     seed: int = typer.Option(0, "--seed"),
     hash_model: bool = typer.Option(
         False, "--hash-model", help="SHA-256 the model file (slow, but pins the manifest)."
@@ -451,7 +462,7 @@ def eval_run(
     target_url = base_url or base_url_from_runtime(runtime)
 
     try:
-        adapter = _load_adapter(adapter_name)
+        adapter = _load_adapter(adapter_name, max_items=max_items)
     except typer.BadParameter as exc:
         err_console.print(f"[red]✗[/] {exc}")
         raise typer.Exit(code=2) from exc

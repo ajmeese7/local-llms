@@ -83,9 +83,18 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
+<!--
+  Load order matters. These are classic scripts (NOT ES modules), so each
+  file's top-level `function Foo()` and `window.X = …` are the only way to
+  share symbols across files. data.jsx must come first (BenchData), then
+  components.jsx (Label/SectionHead/MiniFlag globals), then files that
+  consume them. Do not add type="module" — it would break every cross-file
+  reference here. If you outgrow this, port the hub to a real bundler.
+-->
 <script type="text/babel" src="data.jsx"></script>
 <script type="text/babel" src="components.jsx"></script>
 <script type="text/babel" src="sections.jsx"></script>
+<script type="text/babel" src="guide.jsx"></script>
 <script type="text/babel" src="home.jsx"></script>
 <script type="text/babel" src="app.jsx"></script>
 </body>

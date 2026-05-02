@@ -8,6 +8,31 @@ The eval plane drives an OpenAI-compatible endpoint and writes a per-run directo
 uv run llms eval run <adapter> --endpoint <name> [--max-items N] [--subset spec] [--seed 0]
 ```
 
+A typical session, confirming an endpoint is active and llama-server is up before driving an adapter against it:
+
+```sh
+uv run llms endpoint status                                         # which endpoint is active
+curl -s http://127.0.0.1:9999/health                                # llama-server reachable?
+uv run llms eval run local_smoke --endpoint chat-default            # ~5 items, sanity check
+uv run llms eval run gsm8k       --endpoint chat-default -n 50      # 50 items, ~2 min on a 5090
+uv run llms eval run mmlu        --endpoint chat-default -n 100 \
+    --subset abstract_algebra,college_physics                       # subject filter
+uv run llms eval run niah        --endpoint chat-default            # 9 items at 3 lengths × 3 depths
+uv run llms eval report                                             # refresh the hub registry
+```
+
+`--max-items` (`-n`) caps `mmlu` and `gsm8k`; `local_smoke` and `niah` ignore it (their item counts are fixed by construction). Without it, full splits are 14k (mmlu) / 1.3k (gsm8k).
+
+### Full suite
+
+The `just bench-suite` recipe loops every adapter against one endpoint and refreshes the hub at the end:
+
+```sh
+just bench-suite chat-default          # caps mmlu/gsm8k at 50 items
+just bench-suite chat-default 200      # cap at 200
+just bench-full  chat-default          # full splits — slow, hours not minutes
+```
+
 Each run writes:
 
 ```

@@ -47,3 +47,24 @@ shell:
 # Wipe caches.
 clean:
     rm -rf .ruff_cache .mypy_cache .pytest_cache **/__pycache__ dist *.egg-info
+
+# Run every adapter against ENDPOINT, capping mmlu/gsm8k at MAX_ITEMS, then refresh the hub.
+# Usage: `just bench-suite chat-default 50` (or `just bench-suite chat-default` for the default cap).
+bench-suite ENDPOINT MAX_ITEMS="50":
+    @echo "▶ local_smoke  →  {{ENDPOINT}}"
+    uv run llms eval run local_smoke --endpoint {{ENDPOINT}}
+    @echo "▶ niah         →  {{ENDPOINT}}"
+    uv run llms eval run niah --endpoint {{ENDPOINT}}
+    @echo "▶ gsm8k (n={{MAX_ITEMS}}) →  {{ENDPOINT}}"
+    uv run llms eval run gsm8k --endpoint {{ENDPOINT}} --max-items {{MAX_ITEMS}}
+    @echo "▶ mmlu  (n={{MAX_ITEMS}}) →  {{ENDPOINT}}"
+    uv run llms eval run mmlu --endpoint {{ENDPOINT}} --max-items {{MAX_ITEMS}}
+    uv run llms eval report
+
+# Same as bench-suite but with the full mmlu/gsm8k splits. Slow.
+bench-full ENDPOINT:
+    uv run llms eval run local_smoke --endpoint {{ENDPOINT}}
+    uv run llms eval run niah        --endpoint {{ENDPOINT}}
+    uv run llms eval run gsm8k       --endpoint {{ENDPOINT}}
+    uv run llms eval run mmlu        --endpoint {{ENDPOINT}}
+    uv run llms eval report

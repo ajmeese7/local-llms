@@ -41,6 +41,26 @@ async function loadIndex() {
   }
 }
 
+function extractQuant(filename) {
+  if (typeof filename !== "string" || !filename) return "";
+  const stripped = filename.replace(/\.gguf$/i, "");
+  const match = stripped.match(/(?:UD-)?(IQ?\d+_[A-Z0-9]+(?:_[A-Z0-9]+)?|Q\d+_[A-Z0-9]+(?:_[A-Z0-9]+)?|BF16|F16|F32)/i);
+  return match ? match[1] : "";
+}
+
+async function loadProfilesSnapshot() {
+  try {
+    const r = await fetch(`${REPORTS_BASE}profiles.json`);
+    if (!r.ok) return null;
+    const json = await r.json();
+    if (!json || typeof json !== "object") return null;
+    return json;
+  } catch (err) {
+    console.warn("failed to load profiles snapshot:", err);
+    return null;
+  }
+}
+
 async function loadRun(id) {
   const base = `${REPORTS_BASE}${encodeURIComponent(id)}/`;
   const [manifest, summary, results] = await Promise.all([
@@ -120,10 +140,6 @@ function fmtTps(value) {
   if (value == null || !Number.isFinite(Number(value))) return "—";
   return Number(value).toFixed(1) + " tok/s";
 }
-function fmtPct(value) {
-  if (value == null || !Number.isFinite(Number(value))) return "—";
-  return (Number(value) * 100).toFixed(1) + "%";
-}
 function fmtTimestamp(iso) {
   if (!iso) return "—";
   try {
@@ -154,12 +170,17 @@ function summaryCards(run) {
   ];
 }
 
-/* ---------- Public ---------- */
+/* ---------- Public ----------
+   Surface used by other .jsx files in this hub. REPORTS_BASE and parseJsonl
+   stay module-local since they're internal helpers. If you need either from
+   another file, lift it back onto window.BenchData rather than re-fetching
+   `reports/` paths in two places.
+*/
 window.BenchData = {
-  REPORTS_BASE,
-  parseJsonl,
   loadIndex,
+  loadProfilesSnapshot,
   loadRun,
+  extractQuant,
   listAdapters,
   listTracks,
   groupByComparability,
@@ -167,7 +188,6 @@ window.BenchData = {
   fmtCi,
   fmtMs,
   fmtTps,
-  fmtPct,
   fmtTimestamp,
   summaryCards,
 };

@@ -126,15 +126,26 @@ class CompletionClient:
 
 
 def _extract_text(payload: dict[str, object]) -> str:
-    """Pull the response text out of an OpenAI chat-completions payload."""
+    """Pull the response text out of an OpenAI chat-completions payload.
+
+    llama-server's chat-template parser splits Qwen3-style `<think>…</think>`
+    blocks into `reasoning_content`, leaving `content` empty when the response
+    is truncated mid-thought. Fall back to `reasoning_content` so adapters see
+    the actual tokens the model produced rather than scoring "" as a wrong
+    answer.
+    """
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         return ""
     message = choices[0].get("message") if isinstance(choices[0], dict) else None
-    if isinstance(message, dict):
-        content = message.get("content")
-        if isinstance(content, str):
-            return content
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    if isinstance(content, str) and content:
+        return content
+    reasoning = message.get("reasoning_content")
+    if isinstance(reasoning, str) and reasoning:
+        return reasoning
     return ""
 
 
