@@ -1,4 +1,4 @@
-# local-llms v2 task runner.
+# local-llms task runner.
 # Install `just` via `uv tool install rust-just` or `cargo install just`.
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
@@ -28,7 +28,7 @@ typecheck:
 test *ARGS:
     uv run pytest {{ARGS}}
 
-# Run every quality gate Phase 0 ships with.
+# Run every quality gate.
 check: lint typecheck test
 
 # Quick CLI smoke (manual sanity check).
@@ -36,7 +36,7 @@ smoke:
     uv run llms --version
     uv run llms --help
 
-# Validate every YAML in config/ once Phase 1 lands.
+# Validate every YAML in config/.
 config-lint:
     uv run llms config lint
 
