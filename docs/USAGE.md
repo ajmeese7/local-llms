@@ -10,7 +10,7 @@ http://localhost:9999
 
 ## OpenAI-compatible API
 
-```
+```sh
 curl http://localhost:9999/v1/models -H "Content-Type: application/json"
 
 curl http://localhost:9999/v1/chat/completions \
@@ -35,7 +35,7 @@ Any tool that speaks the OpenAI API can target `http://<host>:9999/v1`. The acti
 
 ## Useful commands
 
-```
+```sh
 # Service
 systemctl status llama-server
 sudo systemctl restart llama-server

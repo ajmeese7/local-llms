@@ -2,7 +2,7 @@
 
 The config tree is YAML under `config/`. Each kind lives in its own directory; `llms config lint` validates the whole tree against Pydantic schemas plus cross-reference + capability checks.
 
-```
+```sh
 config/
   hardware/<name>.yaml      # GPU class, detection regex, host/port floor, default endpoint
   providers/<name>.yaml     # inference backend (llama.cpp, ik_llama.cpp), capability flags
@@ -25,7 +25,7 @@ The launcher resolves the runtime in this order:
 
 ## Endpoint lifecycle
 
-```
+```sh
 llms endpoint list                                # show every endpoint defined
 llms endpoint status                              # show active per hardware
 llms endpoint activate chat-default               # write a revision, swap active pointer

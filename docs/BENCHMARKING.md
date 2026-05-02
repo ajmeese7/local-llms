@@ -4,7 +4,7 @@ The eval plane drives an OpenAI-compatible endpoint and writes a per-run directo
 
 ## Running
 
-```
+```sh
 uv run llms eval run <adapter> --endpoint <name> [--max-items N] [--subset spec] [--seed 0]
 ```
 
@@ -21,7 +21,7 @@ bench/reports/<run-id>/
 
 After a run, refresh the hub registry:
 
-```
+```sh
 uv run llms eval report
 ```
 
@@ -50,7 +50,7 @@ The runner derives the endpoint URL from the resolved runtime config (`http://<h
 
 ## Browsing runs
 
-```
+```sh
 uv run llms eval list
 uv run llms eval show <run-id>
 uv run llms eval report                    # rebuild bench/reports/{reports,profiles}.json
@@ -58,13 +58,13 @@ uv run llms eval report                    # rebuild bench/reports/{reports,prof
 
 The static hub at `bench/` reads those JSON files. Serve locally:
 
-```
+```sh
 cd bench && python -m http.server 5173
 ```
 
 To populate the hub with mock-transport demo data without a live llama-server:
 
-```
+```sh
 uv run python scripts/seed_hub.py
 uv run llms eval report
 ```
@@ -73,7 +73,7 @@ uv run llms eval report
 
 The runner appends per-request rows to `~/.local/state/llms/requests.jsonl`. Aggregate windows:
 
-```
+```sh
 uv run llms endpoint stats --window 24h
 ```
 
@@ -81,7 +81,7 @@ uv run llms endpoint stats --window 24h
 
 If you only want the build path (no full setup):
 
-```
+```sh
 ./scripts/provider.sh install llama.cpp
 ./scripts/provider.sh install ik_llama.cpp --rebuild --jobs 4
 ```

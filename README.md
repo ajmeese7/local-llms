@@ -6,7 +6,7 @@ Run a local LLM as a persistent systemd service using [llama.cpp](https://github
 
 `config/llama-server.service` is hardcoded to `User=ajmeese7`, `Group=ajmeese7`, and `/home/ajmeese7/src/local-llms`. Edit those before installing on a different machine.
 
-```
+```sh
 git clone https://github.com/meese-family/local-llms.git
 cd local-llms
 ./setup.sh
@@ -16,7 +16,7 @@ cd local-llms
 
 After the service is running:
 
-```
+```sh
 .venv/bin/llms endpoint list                    # see what endpoints are defined
 .venv/bin/llms endpoint activate chat-default   # switch active endpoint, then systemctl restart
 .venv/bin/llms eval run mmlu --endpoint chat-default --max-items 50
@@ -38,7 +38,7 @@ Precedence at runtime: endpoint overrides win, then profile, then hardware defau
 
 ## CLI
 
-```
+```sh
 llms config lint                                  # validate the YAML tree
 llms provider list                                # show inference backends + capabilities
 llms endpoint list|status|activate|rollback|revisions|stats
@@ -68,6 +68,6 @@ Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k
 
 The static SPA at `bench/` reads runs from `bench/reports/`. It is meant to be published; see [`bench/README.md`](bench/README.md).
 
-```
+```sh
 cd bench && python -m http.server 5173
 ```

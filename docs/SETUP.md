@@ -16,7 +16,7 @@ Bootstrap the local-llms service on native Linux or WSL2.
 
 RTX 50 series requires CUDA 12.8+. The Ubuntu `nvidia-cuda-toolkit` package is too old.
 
-```
+```sh
 sudo apt remove nvidia-cuda-toolkit
 
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
@@ -41,13 +41,13 @@ systemd=true
 
 Restart WSL from PowerShell:
 
-```
+```powershell
 wsl --shutdown
 ```
 
 Verify inside Linux:
 
-```
+```sh
 ps -p 1 -o comm=
 ```
 
@@ -57,7 +57,7 @@ Should print `systemd`.
 
 `config/llama-server.service` is hardcoded to `User=ajmeese7`, `Group=ajmeese7`, and `/home/ajmeese7/src/local-llms`. Edit those before running on a different machine.
 
-```
+```sh
 git clone https://github.com/meese-family/local-llms.git
 cd local-llms
 ./setup.sh
@@ -67,7 +67,7 @@ cd local-llms
 
 Pick an endpoint after setup:
 
-```
+```sh
 .venv/bin/llms endpoint list
 .venv/bin/llms endpoint activate chat-default
 sudo systemctl restart llama-server
