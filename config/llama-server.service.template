@@ -5,13 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=ajmeese7
-Group=ajmeese7
-WorkingDirectory=/home/ajmeese7/src/local-llms
+User=@@USER@@
+Group=@@GROUP@@
+WorkingDirectory=@@REPO_ROOT@@
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/wsl/lib
 # LD_LIBRARY_PATH needed on WSL2 for CUDA libs; harmless on native Linux.
 Environment=LD_LIBRARY_PATH=/usr/lib/wsl/lib
-ExecStart=/home/ajmeese7/src/local-llms/.venv/bin/llms launcher exec --config /home/ajmeese7/src/local-llms/config
+ExecStart=@@REPO_ROOT@@/.venv/bin/llms launcher exec --config @@REPO_ROOT@@/config
 Restart=always
 RestartSec=10
 TimeoutStartSec=120

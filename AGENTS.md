@@ -54,6 +54,6 @@ bash -n setup.sh scripts/provider.sh
 ## Editing notes
 
 - Profile YAML carries model behavior; the launcher and renderer stay generic. Do not hardcode model-specific flags into python.
-- `config/llama-server.service` is hardcoded to the repo owner's user/home values; preserve unless the user asks to generalize.
+- `config/llama-server.service.template` is rendered by `setup.sh` with the invoking user, primary group, and repo path. Do not commit a concrete `llama-server.service` alongside it; the template is the only source of truth.
 - When you change a profile field, update both the Pydantic model and a snapshot test if rendering changes.
 - The hub publishes from `bench/`; do not put non-published artifacts there.

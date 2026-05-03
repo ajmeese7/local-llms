@@ -55,7 +55,7 @@ Should print `systemd`.
 
 ## Install
 
-`config/llama-server.service` is hardcoded to `User=ajmeese7`, `Group=ajmeese7`, and `/home/ajmeese7/src/local-llms`. Edit those before running on a different machine.
+The systemd unit lives in the repo as `config/llama-server.service.template` with `@@USER@@`, `@@GROUP@@`, and `@@REPO_ROOT@@` placeholders. `setup.sh` substitutes the invoking user, that user's primary group, and the absolute repo path at install time, then writes the rendered unit to `/etc/systemd/system/llama-server.service`. To override (e.g. install under a service account), set `SUDO_USER` before running setup.
 
 ```sh
 git clone https://github.com/meese-family/local-llms.git

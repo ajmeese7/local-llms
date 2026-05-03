@@ -2,6 +2,7 @@
 superpowers/
 COMMIT_MSG.txt
 .pi/
+.claude/scheduled_tasks.lock
 
 # Development
 WIP.md

@@ -4,15 +4,13 @@ Run a local LLM as a persistent systemd service using [llama.cpp](https://github
 
 ## Quick start
 
-`config/llama-server.service` is hardcoded to `User=ajmeese7`, `Group=ajmeese7`, and `/home/ajmeese7/src/local-llms`. Edit those before installing on a different machine.
-
 ```sh
 git clone https://github.com/meese-family/local-llms.git
 cd local-llms
 ./setup.sh
 ```
 
-`setup.sh` checks prereqs, runs `uv sync --all-extras`, lints the YAML config tree, optionally builds the llama.cpp / ik_llama.cpp binaries, installs the systemd unit, and (re)starts the service.
+`setup.sh` checks prereqs, runs `uv sync --all-extras`, lints the YAML config tree, optionally builds the llama.cpp / ik_llama.cpp binaries, renders `config/llama-server.service.template` with the invoking user/group and repo path, installs the resulting unit to `/etc/systemd/system/llama-server.service`, and (re)starts the service. Nothing is machine-specific in the repo itself.
 
 After the service is running:
 

@@ -12,10 +12,26 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$SCRIPT_DIR/config"
-SERVICE_SRC="$CONFIG_DIR/llama-server.service"
+SERVICE_TEMPLATE="$CONFIG_DIR/llama-server.service.template"
 SERVICE_DEST="/etc/systemd/system/llama-server.service"
 VENV_DIR="$SCRIPT_DIR/.venv"
 LLMS_BIN="$VENV_DIR/bin/llms"
+
+# Resolve the install user/group: prefer the invoking user when this script
+# was unintentionally re-run under sudo, fall back to the current uid.
+INSTALL_USER="${SUDO_USER:-$(id -un)}"
+INSTALL_GROUP="$(id -gn "$INSTALL_USER")"
+
+render_service_unit() {
+    # Render the template to stdout with USER/GROUP/REPO_ROOT substituted.
+    # `@@VAR@@` is used instead of `${VAR}` so systemd's own variable syntax
+    # in unit files is never confused with template placeholders.
+    sed \
+        -e "s|@@USER@@|${INSTALL_USER}|g" \
+        -e "s|@@GROUP@@|${INSTALL_GROUP}|g" \
+        -e "s|@@REPO_ROOT@@|${SCRIPT_DIR}|g" \
+        "$SERVICE_TEMPLATE"
+}
 
 info()  { printf '\033[1;34m[INFO]\033[0m  %s\n' "$*"; }
 ok()    { printf '\033[1;32m[OK]\033[0m    %s\n' "$*"; }
@@ -141,14 +157,22 @@ echo ""
 # ── Step 5: systemd unit ────────────────────────────────────────────────────
 
 info "Step 5: Install systemd unit at $SERVICE_DEST"
+info "  rendered for User=$INSTALL_USER Group=$INSTALL_GROUP WorkingDirectory=$SCRIPT_DIR"
+
+# Render the template to a tempfile owned by the invoking user; sudo cp it
+# into place so /etc never sees the placeholders.
+SERVICE_RENDERED="$(mktemp)"
+trap 'rm -f "$SERVICE_RENDERED"' EXIT
+render_service_unit > "$SERVICE_RENDERED"
+
 if [ -f "$SERVICE_DEST" ]; then
-    if confirm "Overwrite $SERVICE_DEST with the version from this repo?"; then
-        sudo cp "$SERVICE_SRC" "$SERVICE_DEST"
+    if confirm "Overwrite $SERVICE_DEST with the rendered unit from this repo?"; then
+        sudo install -m 0644 "$SERVICE_RENDERED" "$SERVICE_DEST"
         ok "Service file overwritten"
     fi
 else
     if confirm "Install systemd service to $SERVICE_DEST?"; then
-        sudo cp "$SERVICE_SRC" "$SERVICE_DEST"
+        sudo install -m 0644 "$SERVICE_RENDERED" "$SERVICE_DEST"
         ok "Service file installed"
     fi
 fi

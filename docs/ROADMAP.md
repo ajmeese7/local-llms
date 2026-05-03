@@ -40,7 +40,6 @@ The big one. Needs Docker, real test runners, log parsing.
 
 ## Quality of life
 
-- `llms eval run --max-items N`: currently has to be set in python by constructing the adapter.
 - `llms eval run --dry-run`: render manifest, build the first prompt, print without hitting HTTP.
 - `llms endpoint activate --restart`: opt-in `systemctl restart` behind a confirm prompt.
 - `llms endpoint stats --endpoint <name>`: filter the stats aggregator. Currently a global rollup, loses signal with multiple endpoints.
@@ -49,6 +48,33 @@ The big one. Needs Docker, real test runners, log parsing.
 - Telemetry record's `endpoint` field stores the profile name (slicing `httpx.Client.base_url` was annoying). Plumb actual base URL through.
 
 ## Eval rigor
+
+### Thinking-mode track
+
+The current eval pipeline force-disables Qwen3-style chain-of-thought (`chat_template_kwargs: {enable_thinking: false}` in `llms/eval/http_client.py`). That was the right call given the existing budgets (mmlu max_tokens=8, niah=64, gsm8k=512), but it also means the harness only measures the model's "fast answer" capability, not what most people will actually use it for. Real-world usage of these models is overwhelmingly with reasoning on; we should be able to score that mode too.
+
+Why this matters: a model can score 0.80 on MMLU with thinking off and 0.92 with thinking on. The gap is the headline capability number for downstream tasks (coding agents, RAG synthesis, multi-step assistants). Without a thinking-mode track we cannot tell users which profile is right for which workload, only which is right for trivia.
+
+Design sketch:
+
+- **Prompt flag.** Add `enable_thinking: bool | None = None` to `Prompt` (in `llms/eval/types.py`). `None` means "use the eval-pipeline default" (currently off). The HTTP client passes the kwarg through unchanged when set, omits it when None.
+- **Adapter opt-in.** Each adapter declares its preferred mode in its constructor or `track`. Default stays "fast answer" so existing comparisons do not silently drift. Reasoning track is a separate track value (e.g. `general_capability_reasoning`) so the comparability key splits the two.
+- **Budget overrides.** Reasoning budgets need to be 8-50x bigger. Pin them per-adapter at the reasoning-track default: mmlu 1024, niah 512, gsm8k 4096, local_smoke 4096. Bake into the adapter, not the CLI, so a "reasoning gsm8k" run is reproducible without invocation flags.
+- **Parser change.** When thinking is on, the HTTP client must surface both `content` and `reasoning_content`. Extend `CompletionResult` with a `reasoning_text: str | None` field. Adapters can then choose: (a) score `content` only (strict — what would a UI user see), (b) score `reasoning_text + content` concatenated (lenient — give credit for showing the work). gsm8k probably wants (b); mmlu probably wants (a) since the answer letter is supposed to land in `content`. Document the choice per adapter.
+- **Throughput accounting.** Reasoning tokens count toward latency but not toward "useful output." Track `reasoning_tokens` separately in `summary.json` and the manifest. The hub should show `total tok/s` and `useful tok/s` as distinct columns so a model that thinks for 3000 tokens to answer "B" does not look fast.
+- **Comparability key.** Add `enable_thinking` to the decode fingerprint hash. A reasoning run and a non-reasoning run of the same adapter must not group together; they are different evaluations, not different seeds.
+- **Hub UX.** A track filter chip ("fast answer" vs "reasoning") on the home page. Two adapter rows per dataset is fine; users will want to compare them side-by-side for the same model.
+- **Reporting.** `report.md` and `report.html` should call out thinking-on runs explicitly in the header so readers do not silently compare apples to oranges.
+
+Open questions to decide before implementing:
+
+- Whether to keep "fast answer" and "reasoning" as separate adapters (`mmlu`, `mmlu_reasoning`) or one adapter with a `--mode` flag. Separate adapters are clearer in the registry; a flag is fewer files. Lean toward separate adapters; the budgets and parsers genuinely diverge.
+- Whether to add a `gpt-oss` style "harmony" channel adapter alongside Qwen3-style thinking. The mechanism is similar (separate channel for reasoning) but the wire format differs. Probably one abstraction (`reasoning_text`) covers both, with the HTTP client normalizing.
+- Whether to enforce a wall-clock cap. A reasoning run can balloon. `--max-wall-seconds` on the CLI lets users bound a long run instead of discovering at item 80/100 that they have an hour to go.
+
+Tests:
+- `httpx.MockTransport` fixture that returns a payload with both `content` and `reasoning_content`. Verify the lenient parser concatenates and the strict parser ignores reasoning.
+- Manifest snapshot test that confirms the comparability key changes when `enable_thinking` flips.
 
 - Optional log-prob scoring for MCQ adapters. When the endpoint exposes `logprobs`, score by per-letter probability instead of parsed-letter match. Drops parse-failure noise. Gate on capability: only some llama.cpp / ik_llama.cpp builds expose log-probs.
 - Parse-retry policy: when a deterministic adapter flags parse-failure, optionally retry the same prompt at higher temperature. The bash harness did this informally with the "reasoning fallback" flag.
