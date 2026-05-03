@@ -62,6 +62,12 @@ Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k
 | [docs/DRIVER-RECOVERY.md](docs/DRIVER-RECOVERY.md) | NVIDIA driver recovery |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What is left |
 
+Reading order by goal:
+
+- **Bring up a new machine**: [SETUP](docs/SETUP.md) → [CONFIGURATION](docs/CONFIGURATION.md) → [USAGE](docs/USAGE.md)
+- **Experiment with local models**: [MODELS](docs/MODELS.md) → [BENCHMARKING](docs/BENCHMARKING.md) → [SWE-BENCH](docs/SWE-BENCH.md)
+- **WSL-specific setup**: [SETUP](docs/SETUP.md) → [WSL2](docs/WSL2.md) → [TROUBLESHOOTING](docs/TROUBLESHOOTING.md)
+
 ## Hub
 
 The static SPA at `bench/` reads runs from `bench/reports/`. It is meant to be published; see [`bench/README.md`](bench/README.md).
