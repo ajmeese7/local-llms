@@ -52,12 +52,23 @@ function RunDetail({ run, onBack }) {
 function SummaryGrid({ cards }) {
   return (
     <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-8">
-      {cards.map(c => (
-        <div key={c.label} className="me-card p-3.5">
-          <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-me-fg-3 mb-1.5">{c.label}</div>
-          <div className="font-display text-[18px] text-me-fg break-words">{c.value}</div>
-        </div>
-      ))}
+      {cards.map(c => {
+        const copyText = c.copy || null;
+        const titleText = c.title || (copyText ? `${copyText}\n(click to copy)` : undefined);
+        const onClick = copyText
+          ? () => { navigator.clipboard?.writeText(copyText); }
+          : undefined;
+        return (
+          <div
+            key={c.label}
+            className={`me-card p-3.5 ${copyText ? "cursor-pointer hover:bg-me-surface" : ""}`}
+            title={titleText}
+            onClick={onClick}>
+            <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-me-fg-3 mb-1.5">{c.label}</div>
+            <div className="font-display text-[18px] text-me-fg break-words">{c.value}</div>
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -149,6 +160,7 @@ function PerItemTable({ results }) {
                     <tr className="border-b border-me-border last:border-0 bg-me-surface">
                       <td colSpan={7} className="px-3 py-3">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Excerpt label="prompt" body={r.prompt} />
                           <Excerpt label="response" body={r.raw} />
                           <Excerpt label="score breakdown" body={score.breakdown ? JSON.stringify(score.breakdown, null, 2) : "—"} />
                         </div>
@@ -187,7 +199,12 @@ function ManifestPanel({ manifest }) {
       <div className="me-card p-4">
         <div className="font-mono text-[11px] text-me-fg-3 mb-2">
           comparability key:&nbsp;
-          <code className="text-me-fg-2">{manifest.comparability_key}</code>
+          <code
+            className="text-me-fg-2 cursor-pointer hover:text-me-fg"
+            title={`${manifest.comparability_key}\n(click to copy)\n\nSHA-256 of model + provider + decode params + prompt template + dataset + scorer. Two runs with the same key are apples-to-apples comparable.`}
+            onClick={() => navigator.clipboard?.writeText(manifest.comparability_key)}>
+            {manifest.comparability_key}
+          </code>
         </div>
         <button
           className="me-chip mt-1"

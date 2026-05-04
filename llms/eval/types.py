@@ -76,6 +76,7 @@ class ItemResult:
     tokens_per_sec: float | None
     http_status: int
     error: str | None = None
+    prompt: str = ""  # rendered prompt text sent to the model
 
 
 __all__ = ["Item", "ItemResult", "ParsedAnswer", "Prompt", "Score"]

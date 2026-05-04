@@ -143,7 +143,19 @@ function RunsTable({ reports, onOpen }) {
                 <td className="px-3 py-2.5 text-right">{window.BenchData.fmtMs(r.median_latency_ms)}</td>
                 <td className="px-3 py-2.5 text-right">{window.BenchData.fmtTps(r.median_tokens_per_sec)}</td>
                 <td className="px-3 py-2.5">
-                  <code className="text-me-fg-2">{r.comparability_prefix || "—"}</code>
+                  {r.comparability_key ? (
+                    <code
+                      className="text-me-fg-2 cursor-pointer hover:text-me-fg"
+                      title={`${r.comparability_key}\n(click to copy)`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard?.writeText(r.comparability_key);
+                      }}>
+                      {r.comparability_prefix}
+                    </code>
+                  ) : (
+                    <code className="text-me-fg-2">—</code>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-me-fg-3">
                   {window.BenchData.fmtTimestamp(r.timestamp)}

@@ -163,6 +163,7 @@ def _iter_results(
             tokens_per_sec=tokens_per_sec,
             http_status=completion.http_status,
             error=completion.error,
+            prompt=prompt.text,
         )
         if telemetry is not None:
             telemetry.write(
@@ -266,6 +267,7 @@ def _result_to_json(result: ItemResult, *, run_id: str) -> dict[str, object]:
         "run_id": run_id,
         "item_id": result.item.id,
         "category": result.item.category,
+        "prompt": result.prompt,
         "raw": result.parsed.raw,
         "value": result.parsed.value,
         "parse_failed": result.parsed.parse_failed,

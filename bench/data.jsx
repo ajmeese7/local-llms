@@ -166,7 +166,14 @@ function summaryCards(run) {
     { label: "Median throughput", value: fmtTps(s.median_tokens_per_sec) },
     { label: "Track", value: adapter.track || "—" },
     { label: "Adapter", value: adapter.name ? `${adapter.name}@${adapter.version}` : "—" },
-    { label: "Comparability", value: m.comparability_key ? m.comparability_key.slice(0, 12) + "…" : "—" },
+    {
+      label: "Comparability",
+      value: m.comparability_key ? m.comparability_key.slice(0, 12) + "…" : "—",
+      copy: m.comparability_key || null,
+      title: m.comparability_key
+        ? `${m.comparability_key}\n(click to copy)\n\nSHA-256 of model + provider + decode params + prompt template + dataset + scorer. Two runs with the same key are apples-to-apples comparable.`
+        : undefined,
+    },
   ];
 }
 
