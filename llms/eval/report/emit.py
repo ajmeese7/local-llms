@@ -39,7 +39,7 @@ def _fmt_tps(value: float | None) -> str:
     return "—" if value is None else f"{value:.1f} tok/s"
 
 
-def _fmt_duration(seconds: float | None) -> str:
+def fmt_duration(seconds: float | None) -> str:
     if seconds is None:
         return "—"
     if seconds < 60:
@@ -96,8 +96,8 @@ def _render_markdown(manifest: Manifest, summary: RunSummary) -> str:
     lines.append(f"| median ttft | {_fmt_ms(summary.median_ttft_ms)} |")
     lines.append(f"| median throughput | {_fmt_tps(summary.median_tokens_per_sec)} |")
     if summary.timing is not None:
-        lines.append(f"| wall-clock | {_fmt_duration(summary.timing.wall_seconds)} |")
-        lines.append(f"| compute (sum of latencies) | {_fmt_duration(summary.timing.compute_seconds)} |")
+        lines.append(f"| wall-clock | {fmt_duration(summary.timing.wall_seconds)} |")
+        lines.append(f"| compute (sum of latencies) | {fmt_duration(summary.timing.compute_seconds)} |")
     lines.append("")
     if summary.by_category:
         lines.append("## By category")
@@ -138,4 +138,4 @@ def _render_html(manifest: Manifest, summary: RunSummary) -> str:
 """
 
 
-__all__ = ["emit"]
+__all__ = ["emit", "fmt_duration"]

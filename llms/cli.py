@@ -491,6 +491,14 @@ def eval_run(
         f"parse_failures={summary.parse_failure_count}, errors={summary.error_count}"
     )
     console.print(f"  artifacts: [dim]{outcome.manifest_path.parent}[/]")
+    timing = summary.timing
+    if timing is not None:
+        from llms.eval.report.emit import fmt_duration
+
+        console.print(
+            f"  took: [dim]{fmt_duration(timing.wall_seconds)} wall · "
+            f"{fmt_duration(timing.compute_seconds)} compute[/]"
+        )
 
 
 @eval_app.command("list")

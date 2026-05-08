@@ -346,10 +346,13 @@ function CapabilityPicker({ cells, active, onSwitch }) {
   );
 }
 
+const PROMPTS_PAGE_SIZE = 50;
+
 function PromptsTable({ cell }) {
   const [filter, setFilter] = _useState("all");
   const [hideThinking, setHideThinking] = _useState(false);
   const [open, setOpen] = _useState({});
+  const [page, setPage] = _useState(0);
 
   const rows = cell.run.results;
   const cats = _useMemo(() => {
@@ -358,6 +361,15 @@ function PromptsTable({ cell }) {
     return ["all", ...set];
   }, [rows]);
   const filtered = filter === "all" ? rows : rows.filter(r => r.category === filter);
+
+  // Reset to first page when the filter changes (or the underlying cell switches).
+  React.useEffect(() => { setPage(0); }, [filter, cell.comparability_key]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PROMPTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const start = safePage * PROMPTS_PAGE_SIZE;
+  const end = Math.min(start + PROMPTS_PAGE_SIZE, filtered.length);
+  const pageRows = filtered.slice(start, end);
 
   return (
     <>
@@ -371,6 +383,14 @@ function PromptsTable({ cell }) {
           {hideThinking ? "Show thinking text" : "Hide thinking text"}
         </Chip>
       </div>
+
+      <PromptsPager
+        page={safePage}
+        totalPages={totalPages}
+        start={start}
+        end={end}
+        total={filtered.length}
+        onPage={setPage} />
 
       <div className="me-card overflow-hidden">
         <table className="prun-table">
@@ -386,7 +406,7 @@ function PromptsTable({ cell }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(r => {
+            {pageRows.map(r => {
               const isOpen = !!open[r.item_id];
               const clean = window.BenchData.classifyCleanliness(r);
               const lat = Number(r.latency_ms);
@@ -434,7 +454,34 @@ function PromptsTable({ cell }) {
           </tbody>
         </table>
       </div>
+
+      <PromptsPager
+        page={safePage}
+        totalPages={totalPages}
+        start={start}
+        end={end}
+        total={filtered.length}
+        onPage={setPage}
+        bottom />
     </>
+  );
+}
+
+function PromptsPager({ page, totalPages, start, end, total, onPage, bottom }) {
+  if (total <= PROMPTS_PAGE_SIZE) return null;
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
+  const btn = "px-2.5 py-1 border border-me-border font-mono text-[10px] tracking-[0.16em] uppercase text-me-fg-2 hover:text-me-fg hover:border-me-border-strong disabled:opacity-30 disabled:hover:text-me-fg-2 disabled:hover:border-me-border bg-transparent transition-colors";
+  return (
+    <div className={`flex flex-wrap items-center gap-2 ${bottom ? "mt-3" : "mb-3"} font-mono text-[11px] text-me-fg-3`}>
+      <span>showing <span className="text-me-fg">{start + 1}</span>–<span className="text-me-fg">{end}</span> of <span className="text-me-fg">{total}</span></span>
+      <span className="flex-1"></span>
+      <button className={btn} onClick={() => onPage(0)} disabled={!canPrev}>« first</button>
+      <button className={btn} onClick={() => onPage(page - 1)} disabled={!canPrev}>‹ prev</button>
+      <span className="px-1">page <span className="text-me-fg">{page + 1}</span> / {totalPages}</span>
+      <button className={btn} onClick={() => onPage(page + 1)} disabled={!canNext}>next ›</button>
+      <button className={btn} onClick={() => onPage(totalPages - 1)} disabled={!canNext}>last »</button>
+    </div>
   );
 }
 
