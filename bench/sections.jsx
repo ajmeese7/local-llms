@@ -1,172 +1,430 @@
 /* ============================================================
-   sections.jsx
-   Run-detail view: summary cards, by-category breakdown, per-item
-   table, manifest disclosure, link to standalone report.
+   sections.jsx — Overview / Prompts / Config sections.
+   Methodology lives in methodology.jsx as a top-level page.
+
+   Inputs: the bench-shaped { bench, meta, cells } produced by
+   data.jsx#loadBench. Each cell has `run` (manifest+summary+
+   results) and `rollup` (headline metrics + cleanliness counts).
    ============================================================ */
 
-const { useState: useDetailS, useMemo: useDetailM } = React;
+const { useState: _useState, useMemo: _useMemo } = React;
 
-function RunDetail({ run, onBack }) {
-  const m = run.manifest;
-  const a = m.adapter || {};
-  const p = m.model || {};
-  const cards = useDetailM(() => window.BenchData.summaryCards(run), [run]);
-  const byCategory = run.summary && run.summary.by_category ? run.summary.by_category : {};
-  const categoryRows = Object.entries(byCategory);
-
+/* ====================== OVERVIEW ====================== */
+function OverviewSection({ bench, leaderboards, onOpenPrompts }) {
+  const meta = bench.meta;
+  const cells = bench.cells;
   return (
-    <>
-      <header className="mb-6 md:mb-8">
-        <button
-          onClick={onBack}
-          className="font-mono text-[10px] text-me-fg-3 hover:text-me-fg uppercase tracking-[0.18em] mb-3">
-          <i className="fa-solid fa-arrow-left mr-1.5"></i> all runs
-        </button>
-        <Eyebrow>// {a.track || "track"} · {a.name || "adapter"}@{a.version || "?"}</Eyebrow>
-        <h1 className="font-display text-[22px] md:text-[30px] tracking-[0.05em] uppercase mt-1.5 mb-2 break-all">
-          {run.id}
-        </h1>
-        <div className="font-mono text-[11px] text-me-fg-3 flex flex-wrap gap-x-4 gap-y-1">
-          <span>endpoint: <span className="text-me-fg-2">{m.endpoint_name || "—"}</span></span>
-          <span>profile: <span className="text-me-fg-2">{p.profile || "—"}</span></span>
-          <span>provider: <span className="text-me-fg-2">{m.provider?.name || "—"}</span></span>
-          <span>{window.BenchData.fmtTimestamp(m.timestamp)}</span>
-          <a href={`${run.base}report.html`} target="_blank" rel="noreferrer">standalone report</a>
+    <section data-screen-label="01 Overview">
+      <BenchHero meta={meta} />
+
+      {meta.hardware && <GpuStateRibbon hardware={meta.hardware} />}
+
+      <SectionHead num="01" title="Capabilities" sub={`// ${cells.length} cell${cells.length === 1 ? "" : "s"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"} accumulated`} />
+      {cells.length === 0 ? (
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          No capability cells yet. Run an adapter against this model and it'll appear here.
         </div>
-        {m.notes && (
-          <p className="font-mono text-[11px] text-me-fg-2 mt-3 max-w-[80ch]">{m.notes}</p>
-        )}
-      </header>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {cells.map(cell => (
+            <CapabilityCell
+              key={cell.comparability_key}
+              cell={cell}
+              onOpenPrompts={() => onOpenPrompts(cell.adapter.name)} />
+          ))}
+        </div>
+      )}
 
-      <SummaryGrid cards={cards} />
+      <SectionHead num="02" title="Output Cleanliness" sub="// did the model leak its reasoning into the response?" />
+      <CleanlinessLegend />
+      <CleanlinessOverview cells={cells} />
 
-      {categoryRows.length > 1 && <ByCategory rows={categoryRows} />}
-
-      <PerItemTable results={run.results} />
-
-      <ManifestPanel manifest={m} />
-    </>
+      {leaderboards && <RecommendationsBlock leaderboards={leaderboards} bench={bench} />}
+    </section>
   );
 }
 
-function SummaryGrid({ cards }) {
+function BenchHero({ meta }) {
+  const hw = meta.hardware;
+  const server = meta.server;
+  const stats = [];
+  if (meta.latest_timestamp) stats.push({ id: "time", icon: "fa-regular fa-clock", value: window.BenchData.fmtTimestamp(meta.latest_timestamp) });
+  if (hw?.gpu_name) {
+    const vram = hw.vram_mb ? ` · ${(hw.vram_mb / 1024).toFixed(0)} GB` : "";
+    stats.push({ id: "gpu", icon: "fa-microchip", value: `${hw.gpu_name}${vram}` });
+  }
+  if (server?.engine) stats.push({
+    id: "engine", icon: "fa-server",
+    value: `${server.engine}${server.version ? ` @ ${server.version}` : ""}`,
+  });
+  stats.push({ id: "cells", icon: "fa-list-check", value: `${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"}` });
+  if (meta.suite_seconds != null) stats.push({
+    id: "suite", icon: "fa-stopwatch",
+    value: `≈ ${window.BenchData.fmtDuration(meta.suite_seconds)} total`,
+  });
+
   return (
-    <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-8">
-      {cards.map(c => {
-        const copyText = c.copy || null;
-        const titleText = c.title || (copyText ? `${copyText}\n(click to copy)` : undefined);
-        const onClick = copyText
-          ? () => { navigator.clipboard?.writeText(copyText); }
-          : undefined;
+    <div className="hero-bg relative overflow-hidden border border-me-border p-5 md:p-8 lg:p-9">
+      <div className="me-eyebrow flex flex-wrap gap-x-5 gap-y-2 mb-3">
+        {stats.map(s => (
+          <span key={s.id} className="inline-flex items-center gap-1.5">
+            <i className={`fa-solid ${s.icon} text-me-cyan`}></i> {s.value}
+          </span>
+        ))}
+      </div>
+      <h1 className="hero-title my-2">{meta.title}</h1>
+      <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 mb-1 max-w-[80ch]">
+        {`// ${meta.model_alias}${meta.hardware_profile && meta.hardware_profile !== "unknown" ? ` · ${meta.hardware_profile}` : ""} · ${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} attached`}
+      </p>
+    </div>
+  );
+}
+
+function GpuStateRibbon({ hardware }) {
+  const items = [];
+  if (hardware.boost_clock_mhz != null) items.push(["Boost", `${hardware.boost_clock_mhz} MHz`]);
+  if (hardware.app_clock_graphics_mhz != null) items.push(["App clock", `${hardware.app_clock_graphics_mhz} MHz`]);
+  if (hardware.mem_clock_max_mhz != null) items.push(["Mem max", `${hardware.mem_clock_max_mhz} MHz`]);
+  if (hardware.power_limit_w != null) items.push(["Power limit", `${Number(hardware.power_limit_w).toFixed(0)} W`]);
+  if (hardware.persistence_mode) items.push(["Persistence", hardware.persistence_mode]);
+  if (!items.length) return null;
+  return (
+    <div className="mt-4 me-card p-3 md:p-4">
+      <div className="me-eyebrow mb-2">
+        <i className="fa-solid fa-bolt text-me-warning mr-1.5"></i> GPU state at run time
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+        {items.map(([k, v]) => (
+          <div key={k} className="p-2 bg-white/[0.02] border border-me-border">
+            <div className="me-label">{k}</div>
+            <div className="font-mono text-[12px] text-me-fg mt-0.5">{v}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 font-mono text-[10px] text-me-fg-3">
+        // shifts here mean OC profile changed
+      </div>
+    </div>
+  );
+}
+
+function CapabilityCell({ cell, onOpenPrompts }) {
+  const adapter = cell.adapter || {};
+  const r = cell.rollup;
+  const qualityClass = qualityColor(r?.quality);
+  const tpsClass = tpsColor(r?.tps);
+  const qualityLabel = r?.qualityKind === "partial" ? "Partial" : "Accuracy";
+  const ts = window.BenchData.fmtDateOnly(cell.latest?.timestamp);
+  return (
+    <div className="me-card p-4 md:p-5 transition-all hover:border-me-border-strong">
+      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+        <div>
+          <div className="me-eyebrow">
+            <i className="fa-solid fa-cube text-me-cyan mr-1.5"></i>
+            {adapter.name}@{adapter.version || "v?"}{adapter.track ? ` · ${adapter.track}` : ""}
+          </div>
+          <h3 className="font-display text-[15px] md:text-[17px] tracking-[0.1em] uppercase m-0 mt-1 text-me-fg break-all">
+            {adapter.name || "—"}
+          </h3>
+        </div>
+        <div className="font-mono text-[10px] text-me-fg-3">{ts}</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mt-3">
+        <div className="p-2.5 bg-white/[0.02] border border-me-border" data-tip={r?.qualityCi ? window.BenchData.fmtCi(r.qualityCi) : qualityLabel}>
+          <div className="me-label">{qualityLabel}</div>
+          <div className={`font-mono text-[20px] md:text-[22px] mt-0.5 ${qualityClass}`}>
+            {window.BenchData.fmtQuality(r?.quality)}
+          </div>
+        </div>
+        <div className="p-2.5 bg-white/[0.02] border border-me-border" data-tip="median tok/s, end-to-end">
+          <div className="me-label">tok/s</div>
+          <div className={`font-mono text-[20px] md:text-[22px] mt-0.5 ${tpsClass}`}>
+            {window.BenchData.fmtTps(r?.tps)}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 font-mono text-[11px]">
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Items</div>
+          <div className="text-me-fg mt-0.5">{r?.itemCount ?? "—"}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Median lat</div>
+          <div className="text-me-fg mt-0.5">{window.BenchData.fmtSeconds(r?.latency)}</div>
+        </div>
+        <div
+          className="p-2 bg-white/[0.02] border border-me-border"
+          data-tip={r?.computeSeconds != null
+            ? `compute ${window.BenchData.fmtDuration(r.computeSeconds)} · overhead ${window.BenchData.fmtDuration(Math.max(0, (r.wallSeconds || 0) - r.computeSeconds))}`
+            : "wall-clock for this run"}>
+          <div className="me-label">Took</div>
+          <div className="text-me-fg mt-0.5">{window.BenchData.fmtDuration(r?.wallSeconds)}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Errors</div>
+          <div className={`mt-0.5 ${r?.errorCount ? "text-me-danger" : "text-me-fg"}`}>{r?.errorCount ?? 0}</div>
+        </div>
+      </div>
+
+      {r && (
+        <div className="mt-3">
+          <CleanlinessBar clean={r.cleanCount} leak={r.leakCount} empty={r.emptyCount} />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mt-4">
+        <div className="font-mono text-[10px] text-me-fg-3">
+          key {cell.comparability_prefix} · {cell.run_count} run{cell.run_count === 1 ? "" : "s"}
+        </div>
+        <button
+          onClick={onOpenPrompts}
+          className="font-mono text-[10px] tracking-[0.16em] uppercase px-2.5 py-1 border border-me-border text-me-fg-2 hover:text-me-fg hover:border-me-cyan transition-colors">
+          Prompts <i className="fa-solid fa-arrow-right ml-1"></i>
+        </button>
+      </div>
+
+      {cell.run_count > 1 && <CellHistoryDisclosure cell={cell} />}
+    </div>
+  );
+}
+
+function CellHistoryDisclosure({ cell }) {
+  const [open, setOpen] = _useState(false);
+  const [history, setHistory] = _useState(null);
+  React.useEffect(() => {
+    if (!open || history) return;
+    let cancelled = false;
+    (async () => {
+      const runs = await window.BenchData.loadCellHistory(cell);
+      if (!cancelled) setHistory(runs);
+    })();
+    return () => { cancelled = true; };
+  }, [open, history, cell]);
+
+  return (
+    <div className="mt-3 border-t border-me-border pt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="font-mono text-[10px] text-me-fg-3 hover:text-me-fg cursor-pointer bg-transparent border-0 p-0">
+        {open ? "▾" : "▸"} history ({cell.run_count - 1} earlier run{cell.run_count - 1 === 1 ? "" : "s"})
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {history === null && <div className="font-mono text-[10px] text-me-fg-3">loading…</div>}
+          {history && history.map(run => {
+            const summary = run.summary || {};
+            const ci = summary.accuracy || summary.partial;
+            const acc = ci?.point != null ? (Number(ci.point) * 100).toFixed(1) + "%" : "—";
+            const tps = summary.median_tokens_per_sec != null ? Number(summary.median_tokens_per_sec).toFixed(1) : "—";
+            return (
+              <div key={run.id} className="grid grid-cols-[1fr_auto_auto] gap-3 font-mono text-[10px] text-me-fg-3">
+                <span className="truncate" title={run.id}>{window.BenchData.fmtTimestamp(run.manifest?.timestamp)}</span>
+                <span className="text-me-fg-2">{acc}</span>
+                <span className="text-me-fg-2">{tps} tok/s</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CleanlinessLegend() {
+  return (
+    <div className="me-card p-3 md:p-4 mb-3">
+      <div className="font-mono text-[11px] md:text-[12px] text-me-fg-2 leading-relaxed">
+        <span className="text-me-fg-3">// </span>
+        Reasoning models can dump their <code className="text-me-warning">&lt;think&gt;</code>{" "}
+        scratchpad into the user-visible answer. We classify each response:
+      </div>
+      <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+        <div className="flex items-baseline gap-2">
+          <span className="me-miniflag clean">clean</span>
+          <span className="text-me-fg-2">no thinking visible — answer only</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="me-miniflag leak">leak</span>
+          <span className="text-me-fg-2">visible <code>&lt;think&gt;</code> block or "thinking process:" preamble</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="me-miniflag danger">empty</span>
+          <span className="text-me-fg-2">no usable answer (empty think block, or all content stuck in <code>reasoning_content</code>)</span>
+        </div>
+      </div>
+      <div className="mt-2 font-mono text-[10px] text-me-fg-3">
+        // 100% clean = every prompt in this cell came back without thinking leakage. higher is better.
+      </div>
+    </div>
+  );
+}
+
+function CleanlinessOverview({ cells }) {
+  const usable = cells.filter(c => c.rollup);
+  if (!usable.length) return (
+    <div className="me-card p-4 font-mono text-[11px] text-me-fg-3">No data yet.</div>
+  );
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      {usable.map(cell => {
+        const r = cell.rollup;
         return (
-          <div
-            key={c.label}
-            className={`me-card p-3.5 ${copyText ? "cursor-pointer hover:bg-me-surface" : ""}`}
-            title={titleText}
-            onClick={onClick}>
-            <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-me-fg-3 mb-1.5">{c.label}</div>
-            <div className="font-display text-[18px] text-me-fg break-words">{c.value}</div>
+          <div key={cell.comparability_key} className="me-card p-3.5">
+            <div className="flex items-baseline justify-between mb-2">
+              <h4 className="font-mono text-[12px] m-0 text-me-fg break-all">{cell.adapter.name}</h4>
+              <span className="font-mono text-[10px] text-me-fg-3">{r.totalRows} rows</span>
+            </div>
+            <CleanlinessBar clean={r.cleanCount} leak={r.leakCount} empty={r.emptyCount} />
+            <div className="font-mono text-[11px] text-me-fg-3 mt-2">
+              clean {r.cleanCount} · leak {r.leakCount} · empty {r.emptyCount}
+            </div>
           </div>
         );
       })}
-    </section>
+    </div>
   );
 }
 
-function ByCategory({ rows }) {
-  return (
-    <section className="mt-2 mb-8">
-      <SectionHead num="//" title="By category" sub="per-subtask accuracy and partial-credit means" />
-      <div className="me-card overflow-x-auto">
-        <table className="w-full font-mono text-[12px]">
-          <thead>
-            <tr className="text-left text-me-fg-3 border-b border-me-border">
-              <th className="px-3 py-2.5">Category</th>
-              <th className="px-3 py-2.5 text-right">Items</th>
-              <th className="px-3 py-2.5 text-right">Correct</th>
-              <th className="px-3 py-2.5 text-right">Accuracy</th>
-              <th className="px-3 py-2.5 text-right">Partial mean</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([cat, stats]) => (
-              <tr key={cat} className="border-b border-me-border last:border-0">
-                <td className="px-3 py-2.5 text-me-fg">{cat}</td>
-                <td className="px-3 py-2.5 text-right">{stats.item_count}</td>
-                <td className="px-3 py-2.5 text-right">{stats.correct_count}</td>
-                <td className="px-3 py-2.5 text-right">{(stats.accuracy * 100).toFixed(1)}%</td>
-                <td className="px-3 py-2.5 text-right">{(stats.partial_mean * 100).toFixed(1)}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
+function RecommendationsBlock({ leaderboards: _lb, bench: _b }) {
+  // Recommendations only show value when there are 2+ benches on the same hw.
+  // For a single-bench host this returns nothing — by design.
+  return null;
 }
 
-function PerItemTable({ results }) {
-  const [open, setOpen] = useDetailS(null);
-  if (!results || results.length === 0) {
+function qualityColor(q) {
+  const n = Number(q);
+  if (!Number.isFinite(n)) return "text-me-fg-3";
+  if (n >= 95) return "text-me-success";
+  if (n >= 80) return "text-me-warning";
+  return "text-me-danger";
+}
+function tpsColor(t) {
+  const n = Number(t);
+  if (!Number.isFinite(n)) return "text-me-fg-3";
+  if (n > 100) return "text-me-cyan";
+  if (n > 30) return "text-me-fg";
+  return "text-me-warning";
+}
+
+/* ====================== PROMPTS ====================== */
+function PromptsSection({ bench, adapterName, onSwitch }) {
+  const cell = bench.cells.find(c => c.adapter.name === adapterName);
+  const cells = bench.cells.filter(c => c.run && c.run.results.length);
+  if (!cell || !cell.run) {
     return (
-      <section className="mt-2 mb-8">
-        <SectionHead num="//" title="Per-item results" sub="results.jsonl was empty or missing" />
+      <section data-screen-label="02 Prompts">
+        <SectionHead num="03" title="Prompts" sub="// pick a capability above" />
+        <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          No data for capability "{adapterName}".
+        </div>
       </section>
     );
   }
   return (
-    <section className="mt-2 mb-8">
-      <SectionHead num="//" title="Per-item results" sub={`${results.length} items`} />
-      <div className="me-card overflow-x-auto">
-        <table className="w-full font-mono text-[11px]">
+    <section data-screen-label="02 Prompts">
+      <SectionHead num="03" title={`Prompts · ${adapterName}`} sub={`// per-item runs from the latest ${adapterName} cell`} />
+      <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
+      <PromptsTable cell={cell} />
+    </section>
+  );
+}
+
+function CapabilityPicker({ cells, active, onSwitch }) {
+  if (cells.length <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <Label>Capability</Label>
+      {cells.map(c => (
+        <Chip key={c.adapter.name} on={c.adapter.name === active} cyan onClick={() => onSwitch(c.adapter.name)}>
+          {c.adapter.name}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+function PromptsTable({ cell }) {
+  const [filter, setFilter] = _useState("all");
+  const [hideThinking, setHideThinking] = _useState(false);
+  const [open, setOpen] = _useState({});
+
+  const rows = cell.run.results;
+  const cats = _useMemo(() => {
+    const set = new Set();
+    for (const r of rows) if (r.category) set.add(r.category);
+    return ["all", ...set];
+  }, [rows]);
+  const filtered = filter === "all" ? rows : rows.filter(r => r.category === filter);
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Label>Category</Label>
+        {cats.map(c => (
+          <Chip key={c} on={filter === c} onClick={() => setFilter(c)}>{c}</Chip>
+        ))}
+        <span className="flex-1"></span>
+        <Chip on={hideThinking} onClick={() => setHideThinking(v => !v)}>
+          {hideThinking ? "Show thinking text" : "Hide thinking text"}
+        </Chip>
+      </div>
+
+      <div className="me-card overflow-hidden">
+        <table className="prun-table">
           <thead>
-            <tr className="text-left text-me-fg-3 border-b border-me-border">
-              <th className="px-3 py-2.5">Item</th>
-              <th className="px-3 py-2.5">Category</th>
-              <th className="px-3 py-2.5">Score</th>
-              <th className="px-3 py-2.5 text-right">Latency</th>
-              <th className="px-3 py-2.5 text-right">Tokens</th>
-              <th className="px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5">Excerpt</th>
+            <tr>
+              <th style={{ width: 30 }}></th>
+              <th>Item</th>
+              <th>Category</th>
+              <th className="numeric">Latency</th>
+              <th className="numeric">tok/s</th>
+              <th className="numeric">Score</th>
+              <th>Output</th>
             </tr>
           </thead>
           <tbody>
-            {results.map(r => {
-              const isOpen = open === r.item_id;
-              const score = r.score || {};
-              const ok = score.correct === true;
-              const partial = (score.partial != null ? Number(score.partial) : 0).toFixed(2);
-              const flag = r.parse_failed ? "leak" : r.error ? "danger" : ok ? "clean" : "";
-              const flagText = r.parse_failed ? "parse fail" : r.error ? "error" : ok ? "correct" : "wrong";
+            {filtered.map(r => {
+              const isOpen = !!open[r.item_id];
+              const clean = window.BenchData.classifyCleanliness(r);
+              const lat = Number(r.latency_ms);
+              const tps = Number(r.tokens_per_sec);
+              const partial = Number(r.score?.partial);
+              const correct = !!r.score?.correct;
+              const excerpt = r.raw || "(no output)";
               return (
                 <React.Fragment key={r.item_id}>
-                  <tr
-                    className={`border-b border-me-border last:border-0 cursor-pointer hover:bg-me-surface ${isOpen ? "bg-me-surface" : ""}`}
-                    onClick={() => setOpen(isOpen ? null : r.item_id)}>
-                    <td className="px-3 py-2 text-me-fg">{r.item_id}</td>
-                    <td className="px-3 py-2">{r.category || "—"}</td>
-                    <td className="px-3 py-2">
-                      <span className={`me-miniflag ${flag}`}>{flagText}</span>
-                      <span className="ml-1 text-me-fg-3">{partial}</span>
+                  <tr className={`toggle-row ${isOpen ? "open" : ""}`} onClick={() => setOpen(o => ({ ...o, [r.item_id]: !o[r.item_id] }))}>
+                    <td></td>
+                    <td><span className="pn break-all">{r.item_id}</span></td>
+                    <td className="text-me-fg-3 font-mono text-[11px]">{r.category || "—"}</td>
+                    <td className="numeric">{Number.isFinite(lat) ? `${(lat / 1000).toFixed(2)} s` : "—"}</td>
+                    <td className="numeric">{Number.isFinite(tps) ? tps.toFixed(1) : "—"}</td>
+                    <td className="numeric">
+                      <QBar
+                        q={Number.isFinite(partial) ? Math.round(partial * 100) : (correct ? 100 : 0)}
+                        qmax={100} />
                     </td>
-                    <td className="px-3 py-2 text-right">{window.BenchData.fmtMs(r.latency_ms)}</td>
-                    <td className="px-3 py-2 text-right">{r.output_tokens ?? "—"}</td>
-                    <td className="px-3 py-2">{r.http_status ?? "—"}</td>
-                    <td className="px-3 py-2 truncate max-w-[40ch] text-me-fg-3">
-                      {(r.raw || "").slice(0, 80) || "—"}
+                    <td>
+                      <MiniFlag kind={clean === "clean" ? "clean" : clean === "empty" ? "danger" : "leak"}>
+                        {clean === "clean" ? "clean" : clean === "empty" ? "empty" : "thinking"}
+                      </MiniFlag>
+                      {!correct && Number.isFinite(partial) && partial < 1 && <MiniFlag kind="leak">low</MiniFlag>}
+                      {r.error && <MiniFlag kind="danger">err</MiniFlag>}
                     </td>
                   </tr>
                   {isOpen && (
-                    <tr className="border-b border-me-border last:border-0 bg-me-surface">
-                      <td colSpan={7} className="px-3 py-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Excerpt label="prompt" body={r.prompt} />
-                          <Excerpt label="response" body={r.raw} />
-                          <Excerpt label="score breakdown" body={score.breakdown ? JSON.stringify(score.breakdown, null, 2) : "—"} />
+                    <tr className="excerpt-row">
+                      <td colSpan="7">
+                        <div className={`excerpt-inner ${hideThinking ? "hide-thinking" : ""}`}
+                             dangerouslySetInnerHTML={{ __html: highlightThinking(excerpt) }} />
+                        <div className="excerpt-foot">
+                          <span className="raw-path">run: {r.run_id}</span>
+                          {r.parse_failed && <span className="text-me-warning ml-3">parse_failed</span>}
+                          {r.error && <span className="text-me-danger ml-3">{String(r.error).slice(0, 80)}</span>}
                         </div>
-                        {r.error && (
-                          <div className="mt-2 font-mono text-[11px] text-me-danger">error: {r.error}</div>
-                        )}
                       </td>
                     </tr>
                   )}
@@ -176,49 +434,52 @@ function PerItemTable({ results }) {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+/* ====================== CONFIG ====================== */
+function ConfigSection({ bench, conf, profilesSnap }) {
+  const meta = bench.meta;
+  const snap = (profilesSnap?.profiles || []).find(p => p.name === meta.model_profile);
+  return (
+    <section data-screen-label="03 Config">
+      <SectionHead num="04" title="Model Config" sub={`// llama-server overlay for ${meta.model_profile}`} />
+      {conf
+        ? <ConfigCard conf={conf} showAll={true} isFamily={false} />
+        : snap
+          ? <SnapshotCard profile={snap} />
+          : <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+              No <code>.conf</code> or snapshot found for <code>{meta.model_profile}</code>.
+            </div>}
     </section>
   );
 }
 
-function Excerpt({ label, body }) {
+function SnapshotCard({ profile }) {
   return (
-    <div>
-      <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-me-fg-3 mb-1.5">{label}</div>
-      <pre className="font-mono text-[11px] text-me-fg-2 whitespace-pre-wrap break-words bg-me-bg p-3 border border-me-border max-h-[300px] overflow-auto">
-        {body || "—"}
-      </pre>
+    <div className="me-card p-4 md:p-5">
+      <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
+        <h3 className="font-display text-[14px] md:text-[16px] tracking-[0.12em] uppercase m-0 text-me-fg break-all">{profile.name}</h3>
+        {window.BenchData.extractQuant(profile.model_filename || "") && (
+          <span className="font-mono text-[10px] tracking-[0.1em] uppercase px-2 py-0.5 border border-me-cyan/40 text-me-cyan">
+            {window.BenchData.extractQuant(profile.model_filename || "")}
+          </span>
+        )}
+      </div>
+      <div className="font-mono text-[11px] text-me-fg-2 break-all mb-3">{profile.model_filename || profile.model_path || "—"}</div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="p-2.5 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Context</div>
+          <div className="font-mono text-[13px] text-me-cyan mt-0.5">{profile.context_length ?? "inherited"}</div>
+        </div>
+        <div className="p-2.5 bg-white/[0.02] border border-me-border">
+          <div className="me-label">KV cache</div>
+          <div className="font-mono text-[13px] text-me-cyan mt-0.5">{(profile.cache_type_k || "default") + "/" + (profile.cache_type_v || "default")}</div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ManifestPanel({ manifest }) {
-  const [show, setShow] = useDetailS(false);
-  return (
-    <section className="mt-2">
-      <SectionHead num="//" title="Manifest" sub="reproducibility-critical fingerprint" />
-      <div className="me-card p-4">
-        <div className="font-mono text-[11px] text-me-fg-3 mb-2">
-          comparability key:&nbsp;
-          <code
-            className="text-me-fg-2 cursor-pointer hover:text-me-fg"
-            title={`${manifest.comparability_key}\n(click to copy)\n\nSHA-256 of model + provider + decode params + prompt template + dataset + scorer. Two runs with the same key are apples-to-apples comparable.`}
-            onClick={() => navigator.clipboard?.writeText(manifest.comparability_key)}>
-            {manifest.comparability_key}
-          </code>
-        </div>
-        <button
-          className="me-chip mt-1"
-          onClick={() => setShow(s => !s)}>
-          {show ? "hide manifest json" : "show manifest json"}
-        </button>
-        {show && (
-          <pre className="mt-3 font-mono text-[11px] text-me-fg-2 whitespace-pre-wrap break-words bg-me-bg p-3 border border-me-border max-h-[400px] overflow-auto">
-            {JSON.stringify(manifest, null, 2)}
-          </pre>
-        )}
-      </div>
-    </section>
-  );
-}
-
-window.RunDetail = RunDetail;
+Object.assign(window, { OverviewSection, PromptsSection, ConfigSection });

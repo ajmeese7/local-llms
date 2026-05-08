@@ -237,6 +237,33 @@ function CleanlinessGrid({ profiles, prompts }) {
   );
 }
 
+/* ---------- Cleanliness stacked bar ----------
+   Per-cell summary, replaces the per-prompt grid for adapters with
+   many items (mmlu/gsm8k routinely have 100+ rows). One bar shows
+   the clean/leak/empty distribution; counts go below.
+------------------------------------------------------------ */
+function CleanlinessBar({ clean = 0, leak = 0, empty = 0 }) {
+  const total = (clean | 0) + (leak | 0) + (empty | 0);
+  if (total === 0) return (
+    <div className="font-mono text-[10px] text-me-fg-3">no rows</div>
+  );
+  const cw = (clean / total) * 100;
+  const lw = (leak / total) * 100;
+  const ew = (empty / total) * 100;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-2 bg-white/5 border border-me-border relative overflow-hidden">
+        {clean > 0 && <div className="absolute inset-y-0 bg-me-success/70" style={{ left: 0, width: `${cw}%` }} title={`${clean} clean`}></div>}
+        {leak > 0  && <div className="absolute inset-y-0 bg-me-warning/70" style={{ left: `${cw}%`, width: `${lw}%` }} title={`${leak} leak`}></div>}
+        {empty > 0 && <div className="absolute inset-y-0 bg-me-danger/70" style={{ left: `${cw + lw}%`, width: `${ew}%` }} title={`${empty} empty`}></div>}
+      </div>
+      <div className="font-mono text-[10px] text-me-fg-3 whitespace-nowrap">
+        {Math.round((clean / total) * 100)}% clean
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Quality bar ---------- */
 function QBar({ q, qmax }) {
   const r = qmax ? q / qmax : 0;
@@ -269,6 +296,6 @@ function highlightThinking(text) {
 
 Object.assign(window, {
   Txt, Eyebrow, Label, SectionHead, Chip, Flag, MiniFlag,
-  BarChart, Scatter, CleanlinessGrid, QBar,
+  BarChart, Scatter, CleanlinessGrid, CleanlinessBar, QBar,
   escapeHtml, highlightThinking,
 });

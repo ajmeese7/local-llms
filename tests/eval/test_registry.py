@@ -103,6 +103,84 @@ def test_registry_skips_runs_without_manifest(tmp_path: Path) -> None:
     assert registry["reports"] == []
 
 
+def test_registry_surfaces_timing_per_cell_and_suite(tmp_path: Path) -> None:
+    """A real run populates wall_seconds on the cell and suite_seconds on the bench."""
+    output = tmp_path / "reports"
+    run_eval(
+        adapter=LocalSmokeAdapter(),
+        runtime=_runtime(),
+        endpoint_name="ep",
+        base_url="http://stub",
+        output_root=output,
+        transport=_ok_transport(),
+        subset="coding_bugfix",
+    )
+    registry = build_registry(output)
+    bench = registry["benches"][0]
+    cell = bench["cells"][0]
+    assert isinstance(cell["wall_seconds"], int | float)
+    assert cell["wall_seconds"] >= 0
+    assert isinstance(bench["suite_seconds"], int | float)
+    assert bench["suite_seconds"] == cell["wall_seconds"]
+    # Per-run entry mirrors the timing block.
+    entry = registry["reports"][0]
+    assert entry["timing"] is not None
+    assert "wall_seconds" in entry["timing"]
+
+
+def test_registry_groups_into_benches(tmp_path: Path) -> None:
+    output = tmp_path / "reports"
+    run_eval(
+        adapter=LocalSmokeAdapter(),
+        runtime=_runtime(),
+        endpoint_name="ep",
+        base_url="http://stub",
+        output_root=output,
+        transport=_ok_transport(),
+        subset="coding_bugfix",
+    )
+    registry = build_registry(output)
+    assert registry["version"] >= 4
+    benches = registry["benches"]
+    assert len(benches) == 1
+    bench = benches[0]
+    assert bench["model_profile"] == "p"
+    assert bench["hardware_profile"] == "hw"
+    assert bench["cell_count"] == 1
+    assert bench["run_count"] == 1
+    cell = bench["cells"][0]
+    assert cell["adapter"]["name"] == "local_smoke"
+    assert cell["run_count"] == 1
+    assert cell["history_ids"] == [registry["reports"][0]["id"]]
+    assert cell["comparability_key"] == registry["reports"][0]["comparability_key"]
+
+
+def test_bench_cell_history_accumulates_across_reruns(tmp_path: Path) -> None:
+    """Two runs of the same adapter against the same model land in one cell,
+    newest first, with both ids preserved."""
+    output = tmp_path / "reports"
+    args = {
+        "adapter": LocalSmokeAdapter(),
+        "runtime": _runtime(),
+        "endpoint_name": "ep",
+        "base_url": "http://stub",
+        "output_root": output,
+        "transport": _ok_transport(),
+        "subset": "coding_bugfix",
+    }
+    a = run_eval(**args)
+    b = run_eval(**args)
+    registry = build_registry(output)
+    benches = registry["benches"]
+    assert len(benches) == 1
+    cell = benches[0]["cells"][0]
+    assert cell["run_count"] == 2
+    assert set(cell["history_ids"]) == {a.manifest.run_id, b.manifest.run_id}
+    # The latest is whichever got the later timestamp; both share the key.
+    assert cell["latest"]["id"] in cell["history_ids"]
+    assert cell["comparability_key"] == a.manifest.comparability_key
+
+
 def test_registry_sorted_newest_first(tmp_path: Path) -> None:
     output = tmp_path / "reports"
     output.mkdir()

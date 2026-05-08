@@ -1,6 +1,6 @@
 """GSM8K adapter: grade-school math word problems with numeric answers.
 
-Source: https://huggingface.co/datasets/gsm8k (config `main`, split `test`).
+Source: https://huggingface.co/datasets/openai/gsm8k (config `main`, split `test`).
 Each row has `question` and `answer` (CoT + `#### <int>`). Prompt asks for
 step-by-step reasoning ending with `#### <number>`. The parser pulls out
 the final integer; the scorer compares as Python ints, ignoring commas.

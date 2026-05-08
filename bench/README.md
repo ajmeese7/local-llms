@@ -7,12 +7,12 @@ Static SPA over eval runs. No build step (Babel-in-browser, React via CDN).
 ```
 bench/
   index.html
-  app.jsx data.jsx components.jsx home.jsx sections.jsx guide.jsx
+  app.jsx data.jsx components.jsx home.jsx sections.jsx configs.jsx
   reports/
-    reports.json                     # registry index
-    profiles.json                    # config snapshot for the guide cards
+    reports.json                     # registry index (reports + suites)
+    profiles.json                    # config snapshot
     <run-id>/
-      manifest.json                  # full run fingerprint
+      manifest.json                  # full run fingerprint (incl. hardware/server)
       summary.json                   # aggregated metrics
       results.jsonl                  # per-item rows
       report.html report.md          # standalone per-run views
@@ -43,8 +43,15 @@ Then open <http://127.0.0.1:5173/>.
 
 ## Schema
 
-- `loadIndex()` reads `reports/reports.json`, built by `llms eval report` from each run's `manifest.json` + `summary.json`.
-- `loadProfilesSnapshot()` reads `reports/profiles.json`, a flat snapshot of the active config tree the guide section renders.
-- `loadRun(id)` lazily fetches the run's `manifest.json`, `summary.json`, `results.jsonl`. The detail view at `#/run/<id>` renders summary cards, by-category breakdown, per-item table, and a manifest disclosure.
+- `loadIndex()` reads `reports/reports.json`, built by `llms eval report` from each run's `manifest.json` + `summary.json`. The registry's `suites` block groups runs by `comparability_key` (one suite = one adapter/dataset/decode, varying profiles).
+- `loadProfilesSnapshot()` reads `reports/profiles.json`, a flat snapshot of the active config tree.
+- `loadSuite(id)` lazily fetches each member run's `manifest.json`, `summary.json`, `results.jsonl`, then rolls them up into per-profile + per-prompt views.
+- `loadProfileConfs(names)` looks for `bench/configs/<profile>.conf` first, then falls back to the working tree at `config/profiles/<profile>.conf`.
 
-The home page shows a flat run list with adapter and track filters, a comparable-groups panel that groups runs sharing a `comparability_key`, and the model reading guide.
+The home page shows the latest suite as a hero, a suite grid, and a cross-suite leaderboard. Each suite report has five tabs:
+
+- **Summary** — recommendations, bar chart, scatter, cleanliness grid.
+- **Profiles** — sortable manifest with role highlights.
+- **Prompts** — per-prompt × per-profile output with expandable excerpts.
+- **Configs** — per-profile `.conf` cards + auto-detected family diff.
+- **Methodology** — timings / rubric / cleanliness explainers + GGUF reading guide.

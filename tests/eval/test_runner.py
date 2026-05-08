@@ -126,6 +126,28 @@ def test_runner_records_errors_on_http_500(tmp_path: Path) -> None:
     assert rows[0]["error"]
 
 
+def test_runner_records_timing(tmp_path: Path) -> None:
+    """Wall-clock and compute-clock timing land in summary.json."""
+    outcome = run_eval(
+        adapter=LocalSmokeAdapter(),
+        runtime=_stub_runtime(),
+        endpoint_name="ep",
+        base_url="http://stub",
+        output_root=tmp_path / "runs",
+        transport=_mock_transport(),
+        subset="coding_bugfix",
+    )
+    timing = outcome.summary.timing
+    assert timing is not None
+    assert timing.wall_seconds >= 0
+    assert timing.compute_seconds >= 0
+    # ISO-8601 stamps round-trip through summary.json.
+    payload = json.loads(outcome.summary_path.read_text())
+    assert payload["timing"]["started_at"]
+    assert payload["timing"]["finished_at"]
+    assert "wall_seconds" in payload["timing"]
+
+
 def test_runner_writes_comparable_keys(tmp_path: Path) -> None:
     runtime = _stub_runtime()
     args = {

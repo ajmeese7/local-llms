@@ -28,6 +28,22 @@ class CategoryStats:
 
 
 @dataclass(frozen=True, slots=True)
+class Timing:
+    """Wall-clock cost of a run.
+
+    `wall_seconds` is the full duration the runner spent driving this adapter
+    (item iteration + scoring + summarization). `compute_seconds` is the sum of
+    per-item HTTP latencies — i.e. time the model was actively generating. The
+    delta is dataset I/O, scoring, parse overhead, and any inter-request gaps.
+    """
+
+    started_at: str  # ISO-8601 UTC, captured before the item loop
+    finished_at: str  # ISO-8601 UTC, captured after summarize
+    wall_seconds: float
+    compute_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
 class RunSummary:
     """High-level numbers for one run."""
 
@@ -41,6 +57,7 @@ class RunSummary:
     median_ttft_ms: float | None
     median_tokens_per_sec: float | None
     by_category: dict[str, CategoryStats] = field(default_factory=dict)
+    timing: Timing | None = None
 
 
 def _percentile_from_sorted(values: list[float], pct: float) -> float:
@@ -86,7 +103,11 @@ def _median(values: list[float]) -> float | None:
     return statistics.median(values) if values else None
 
 
-def summarize(results: Sequence[ItemResult]) -> RunSummary:
+def summarize(
+    results: Sequence[ItemResult],
+    *,
+    timing: Timing | None = None,
+) -> RunSummary:
     correct = [1.0 if r.score.correct else 0.0 for r in results]
     partial = [r.score.partial for r in results]
     latencies = [r.latency_ms for r in results if r.latency_ms is not None]
@@ -119,6 +140,7 @@ def summarize(results: Sequence[ItemResult]) -> RunSummary:
         median_ttft_ms=_median(ttfts),
         median_tokens_per_sec=_median(tps),
         by_category=category_stats,
+        timing=timing,
     )
 
 
@@ -126,6 +148,7 @@ __all__ = [
     "CategoryStats",
     "ConfidenceInterval",
     "RunSummary",
+    "Timing",
     "bootstrap_mean",
     "summarize",
 ]

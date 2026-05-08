@@ -39,6 +39,18 @@ def _fmt_tps(value: float | None) -> str:
     return "—" if value is None else f"{value:.1f} tok/s"
 
 
+def _fmt_duration(seconds: float | None) -> str:
+    if seconds is None:
+        return "—"
+    if seconds < 60:
+        return f"{seconds:.1f} s"
+    minutes, sec = divmod(int(seconds), 60)
+    if minutes < 60:
+        return f"{minutes}m {sec}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m"
+
+
 def _render_markdown(manifest: Manifest, summary: RunSummary) -> str:
     lines: list[str] = []
     a = manifest.adapter
@@ -48,6 +60,25 @@ def _render_markdown(manifest: Manifest, summary: RunSummary) -> str:
     lines.append(f"- track: `{a.track}`  ·  adapter: `{a.name}@{a.version}`")
     lines.append(f"- endpoint: `{manifest.endpoint_name}`  ·  profile: `{m.profile}`")
     lines.append(f"- provider: `{manifest.provider.name}`")
+    if manifest.hardware.gpu_name:
+        vram = (
+            f", {manifest.hardware.vram_mb} MiB VRAM"
+            if manifest.hardware.vram_mb is not None
+            else ""
+        )
+        lines.append(f"- hardware: `{manifest.hardware.gpu_name}`{vram}")
+        oc_bits: list[str] = []
+        if manifest.hardware.boost_clock_mhz is not None:
+            oc_bits.append(f"boost {manifest.hardware.boost_clock_mhz} MHz")
+        if manifest.hardware.power_limit_w is not None:
+            oc_bits.append(f"power {manifest.hardware.power_limit_w:g} W")
+        if manifest.hardware.persistence_mode:
+            oc_bits.append(f"persistence {manifest.hardware.persistence_mode.lower()}")
+        if oc_bits:
+            lines.append(f"- gpu state: {', '.join(oc_bits)}")
+    if manifest.server is not None:
+        version = f"@{manifest.server.version}" if manifest.server.version else ""
+        lines.append(f"- server: `{manifest.server.engine}{version}`")
     lines.append(f"- comparability: `{manifest.comparability_key[:12]}…`")
     lines.append(f"- timestamp: {manifest.timestamp}")
     lines.append("")
@@ -64,6 +95,9 @@ def _render_markdown(manifest: Manifest, summary: RunSummary) -> str:
     lines.append(f"| median latency | {_fmt_ms(summary.median_latency_ms)} |")
     lines.append(f"| median ttft | {_fmt_ms(summary.median_ttft_ms)} |")
     lines.append(f"| median throughput | {_fmt_tps(summary.median_tokens_per_sec)} |")
+    if summary.timing is not None:
+        lines.append(f"| wall-clock | {_fmt_duration(summary.timing.wall_seconds)} |")
+        lines.append(f"| compute (sum of latencies) | {_fmt_duration(summary.timing.compute_seconds)} |")
     lines.append("")
     if summary.by_category:
         lines.append("## By category")

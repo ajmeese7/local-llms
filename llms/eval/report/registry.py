@@ -5,10 +5,17 @@ flat `reports.json` the SPA loads up front. Per-run heavy data
 (`results.jsonl`) is fetched lazily by the hub when a row is opened.
 Also emits `profiles.json`, a snapshot of the config tree the SPA
 guide reads to render real model cards.
+
+The registry's `benches` block groups runs by `(hardware_profile,
+model_profile)` — one bench per GPU+model pair on this host.
+Inside a bench, runs are bucketed into `cells` keyed by
+`comparability_key` (one cell = one capability against this model);
+each cell keeps history (newest first) so re-runs are not lost.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +23,7 @@ from typing import Any
 
 from llms.serving.config.loader import load_bundle
 
-REGISTRY_VERSION = 2
+REGISTRY_VERSION = 4
 
 
 def build_registry(output_root: Path) -> dict[str, Any]:
@@ -33,7 +40,122 @@ def build_registry(output_root: Path) -> dict[str, Any]:
         "version": REGISTRY_VERSION,
         "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "reports": reports,
+        "benches": _build_benches(reports),
     }
+
+
+def _build_benches(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group reports into benches keyed by (hardware_profile, model_profile).
+
+    A bench is one (GPU, model) pair on this host. Inside a bench, runs are
+    bucketed into cells keyed by `comparability_key`; each cell keeps the
+    full history (newest first), so re-running the same capability against
+    the same model preserves the older results for trend-spotting.
+    """
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for report in reports:
+        hw_profile = _hw_profile_of(report) or "unknown"
+        model_profile = report.get("profile") or report.get("alias") or "unknown"
+        grouped.setdefault((hw_profile, model_profile), []).append(report)
+
+    benches: list[dict[str, Any]] = []
+    for (hw_profile, model_profile), members in grouped.items():
+        members.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+        head = members[0]
+        cells = _build_cells(members)
+        suite_seconds = _sum_or_none(c.get("wall_seconds") for c in cells)
+        benches.append(
+            {
+                "id": _bench_id(hw_profile, model_profile),
+                "hardware_profile": hw_profile,
+                "model_profile": model_profile,
+                "model_alias": head.get("alias") or model_profile,
+                "title": _bench_title(head, hw_profile, model_profile),
+                "latest_timestamp": head.get("timestamp"),
+                "hardware": head.get("hardware"),
+                "server": head.get("server"),
+                "cell_count": len(cells),
+                "run_count": len(members),
+                "suite_seconds": suite_seconds,
+                "cells": cells,
+            }
+        )
+    benches.sort(key=lambda b: b.get("latest_timestamp") or "", reverse=True)
+    return benches
+
+
+def _sum_or_none(values: Any) -> float | None:
+    """Sum non-None numerics; return None if every value is missing."""
+    total = 0.0
+    seen = False
+    for v in values:
+        if isinstance(v, int | float):
+            total += float(v)
+            seen = True
+    return total if seen else None
+
+
+def _build_cells(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One cell per comparability_key inside a bench."""
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for r in members:
+        key = r.get("comparability_key")
+        if not key:
+            continue
+        by_key.setdefault(key, []).append(r)
+
+    cells: list[dict[str, Any]] = []
+    for key, runs in by_key.items():
+        runs.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+        latest = runs[0]
+        latest_timing = latest.get("timing") if isinstance(latest.get("timing"), dict) else None
+        cells.append(
+            {
+                "comparability_key": key,
+                "comparability_prefix": key[:8],
+                "adapter": latest.get("adapter") or {},
+                "latest": latest,
+                "history_ids": [r["id"] for r in runs],  # newest first; includes latest
+                "run_count": len(runs),
+                "wall_seconds": (latest_timing or {}).get("wall_seconds"),
+                "compute_seconds": (latest_timing or {}).get("compute_seconds"),
+            }
+        )
+    # Newest cell first, but stable on adapter name as tiebreaker.
+    cells.sort(
+        key=lambda c: (
+            c["latest"].get("timestamp") or "",
+            (c["adapter"].get("name") or ""),
+        ),
+        reverse=True,
+    )
+    return cells
+
+
+def _bench_id(hw_profile: str, model_profile: str) -> str:
+    """Stable 16-char id for a bench. Uses sha256 so renames produce a
+    fresh id (acceptable: a renamed hardware profile is a different bench)."""
+    return hashlib.sha256(f"{hw_profile}::{model_profile}".encode()).hexdigest()[:16]
+
+
+def _hw_profile_of(report: dict[str, Any]) -> str | None:
+    hw = report.get("hardware")
+    if isinstance(hw, dict):
+        profile = hw.get("profile")
+        if isinstance(profile, str) and profile:
+            return profile
+    return None
+
+
+def _bench_title(head: dict[str, Any], hw_profile: str, model_profile: str) -> str:
+    """'<model_alias> on <gpu_short>' when both are known; else fall back."""
+    alias = head.get("alias") or model_profile
+    hw = head.get("hardware") if isinstance(head.get("hardware"), dict) else None
+    gpu = (hw or {}).get("gpu_name") or hw_profile
+    if not gpu or gpu == "unknown":
+        return alias
+    short = gpu.replace("NVIDIA ", "").replace("GeForce ", "")
+    return f"{alias} on {short}"
 
 
 def emit_registry(output_root: Path) -> Path:
@@ -170,6 +292,9 @@ def _entry_for(run_dir: Path) -> dict[str, Any] | None:
     provider = manifest.get("provider", {})
     accuracy = _normalize_ci(summary.get("accuracy"))
     partial = _normalize_ci(summary.get("partial"))
+    hardware = manifest.get("hardware") if isinstance(manifest.get("hardware"), dict) else None
+    server = manifest.get("server") if isinstance(manifest.get("server"), dict) else None
+    timing = summary.get("timing") if isinstance(summary.get("timing"), dict) else None
     return {
         "id": run_dir.name,
         "timestamp": manifest.get("timestamp"),
@@ -194,7 +319,10 @@ def _entry_for(run_dir: Path) -> dict[str, Any] | None:
         "median_latency_ms": summary.get("median_latency_ms"),
         "median_ttft_ms": summary.get("median_ttft_ms"),
         "median_tokens_per_sec": summary.get("median_tokens_per_sec"),
+        "timing": timing,
         "notes": manifest.get("notes") or "",
+        "hardware": hardware,
+        "server": server,
     }
 
 

@@ -1,234 +1,311 @@
 /* ============================================================
-   home.jsx
-   Hub home: a flat run list with adapter / track filters and a
-   small comparability grouping aside, then the model reading guide.
+   home.jsx — Hub home.
+
+   Flat bench grid by default (one card per (hardware, model)).
+   When >=2 distinct hardware profiles are present, a hardware
+   filter chip row appears above the grid. Sidebar surfaces
+   per-metric leaderboards across all benches.
    ============================================================ */
 
-const { useState: useHomeS, useMemo: useHomeM } = React;
+const { useState: _hUseS, useMemo: _hUseM } = React;
 
-function HomePage({ reports, profilesSnapshot, onOpen, onRefresh, generatedAt }) {
-  const [adapterFilter, setAdapterFilter] = useHomeS(null);
-  const [trackFilter, setTrackFilter] = useHomeS(null);
+function HomePage({ index, profilesSnap, leaderboards, onOpen }) {
+  const benches = index?.benches || [];
+  const reports = index?.reports || [];
 
-  const adapters = useHomeM(() => window.BenchData.listAdapters(reports), [reports]);
-  const tracks = useHomeM(() => window.BenchData.listTracks(reports), [reports]);
+  const hwProfiles = _hUseM(() => {
+    const set = new Set();
+    for (const b of benches) set.add(b.hardware_profile || "unknown");
+    return [...set].sort();
+  }, [benches]);
 
-  const filtered = useHomeM(() => {
-    return reports.filter(r => {
-      const a = r.adapter || {};
-      if (adapterFilter && a.name !== adapterFilter) return false;
-      if (trackFilter && a.track !== trackFilter) return false;
-      return true;
-    });
-  }, [reports, adapterFilter, trackFilter]);
+  const [hwFilter, setHwFilter] = _hUseS("all");
+  const visible = hwFilter === "all"
+    ? benches
+    : benches.filter(b => (b.hardware_profile || "unknown") === hwFilter);
 
-  const buckets = useHomeM(
-    () => window.BenchData.groupByComparability(filtered),
-    [filtered],
-  );
+  if (!index) {
+    return (
+      <div className="me-card p-8 text-center font-mono text-me-fg-3">
+        <i className="fa-solid fa-spinner fa-spin mr-2"></i> Loading registry…
+      </div>
+    );
+  }
+
+  if (!benches.length) return <EmptyState reports={reports} />;
 
   return (
     <>
-      <header className="mb-8 md:mb-10">
-        <Eyebrow>// Meese · Bench</Eyebrow>
-        <h1 className="font-display text-[28px] md:text-[40px] tracking-[0.06em] uppercase mt-1.5 mb-3">
-          Eval runs
-        </h1>
-        <div className="font-mono text-[12px] text-me-fg-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span>{reports.length} run{reports.length === 1 ? "" : "s"} indexed</span>
-          {generatedAt && <span>registry generated {window.BenchData.fmtTimestamp(generatedAt)}</span>}
-          <button
-            onClick={onRefresh}
-            className="me-chip text-[10px] px-2 py-0.5"
-            title="Reload reports.json from disk">
-            <i className="fa-solid fa-rotate mr-1"></i> refresh
-          </button>
+      <HomeHero benches={benches} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 lg:gap-8">
+        <div>
+          <div className="me-section-head">
+            <h2><span className="num">A</span>All Benches</h2>
+            <span className="sub">
+              // {benches.length} bench{benches.length === 1 ? "" : "es"} · {reports.length} run{reports.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          {hwProfiles.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <Label>Hardware</Label>
+              <Chip on={hwFilter === "all"} cyan onClick={() => setHwFilter("all")}>All</Chip>
+              {hwProfiles.map(hw => (
+                <Chip key={hw} on={hwFilter === hw} onClick={() => setHwFilter(hw)}>
+                  {hw}
+                </Chip>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {visible.map(b => (
+              <BenchCard
+                key={b.id}
+                bench={b}
+                showHwPill={hwProfiles.length > 1}
+                onOpen={() => onOpen(b.id)} />
+            ))}
+          </div>
         </div>
-      </header>
 
-      <FilterRow
-        label="adapter"
-        options={adapters}
-        active={adapterFilter}
-        onChange={setAdapterFilter} />
-      <FilterRow
-        label="track"
-        options={tracks}
-        active={trackFilter}
-        onChange={setTrackFilter} />
-
-      {filtered.length === 0 ? (
-        <EmptyState reports={reports} onClear={() => { setAdapterFilter(null); setTrackFilter(null); }} />
-      ) : (
-        <RunsTable reports={filtered} onOpen={onOpen} />
-      )}
-
-      <ComparabilityIndex buckets={buckets} onOpen={onOpen} />
-
-      <GuideSection profilesSnapshot={profilesSnapshot} />
+        <div className="flex flex-col gap-4">
+          {leaderboards && <LeaderboardsBlock leaderboards={leaderboards} onOpen={onOpen} />}
+          {profilesSnap && <ProfilesSnapshotCard snapshot={profilesSnap} />}
+          <NextStepsCard />
+        </div>
+      </div>
     </>
   );
 }
 
-function FilterRow({ label, options, active, onChange }) {
-  if (!options.length) return null;
+function EmptyState({ reports }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 mb-3 font-mono text-[10px] text-me-fg-3">
-      <span className="w-16 uppercase tracking-[0.18em]">{label}:</span>
-      <button
-        className={`me-chip ${active == null ? "on" : ""}`}
-        onClick={() => onChange(null)}>all</button>
-      {options.map(opt => (
-        <button
-          key={opt}
-          className={`me-chip ${active === opt ? "on" : ""}`}
-          onClick={() => onChange(active === opt ? null : opt)}>{opt}</button>
+    <div className="hero-bg relative overflow-hidden border border-me-border p-8 mb-8">
+      <h1 className="hero-title my-2">Meese · Bench</h1>
+      <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 mb-4 max-w-[64ch]">
+        // No benches yet. Run an adapter at least once and the hub will pick it up automatically.
+      </p>
+      <div className="me-card p-4 md:p-5 max-w-[64ch]">
+        <Label>Quick start</Label>
+        <pre className="font-mono text-[12px] md:text-[13px] text-me-cyan mt-2 whitespace-pre-wrap">
+{`# from the repo root
+just bench-run            # any adapter
+llms eval report          # rebuilds bench/reports/reports.json`}
+        </pre>
+        {reports.length > 0 && (
+          <div className="mt-3 font-mono text-[11px] text-me-warning">
+            {reports.length} run{reports.length === 1 ? "" : "s"} present but didn't group — re-run <code>llms eval report</code>.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HomeHero({ benches }) {
+  const totalCells = benches.reduce((acc, b) => acc + (b.cell_count || 0), 0);
+  const totalRuns = benches.reduce((acc, b) => acc + (b.run_count || 0), 0);
+  const latestStamp = benches[0]?.latest_timestamp;
+  return (
+    <div className="hero-bg relative overflow-hidden border border-me-border p-5 md:p-8 lg:p-9 mb-8">
+      <div className="me-eyebrow flex flex-wrap gap-x-5 gap-y-2 mb-3">
+        <span className="inline-flex items-center gap-1.5 text-me-magenta">
+          <i className="fa-solid fa-circle-dot"></i> Bench hub
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="fa-solid fa-cubes-stacked text-me-cyan"></i>
+          {benches.length} bench{benches.length === 1 ? "" : "es"}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="fa-solid fa-list-check text-me-cyan"></i>
+          {totalCells} capabilit{totalCells === 1 ? "y" : "ies"}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="fa-solid fa-rotate text-me-cyan"></i>
+          {totalRuns} run{totalRuns === 1 ? "" : "s"} accumulated
+        </span>
+        {latestStamp && (
+          <span className="inline-flex items-center gap-1.5">
+            <i className="fa-regular fa-clock text-me-cyan"></i>
+            last: {window.BenchData.fmtTimestamp(latestStamp)}
+          </span>
+        )}
+      </div>
+      <h1 className="hero-title my-2">Meese · Bench</h1>
+      <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 max-w-[80ch]">
+        // one card per (hardware, model). each card carries every capability you've thrown at it.
+      </p>
+    </div>
+  );
+}
+
+function BenchCard({ bench, showHwPill, onOpen }) {
+  const hw = bench.hardware;
+  const cellPreview = (bench.cells || []).slice(0, 6);
+  const overflow = (bench.cells || []).length - cellPreview.length;
+
+  return (
+    <div
+      className="me-card p-4 md:p-5 transition-all hover:-translate-y-0.5 hover:border-me-border-strong cursor-pointer"
+      onClick={onOpen}
+      role="button">
+      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+        <div className="me-eyebrow flex items-center gap-2">
+          <i className="fa-solid fa-cube text-me-cyan"></i>
+          <span>{bench.model_alias}</span>
+        </div>
+        <div className="font-mono text-[10px] text-me-fg-3">
+          {window.BenchData.fmtDateOnly(bench.latest_timestamp)}
+        </div>
+      </div>
+
+      <h3 className="font-display text-[14px] md:text-[16px] tracking-[0.08em] uppercase m-0 mb-3 text-me-fg break-words">
+        {bench.title}
+      </h3>
+
+      {showHwPill && (
+        <div className="mb-3">
+          <span className="font-mono text-[10px] tracking-[0.1em] uppercase px-2 py-0.5 border border-me-cyan/40 text-me-cyan">
+            {hw?.gpu_name ? window.BenchData.gpuShort(hw.gpu_name) : (bench.hardware_profile || "unknown")}
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[11px]">
+        <div className="p-2 bg-white/[0.02] border border-me-border min-w-0">
+          <div className="me-label">Capabilities</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{bench.cell_count}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border min-w-0">
+          <div className="me-label">Runs</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{bench.run_count}</div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {cellPreview.map(c => (
+          <span key={c.comparability_key}
+                className="font-mono text-[10px] tracking-[0.06em] uppercase px-2 py-0.5 border border-me-border text-me-fg-2">
+            {c.adapter.name}
+          </span>
+        ))}
+        {overflow > 0 && <span className="font-mono text-[10px] text-me-fg-3 px-1.5 py-0.5">+{overflow}</span>}
+      </div>
+
+      {bench.suite_seconds != null && (
+        <div className="flex items-center gap-1.5 mb-3 font-mono text-[10px] text-me-fg-3">
+          <i className="fa-solid fa-stopwatch text-me-fg-3"></i>
+          ≈ {window.BenchData.fmtDuration(bench.suite_seconds)} per full suite
+        </div>
+      )}
+
+      <div className="w-full font-display text-[11px] tracking-[0.16em] uppercase px-3 py-2 border border-me-border text-me-fg-2 hover:text-me-fg hover:border-me-cyan hover:[box-shadow:inset_0_0_0_1px_var(--me-cyan-60)] transition-all text-center">
+        Open <i className="fa-solid fa-arrow-right ml-1"></i>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Leaderboards ---------- */
+function LeaderboardsBlock({ leaderboards, onOpen }) {
+  const blocks = [];
+  // Top tok/s (any adapter, all benches)
+  if (leaderboards.tps && leaderboards.tps.length > 1) {
+    blocks.push({
+      id: "tps",
+      icon: "fa-bolt",
+      title: "Top tok/s",
+      sub: "any capability",
+      rows: leaderboards.tps.slice(0, 5),
+      fmt: r => window.BenchData.fmtTps(r.value),
+    });
+  }
+  // Per-adapter quality leaderboards (only if 2+ contenders)
+  for (const [adapter, rows] of Object.entries(leaderboards.perAdapter || {})) {
+    if (!rows || rows.length < 2) continue;
+    blocks.push({
+      id: `q-${adapter}`,
+      icon: "fa-list-check",
+      title: `Top ${adapter}`,
+      sub: "quality",
+      rows: rows.slice(0, 5),
+      fmt: r => `${Number(r.value).toFixed(1)}%`,
+    });
+  }
+  if (!blocks.length) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      {blocks.map(b => (
+        <div key={b.id} className="me-card p-4 md:p-5">
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 text-me-fg">
+              <i className={`fa-solid ${b.icon} text-me-warning mr-2`}></i> {b.title}
+            </h3>
+            <span className="font-mono text-[10px] text-me-fg-3">{b.sub}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {b.rows.map((r, i) => (
+              <button
+                key={`${r.benchId}-${r.adapter?.name || ""}`}
+                onClick={() => onOpen(r.benchId)}
+                className="grid grid-cols-[18px_1fr_60px] gap-2 items-center text-[11px] font-mono text-left bg-transparent border-0 px-1 py-0.5 cursor-pointer hover:text-me-fg">
+                <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}</span>
+                <div className="min-w-0">
+                  <div className="text-me-fg truncate" title={r.benchTitle}>{r.modelAlias}</div>
+                  <div className="text-me-fg-3 text-[10px] truncate">{r.adapter?.name || "—"} · {r.hardwareProfile}</div>
+                </div>
+                <div className="text-right text-me-cyan">{b.fmt(r)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
 }
 
-function RunsTable({ reports, onOpen }) {
+function ProfilesSnapshotCard({ snapshot }) {
+  const profiles = snapshot.profiles || [];
+  const providers = snapshot.providers || [];
+  if (!profiles.length && !providers.length) return null;
   return (
-    <div className="me-card overflow-x-auto">
-      <table className="w-full font-mono text-[12px]">
-        <thead>
-          <tr className="text-left text-me-fg-3 border-b border-me-border">
-            <th className="px-3 py-2.5">Run</th>
-            <th className="px-3 py-2.5">Adapter</th>
-            <th className="px-3 py-2.5">Endpoint</th>
-            <th className="px-3 py-2.5">Profile</th>
-            <th className="px-3 py-2.5 text-right">Items</th>
-            <th className="px-3 py-2.5">Accuracy</th>
-            <th className="px-3 py-2.5 text-right">Latency</th>
-            <th className="px-3 py-2.5 text-right">Throughput</th>
-            <th className="px-3 py-2.5">Compat</th>
-            <th className="px-3 py-2.5">Timestamp</th>
-          </tr>
-        </thead>
-        <tbody>
-          {reports.map(r => {
-            const a = r.adapter || {};
-            const accLabel = window.BenchData.fmtAccuracy(r.accuracy);
-            const accCi = window.BenchData.fmtCi(r.accuracy);
-            const failBadge = (r.parse_failure_count || 0) + (r.error_count || 0);
-            return (
-              <tr
-                key={r.id}
-                className="border-b border-me-border last:border-0 hover:bg-me-surface cursor-pointer"
-                onClick={() => onOpen(r.id)}>
-                <td className="px-3 py-2.5 text-me-fg">
-                  <div className="truncate max-w-[28ch]" title={r.id}>{r.id}</div>
-                  {r.notes && <div className="text-me-fg-3 line-clamp-2 max-w-[28ch]">{r.notes}</div>}
-                </td>
-                <td className="px-3 py-2.5">
-                  <div>{a.name}@{a.version}</div>
-                  <div className="text-me-fg-3 text-[10px]">{a.track || "—"}</div>
-                </td>
-                <td className="px-3 py-2.5">
-                  <div>{r.endpoint || "—"}</div>
-                  <div className="text-me-fg-3 text-[10px]">{r.provider || ""}</div>
-                </td>
-                <td className="px-3 py-2.5">
-                  {r.profile || "—"}
-                </td>
-                <td className="px-3 py-2.5 text-right">{r.item_count ?? "—"}</td>
-                <td className="px-3 py-2.5">
-                  <div className="text-me-fg">{accLabel}</div>
-                  <div className="text-me-fg-3 text-[10px]" title={accCi}>{accCi !== accLabel ? accCi : ""}</div>
-                  {failBadge > 0 && (
-                    <span className="me-miniflag leak mt-1 inline-block">{failBadge} failed</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-right">{window.BenchData.fmtMs(r.median_latency_ms)}</td>
-                <td className="px-3 py-2.5 text-right">{window.BenchData.fmtTps(r.median_tokens_per_sec)}</td>
-                <td className="px-3 py-2.5">
-                  {r.comparability_key ? (
-                    <code
-                      className="text-me-fg-2 cursor-pointer hover:text-me-fg"
-                      title={`${r.comparability_key}\n(click to copy)`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard?.writeText(r.comparability_key);
-                      }}>
-                      {r.comparability_prefix}
-                    </code>
-                  ) : (
-                    <code className="text-me-fg-2">—</code>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-me-fg-3">
-                  {window.BenchData.fmtTimestamp(r.timestamp)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ComparabilityIndex({ buckets, onOpen }) {
-  const groups = [...buckets.entries()].filter(([, runs]) => runs.length > 1);
-  if (!groups.length) return null;
-  return (
-    <section className="mt-12">
-      <SectionHead num="//" title="Comparable groups" sub="runs sharing a comparability key, same model, provider, decode, prompt, dataset, scorer" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {groups.map(([key, runs]) => {
-          const sample = runs[0];
-          return (
-            <div key={key} className="me-card p-4">
-              <div className="flex items-baseline justify-between gap-3 mb-2">
-                <div className="font-mono text-[11px] text-me-fg-2">
-                  {sample.adapter?.name}@{sample.adapter?.version}
-                  <span className="text-me-fg-3"> · {key.slice(0, 12)}…</span>
-                </div>
-                <div className="font-mono text-[10px] text-me-fg-3">{runs.length} runs</div>
-              </div>
-              <ul className="space-y-1">
-                {runs.map(r => (
-                  <li key={r.id}>
-                    <button
-                      onClick={() => onOpen(r.id)}
-                      className="font-mono text-[11px] text-me-fg-2 hover:text-me-fg text-left w-full">
-                      <span className="text-me-cyan">{window.BenchData.fmtAccuracy(r.accuracy)}</span>
-                      &nbsp;&nbsp;
-                      <span className="text-me-fg-3">{window.BenchData.fmtTimestamp(r.timestamp)}</span>
-                      &nbsp;&nbsp;
-                      <span>{r.endpoint || r.id}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function EmptyState({ reports, onClear }) {
-  if (reports.length === 0) {
-    return (
-      <div className="me-card p-8 text-center">
-        <i className="fa-solid fa-folder-open text-[28px] text-me-fg-3 mb-3"></i>
-        <div className="font-mono text-[12px] text-me-fg-2 mb-1">No runs indexed.</div>
-        <div className="font-mono text-[11px] text-me-fg-3">
-          Run <code>llms eval run &lt;adapter&gt; --endpoint &lt;name&gt;</code>, then{" "}
-          <code>llms eval report</code> to refresh the index.
+    <div className="me-card p-4 md:p-5">
+      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
+        <i className="fa-solid fa-folder-tree text-me-cyan mr-2"></i> Config snapshot
+      </h3>
+      <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[11px]">
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Profiles</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{profiles.length}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Providers</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{providers.length}</div>
         </div>
       </div>
-    );
-  }
-  return (
-    <div className="me-card p-6 text-center">
-      <div className="font-mono text-[12px] text-me-fg-2 mb-2">No runs match the selected filters.</div>
-      <button onClick={onClear} className="me-chip">clear filters</button>
+      <div className="font-mono text-[10px] text-me-fg-3 break-all">
+        {profiles.slice(0, 8).map(p => p.name).join(" · ")}
+        {profiles.length > 8 && ` · +${profiles.length - 8}`}
+      </div>
     </div>
   );
 }
 
-window.HomePage = HomePage;
+function NextStepsCard() {
+  return (
+    <div className="me-card p-4 md:p-5">
+      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
+        <i className="fa-solid fa-circle-info text-me-cyan mr-2"></i> Add a capability
+      </h3>
+      <div className="text-[12px] text-me-fg-2 leading-relaxed">
+        Run another adapter against an existing model and a new cell appears on its bench card. Re-run an adapter and the cell keeps its history.
+      </div>
+      <pre className="font-mono text-[11px] text-me-cyan mt-3 whitespace-pre-wrap">
+{`just bench-run mmlu profile=qwen36-27b
+just bench-run gsm8k profile=qwen36-27b`}
+      </pre>
+    </div>
+  );
+}
+
+Object.assign(window, { HomePage });

@@ -12,6 +12,15 @@
   color: transparent;
   text-shadow: -1px -1px 0 var(--me-magenta-60), 1px 1px 0 var(--me-cyan-60);
   white-space: nowrap;
+  transition: text-shadow 180ms ease;
+}
+/* Override the global `a:hover` blur — keep the chromatic offsets, just brighten them. */
+.nav-logo:hover,
+.nav-logo:focus {
+  text-shadow:
+    -1px -1px 0 var(--me-magenta),
+    1px 1px 0 var(--me-cyan),
+    0 0 1px rgba(255,255,255,0.2);
 }
 
 /* Tab underline */

@@ -17,9 +17,11 @@ from llms.eval.manifest import (
     AdapterFingerprint,
     DatasetFingerprint,
     DecodeFingerprint,
+    HardwareInfo,
     Manifest,
     ModelFingerprint,
     ProviderFingerprint,
+    ServerInfo,
     compute_comparability_key,
     file_sha256,
     hostname,
@@ -27,9 +29,10 @@ from llms.eval.manifest import (
     utc_now_iso,
 )
 from llms.eval.report.emit import emit as emit_report
-from llms.eval.scoring import RunSummary, summarize
+from llms.eval.scoring import RunSummary, Timing, summarize
 from llms.eval.types import Item, ItemResult
 from llms.serving.config.models import RuntimeConfig
+from llms.serving.launcher.gpu import detect_gpu_quiet
 from llms.serving.telemetry.log import RequestRecord, TelemetryWriter
 
 
@@ -81,6 +84,37 @@ def _provider_fingerprint(rt: RuntimeConfig) -> ProviderFingerprint:
     )
 
 
+def _hardware_info(rt: RuntimeConfig) -> HardwareInfo:
+    """Snapshot what we know about the host. Best effort: a CPU-only host or a
+    machine without `nvidia-smi` still produces a valid (if sparse) record.
+    Captures clock / power / persistence so OC vs. stock runs are visibly
+    distinguishable in the hub."""
+    gpu = detect_gpu_quiet()
+    if gpu is None:
+        return HardwareInfo(profile=rt.hardware.name)
+    return HardwareInfo(
+        profile=rt.hardware.name,
+        gpu_name=gpu.name,
+        vram_mb=gpu.vram_mb,
+        boost_clock_mhz=gpu.boost_clock_mhz,
+        mem_clock_max_mhz=gpu.mem_clock_max_mhz,
+        app_clock_graphics_mhz=gpu.app_clock_graphics_mhz,
+        app_clock_memory_mhz=gpu.app_clock_memory_mhz,
+        power_limit_w=gpu.power_limit_w,
+        persistence_mode=gpu.persistence_mode,
+    )
+
+
+def _server_info(rt: RuntimeConfig) -> ServerInfo:
+    """The provider config tells us the engine. Version / git commit are
+    populated lazily once `llms provider install` records them."""
+    return ServerInfo(
+        engine=rt.provider.name,
+        version=None,
+        git_commit=None,
+    )
+
+
 def build_manifest(
     *,
     adapter: BenchmarkAdapter,
@@ -127,6 +161,8 @@ def build_manifest(
         timestamp=utc_now_iso(),
         comparability_key=key,
         notes=notes,
+        hardware=_hardware_info(runtime),
+        server=_server_info(runtime),
     )
 
 
@@ -228,6 +264,8 @@ def run_eval(
     manifest.write(manifest_path)
 
     results: list[ItemResult] = []
+    started_at = utc_now_iso()
+    t0 = time.perf_counter()
     with (
         CompletionClient(
             base_url=base_url,
@@ -248,7 +286,17 @@ def run_eval(
             results.append(result)
             out.write(json.dumps(_result_to_json(result, run_id=manifest.run_id)) + "\n")
 
-    summary = summarize(results)
+    wall_seconds = time.perf_counter() - t0
+    compute_seconds = (
+        sum(r.latency_ms for r in results if r.latency_ms is not None) / 1000.0
+    )
+    timing = Timing(
+        started_at=started_at,
+        finished_at=utc_now_iso(),
+        wall_seconds=wall_seconds,
+        compute_seconds=compute_seconds,
+    )
+    summary = summarize(results, timing=timing)
     summary_path.write_text(json.dumps(_summary_to_json(summary), indent=2, sort_keys=True))
     md_path, html_path = emit_report(manifest=manifest, summary=summary, run_dir=run_dir)
     return RunOutcome(

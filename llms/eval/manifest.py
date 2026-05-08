@@ -68,6 +68,38 @@ class AdapterFingerprint:
 
 
 @dataclass(frozen=True, slots=True)
+class HardwareInfo:
+    """Best-effort host hardware snapshot. All fields optional; CPU-only hosts
+    leave them null and the hub renders 'unknown' gracefully.
+
+    The clock / power / persistence fields exist so two runs taken on
+    differently-tuned configurations of the same GPU (think overclock vs.
+    stock) are visibly distinguishable in the UI. We don't auto-invalidate
+    cells across state changes; the user reads the strip and decides.
+    """
+
+    profile: str | None = None  # resolved hardware config name (e.g. 'rtx-5090')
+    gpu_name: str | None = None
+    vram_mb: int | None = None
+    boost_clock_mhz: int | None = None        # clocks.max.graphics
+    mem_clock_max_mhz: int | None = None      # clocks.max.memory
+    app_clock_graphics_mhz: int | None = None  # clocks.applications.graphics
+    app_clock_memory_mhz: int | None = None   # clocks.applications.memory
+    power_limit_w: float | None = None        # power.limit
+    persistence_mode: str | None = None       # 'Enabled' | 'Disabled' | None
+
+
+@dataclass(frozen=True, slots=True)
+class ServerInfo:
+    """Inference server identity. `engine` is the provider name; `version` and
+    `git_commit` come from whichever the provider can report at run time."""
+
+    engine: str
+    version: str | None = None
+    git_commit: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Manifest:
     """Immutable record of one run's exact configuration."""
 
@@ -84,6 +116,8 @@ class Manifest:
     timestamp: str  # ISO-8601 UTC
     comparability_key: str
     notes: str = ""
+    hardware: HardwareInfo = field(default_factory=HardwareInfo)
+    server: ServerInfo | None = None
     extras: dict[str, object] = field(default_factory=dict)
 
     def to_json(self) -> str:
@@ -190,6 +224,14 @@ def _manifest_from_dict(data: dict[str, object]) -> Manifest:
     adapter = AdapterFingerprint(**_section(data, "adapter"))  # type: ignore[arg-type]
     extras_raw = data.get("extras") or {}
     extras = dict(extras_raw) if isinstance(extras_raw, dict) else {}
+    hardware_raw = data.get("hardware") or {}
+    hardware = (
+        HardwareInfo(**hardware_raw)  # type: ignore[arg-type]
+        if isinstance(hardware_raw, dict)
+        else HardwareInfo()
+    )
+    server_raw = data.get("server")
+    server = ServerInfo(**server_raw) if isinstance(server_raw, dict) else None  # type: ignore[arg-type]
     return Manifest(
         run_id=str(data["run_id"]),
         endpoint_name=str(data["endpoint_name"]),
@@ -204,6 +246,8 @@ def _manifest_from_dict(data: dict[str, object]) -> Manifest:
         timestamp=str(data["timestamp"]),
         comparability_key=str(data["comparability_key"]),
         notes=str(data.get("notes") or ""),
+        hardware=hardware,
+        server=server,
         extras=extras,
     )
 
@@ -212,9 +256,11 @@ __all__ = [
     "AdapterFingerprint",
     "DatasetFingerprint",
     "DecodeFingerprint",
+    "HardwareInfo",
     "Manifest",
     "ModelFingerprint",
     "ProviderFingerprint",
+    "ServerInfo",
     "compute_comparability_key",
     "file_sha256",
     "hostname",
