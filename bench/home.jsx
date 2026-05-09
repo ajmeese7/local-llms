@@ -246,7 +246,7 @@ function LeaderboardsBlock({ leaderboards, onOpen }) {
           <div className="flex flex-col gap-1">
             {b.rows.map((r, i) => (
               <button
-                key={`${r.benchId}-${r.adapter?.name || ""}`}
+                key={`${r.benchId}-${r.adapter?.name || ""}-${r.comparabilityPrefix || i}`}
                 onClick={() => onOpen(r.benchId)}
                 className="grid grid-cols-[18px_1fr_60px] gap-2 items-center text-[11px] font-mono text-left bg-transparent border-0 px-1 py-0.5 cursor-pointer hover:text-me-fg">
                 <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}</span>

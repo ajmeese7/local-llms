@@ -72,11 +72,15 @@ class CompletionClient:
             "max_tokens": prompt.max_tokens,
             "temperature": prompt.temperature,
             "stream": False,
-            # Disable Qwen3-style chain-of-thought for evals. Adapter budgets
-            # (e.g. mmlu max_tokens=8, niah=64) are sized for short final
-            # answers, not hidden `<think>` reasoning. Servers that don't
-            # honor this kwarg ignore it; harmless for non-Qwen models.
-            "chat_template_kwargs": {"enable_thinking": False},
+            # Default-off for Qwen3-style chain-of-thought: most adapters size
+            # max_tokens for short final answers, not hidden `<think>` reasoning.
+            # Adapters that want thinking on (e.g. frontend_agentic agentic
+            # items) set Prompt.enable_thinking=True to override.
+            "chat_template_kwargs": {
+                "enable_thinking": (
+                    prompt.enable_thinking if prompt.enable_thinking is not None else False
+                )
+            },
         }
         if prompt.top_p is not None:
             body["top_p"] = prompt.top_p

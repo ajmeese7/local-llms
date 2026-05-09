@@ -50,7 +50,7 @@ module-root = ""
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["archive", "design", "bench/reports", "benchmark-results"]
+extend-exclude = ["archive", "design", "bench/reports"]
 
 [tool.ruff.lint]
 select = [
@@ -71,7 +71,7 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-exclude = ["archive/", "design/", "bench/reports/", "benchmark-results/"]
+exclude = ["archive/", "design/", "bench/reports/"]
 
 [[tool.mypy.overrides]]
 module = ["pynvml.*", "datasets.*"]

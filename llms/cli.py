@@ -9,6 +9,14 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 
 from llms import __version__
@@ -69,11 +77,25 @@ def root(
     """Entry callback. Subcommands are registered above."""
 
 
+def _find_default_config_root() -> Path:
+    """Walk up from cwd looking for the nearest dir containing `config/profiles/`.
+
+    Lets `llms eval report` (and friends) work from any subdirectory of the
+    repo. Falls back to `./config` so the existing `--config` UX is unchanged
+    when running from the repo root.
+    """
+    cwd = Path.cwd()
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / "config" / "profiles").is_dir():
+            return candidate / "config"
+    return Path("config")
+
+
 CONFIG_OPT = typer.Option(
-    Path("config"),
+    _find_default_config_root(),
     "--config",
     "-c",
-    help="Path to the config tree (defaults to ./config).",
+    help="Path to the config tree (defaults to nearest ancestor `config/`).",
     exists=True,
     file_okay=False,
     dir_okay=True,
@@ -382,11 +404,24 @@ def endpoint_revisions(
 
 # ── eval ────────────────────────────────────────────────────────────────────
 
+def _find_default_output_root() -> Path:
+    """Walk up from cwd looking for the nearest `bench/reports/` directory.
+
+    Mirrors `_find_default_config_root` so eval commands work from any
+    repo subdirectory, not just the root.
+    """
+    cwd = Path.cwd()
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / "bench" / "reports").is_dir():
+            return candidate / "bench" / "reports"
+    return Path("bench/reports")
+
+
 EVAL_OUTPUT_OPT = typer.Option(
-    Path("bench/reports"),
+    _find_default_output_root(),
     "--output",
     "-o",
-    help="Where to write per-run artifacts (manifest, jsonl, html).",
+    help="Where to write per-run artifacts (defaults to nearest ancestor `bench/reports/`).",
 )
 
 
@@ -414,7 +449,14 @@ def _load_adapter(name: str, *, max_items: int | None = None) -> BenchmarkAdapte
         from llms.eval.adapters.niah import NIAHAdapter
 
         return NIAHAdapter()
-    raise typer.BadParameter(f"unknown adapter '{name}' (have: local_smoke, mmlu, gsm8k, niah)")
+    if name == "frontend_agentic":
+        from llms.eval.adapters.frontend_agentic import FrontendAgenticAdapter
+
+        return FrontendAgenticAdapter()
+    raise typer.BadParameter(
+        f"unknown adapter '{name}' "
+        "(have: local_smoke, mmlu, gsm8k, niah, frontend_agentic)"
+    )
 
 
 @eval_app.command("run")
@@ -472,22 +514,68 @@ def eval_run(
         f"running [bold]{adapter_name}[/] against [cyan]{target_url}[/] "
         f"(endpoint=[bold]{endpoint}[/], hardware=[bold]{hw}[/])"
     )
-    outcome = run_eval(
-        adapter=adapter,
-        runtime=runtime,
-        endpoint_name=endpoint,
-        base_url=target_url,
-        output_root=output_root,
-        subset=subset,
-        seed=seed,
-        hash_model=hash_model,
-        telemetry=telemetry,
-        notes=notes,
+    progress = Progress(
+        TextColumn("[bold]{task.fields[item_id]}[/]"),
+        BarColumn(bar_width=24),
+        MofNCompleteColumn(),
+        TextColumn("{task.fields[stats]}"),
+        TimeElapsedColumn(),
+        TextColumn("eta"),
+        TimeRemainingColumn(),
+        console=console,
+        transient=False,
     )
+    task_id = progress.add_task("eval", total=None, item_id="-", stats="")
+
+    def _on_start(idx: int, total: int, item: object) -> None:
+        del idx
+        progress.update(
+            task_id,
+            total=total,
+            item_id=getattr(item, "id", "?"),
+            stats="[dim]generating…[/]",
+        )
+
+    def _on_finish(idx: int, total: int, result: object) -> None:
+        del idx
+        score = getattr(result, "score", None)
+        ok_mark = (
+            "[green]✓[/]"
+            if score is not None and getattr(score, "correct", False)
+            else "[yellow]·[/]"
+        )
+        partial = getattr(score, "partial", None) if score is not None else None
+        partial_str = f"{partial:.2f}" if isinstance(partial, float) else "—"
+        tok = getattr(result, "output_tokens", None)
+        tps = getattr(result, "tokens_per_sec", None)
+        bits = [ok_mark, f"score={partial_str}"]
+        if isinstance(tok, int):
+            bits.append(f"{tok:,} tok")
+        if isinstance(tps, float):
+            bits.append(f"{tps:.0f} tok/s")
+        progress.update(task_id, advance=1, total=total, stats=" · ".join(bits))
+
+    with progress:
+        outcome = run_eval(
+            adapter=adapter,
+            runtime=runtime,
+            endpoint_name=endpoint,
+            base_url=target_url,
+            output_root=output_root,
+            subset=subset,
+            seed=seed,
+            hash_model=hash_model,
+            telemetry=telemetry,
+            notes=notes,
+            on_item_start=_on_start,
+            on_item_finish=_on_finish,
+        )
     summary = outcome.summary
     accuracy = f"{summary.accuracy.point:.3f}" if summary.accuracy is not None else "—"
+    head_marker = "[yellow]![/]" if outcome.interrupted else "[green]✓[/]"
+    head_label = "interrupted after" if outcome.interrupted else ""
     console.print(
-        f"[green]✓[/] {summary.item_count} items, accuracy={accuracy}, "
+        f"{head_marker} {head_label} {summary.item_count} items, accuracy={accuracy}, "
         f"parse_failures={summary.parse_failure_count}, errors={summary.error_count}"
     )
     console.print(f"  artifacts: [dim]{outcome.manifest_path.parent}[/]")
@@ -499,6 +587,21 @@ def eval_run(
             f"  took: [dim]{fmt_duration(timing.wall_seconds)} wall · "
             f"{fmt_duration(timing.compute_seconds)} compute[/]"
         )
+
+    # Refresh the bench SPA index so this run shows up immediately. Failure here
+    # shouldn't fail the run — the artifacts are already on disk and a manual
+    # `llms eval report` will pick them up later.
+    try:
+        from llms.eval.report.registry import emit_profiles_snapshot, emit_registry
+
+        emit_registry(output_root)
+        emit_profiles_snapshot(output_root, config_root)
+        console.print(f"  hub: [dim]refreshed {output_root}/reports.json[/]")
+    except Exception as exc:
+        err_console.print(f"[yellow]![/] hub refresh failed: {exc}")
+
+    if outcome.interrupted:
+        raise typer.Exit(code=130)  # 128 + SIGINT
 
 
 @eval_app.command("list")

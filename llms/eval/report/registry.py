@@ -269,23 +269,31 @@ def emit_profiles_snapshot(output_root: Path, config_root: Path) -> Path:
 
 
 def _entry_for(run_dir: Path) -> dict[str, Any] | None:
+    """Build a registry entry from a run directory.
+
+    Skips zombie runs — directories with a manifest but no summary.json
+    (interrupted before scoring finished). Including them poisons bench
+    `latest_timestamp` (the zombie's clock looks "newer" than real runs)
+    and pads cell counts with rows that have null quality.
+    """
     if not run_dir.is_dir():
         return None
     manifest_path = run_dir / "manifest.json"
     summary_path = run_dir / "summary.json"
     if not manifest_path.is_file():
         return None
+    if not summary_path.is_file():
+        return None  # zombie run — interrupted before scoring
     try:
         manifest = json.loads(manifest_path.read_text())
     except (OSError, json.JSONDecodeError):
         return None
-
-    summary: dict[str, Any] = {}
-    if summary_path.is_file():
-        try:
-            summary = json.loads(summary_path.read_text())
-        except (OSError, json.JSONDecodeError):
-            summary = {}
+    try:
+        summary = json.loads(summary_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(summary, dict) or not summary.get("item_count"):
+        return None  # summary exists but has no scored items
 
     adapter = manifest.get("adapter", {})
     model = manifest.get("model", {})

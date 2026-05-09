@@ -238,7 +238,7 @@ function buildCellRollup(cell, run) {
   const adapter = cell.adapter || run.manifest?.adapter || {};
   // Adapters where partial mean is the right headline (rubric-graded);
   // everything else uses accuracy.
-  const rubricAdapters = new Set(["local_smoke"]);
+  const rubricAdapters = new Set(["local_smoke", "frontend_agentic"]);
   const useRubric = rubricAdapters.has(adapter.name);
   const ci = useRubric ? summary.partial : summary.accuracy;
   const qualityKind = useRubric ? "partial" : "accuracy";
@@ -330,7 +330,12 @@ function rankCells(loadedBenches, metric, adapterName) {
     for (const cell of lb.cells) {
       if (!cell.rollup) continue;
       if (adapterName && cell.adapter?.name !== adapterName) continue;
-      const value = Number(cell.rollup[metric]);
+      const raw = cell.rollup[metric];
+      // Explicitly skip null/undefined: Number(null) === 0 is finite, which
+      // would put unscored cells (zombie runs, missing summary) on the
+      // leaderboard at 0%.
+      if (raw == null) continue;
+      const value = Number(raw);
       if (!Number.isFinite(value)) continue;
       rows.push({
         value,
@@ -340,6 +345,7 @@ function rankCells(loadedBenches, metric, adapterName) {
         benchTitle: lb.bench.title,
         modelAlias: lb.bench.model_alias,
         hardwareProfile: lb.bench.hardware_profile,
+        comparabilityPrefix: cell.comparability_prefix,
         timestamp: cell.latest?.timestamp,
       });
     }
@@ -378,39 +384,6 @@ function generateRecommendations(loadedBenches, currentBench) {
     }
   }
   return recs;
-}
-
-/* ---------- .conf parser ---------- */
-function parseConf(text, filename) {
-  const fields = {};
-  const order = [];
-  for (const raw of (text || "").split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$/);
-    if (!m) continue;
-    let val = m[2];
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-    fields[m[1]] = val;
-    if (!order.includes(m[1])) order.push(m[1]);
-  }
-  const modelPath = fields.MODEL || "";
-  const modelFile = modelPath.split("/").pop() || modelPath;
-  const quant = extractQuant(modelFile || fields.HF_FILE || "");
-  const profileId = (filename || "").replace(/\.conf$/, "");
-  return { profile_id: profileId, fields, order, derived: { model_file: modelFile, quant } };
-}
-
-async function loadProfileConf(profileName) {
-  if (!profileName) return null;
-  const safe = encodeURIComponent(profileName);
-  for (const url of [`configs/${safe}.conf`, `../config/profiles/${safe}.conf`]) {
-    const text = await fetchText(url);
-    if (text) return parseConf(text, `${profileName}.conf`);
-  }
-  return null;
 }
 
 /* ---------- Format helpers ---------- */
@@ -486,13 +459,13 @@ function fmtDateOnly(iso) {
 window.BenchData = {
   // loaders
   loadIndex, loadProfilesSnapshot, loadRun, loadBench, loadCellHistory,
-  loadLeaderboards, loadProfileConf,
+  loadLeaderboards,
   // bench helpers
   deriveBenches, deriveCells, findBench, gpuShort,
   // dataset helpers
   classifyCleanliness, generateRecommendations,
   // configs
-  parseConf, extractQuant,
+  extractQuant,
   // formatters
   fmtAccuracy, fmtCi, fmtMs, fmtTps, fmtSeconds, fmtQuality, fmtDuration, fmtTimestamp, fmtDateOnly,
 };

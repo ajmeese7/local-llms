@@ -1,0 +1,19 @@
+kind: profile
+name: qwopus36-35B-A3B
+alias: Qwopus3.6-35B-A3B
+model_path: ~/models/Qwopus3.6-35B-A3B-v1-Q5_K_M.gguf
+hf_repo: Jackrong/Qwopus3.6-35B-A3B-v1-GGUF
+hf_file: Qwopus3.6-35B-A3B-v1-Q5_K_M.gguf
+
+# Based on https://huggingface.co/spaces/KyleHessling1/qwopus36-35b-a3b-eval
+jinja: true
+context_length: 131072
+parallel_slots: 1
+cache_type_k: q8_0
+cache_type_v: q8_0
+decode:
+  temperature: 0.3
+  top_p: 0.9
+provider_compat:
+  proven:
+    - llama.cpp

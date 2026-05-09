@@ -49,7 +49,6 @@ function App() {
   const [index, setIndex] = useS(null);
   const [profilesSnap, setProfilesSnap] = useS(null);
   const [active, setActive] = useS(null);            // { bench, meta, cells }
-  const [conf, setConf] = useS(null);                // single .conf
   const [leaderboards, setLeaderboards] = useS(null);
   const [drawerOpen, setDrawerOpen] = useS(false);
   const [error, setError] = useS(null);
@@ -91,7 +90,6 @@ function App() {
   useE(() => {
     if (route.view !== "bench") {
       setActive(null);
-      setConf(null);
       setError(null);
       return;
     }
@@ -108,9 +106,6 @@ function App() {
         return;
       }
       setActive(loaded);
-      const c = await window.BenchData.loadProfileConf(loaded.bench.model_profile);
-      if (cancelled) return;
-      setConf(c);
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -235,7 +230,7 @@ function App() {
                 onSwitch={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })} />
             )}
             {route.tab === "config" && (
-              <ConfigSection bench={active} conf={conf} profilesSnap={profilesSnap} />
+              <ConfigSection bench={active} profilesSnap={profilesSnap} />
             )}
           </>
         )}

@@ -486,19 +486,17 @@ function PromptsPager({ page, totalPages, start, end, total, onPage, bottom }) {
 }
 
 /* ====================== CONFIG ====================== */
-function ConfigSection({ bench, conf, profilesSnap }) {
+function ConfigSection({ bench, profilesSnap }) {
   const meta = bench.meta;
   const snap = (profilesSnap?.profiles || []).find(p => p.name === meta.model_profile);
   return (
     <section data-screen-label="03 Config">
       <SectionHead num="04" title="Model Config" sub={`// llama-server overlay for ${meta.model_profile}`} />
-      {conf
-        ? <ConfigCard conf={conf} showAll={true} isFamily={false} />
-        : snap
-          ? <SnapshotCard profile={snap} />
-          : <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
-              No <code>.conf</code> or snapshot found for <code>{meta.model_profile}</code>.
-            </div>}
+      {snap
+        ? <SnapshotCard profile={snap} />
+        : <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+            No snapshot found for <code>{meta.model_profile}</code>. Run <code>llms eval report</code> to refresh.
+          </div>}
     </section>
   );
 }

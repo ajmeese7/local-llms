@@ -12,6 +12,8 @@ supported_endpoints:
   - chat-a3b
   - chat-a3b-ngram
   - chat-carnice
+  - chat-qwopus36
+  - chat-granite
 defaults:
   host: 0.0.0.0
   port: 9999

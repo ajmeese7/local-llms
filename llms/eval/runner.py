@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -45,6 +45,7 @@ class RunOutcome:
     summary_path: Path
     report_md_path: Path
     report_html_path: Path
+    interrupted: bool = False
 
 
 def _decode_fingerprint(rt: RuntimeConfig, *, max_tokens_hint: int | None) -> DecodeFingerprint:
@@ -174,14 +175,19 @@ def _new_run_id(adapter_name: str) -> str:
 
 def _iter_results(
     adapter: BenchmarkAdapter,
-    items: Iterable[Item],
+    items: list[Item],
     client: CompletionClient,
     *,
     telemetry: TelemetryWriter | None,
     run_id: str,
     profile: str,
+    on_item_start: Callable[[int, int, Item], None] | None = None,
+    on_item_finish: Callable[[int, int, ItemResult], None] | None = None,
 ) -> Iterable[ItemResult]:
-    for item in items:
+    total = len(items)
+    for idx, item in enumerate(items, start=1):
+        if on_item_start is not None:
+            on_item_start(idx, total, item)
         prompt = adapter.render_prompt(item)
         completion = client.complete(prompt)
         parsed = adapter.parse(completion.text, item)
@@ -216,6 +222,8 @@ def _iter_results(
                     error=completion.error,
                 )
             )
+        if on_item_finish is not None:
+            on_item_finish(idx, total, result)
         yield result
 
 
@@ -233,6 +241,8 @@ def run_eval(
     telemetry: TelemetryWriter | None = None,
     repo_root: Path | None = None,
     notes: str = "",
+    on_item_start: Callable[[int, int, Item], None] | None = None,
+    on_item_finish: Callable[[int, int, ItemResult], None] | None = None,
 ) -> RunOutcome:
     """Drive `adapter` end-to-end against `base_url`. Writes artifacts to disk."""
     items = list(adapter.load_dataset(subset=subset, seed=seed))
@@ -266,26 +276,37 @@ def run_eval(
     results: list[ItemResult] = []
     started_at = utc_now_iso()
     t0 = time.perf_counter()
-    with (
-        CompletionClient(
-            base_url=base_url,
-            api_key=runtime.api_key,
-            model=runtime.profile.alias,
-            transport=transport,
-        ) as client,
-        results_path.open("w", encoding="utf-8") as out,
-    ):
-        for result in _iter_results(
-            adapter,
-            items,
-            client,
-            telemetry=telemetry,
-            run_id=manifest.run_id,
-            profile=runtime.profile.name,
+    interrupted = False
+    try:
+        with (
+            CompletionClient(
+                base_url=base_url,
+                api_key=runtime.api_key,
+                model=runtime.profile.alias,
+                transport=transport,
+            ) as client,
+            results_path.open("w", encoding="utf-8") as out,
         ):
-            results.append(result)
-            out.write(json.dumps(_result_to_json(result, run_id=manifest.run_id)) + "\n")
+            for result in _iter_results(
+                adapter,
+                items,
+                client,
+                telemetry=telemetry,
+                run_id=manifest.run_id,
+                profile=runtime.profile.name,
+                on_item_start=on_item_start,
+                on_item_finish=on_item_finish,
+            ):
+                results.append(result)
+                out.write(json.dumps(_result_to_json(result, run_id=manifest.run_id)) + "\n")
+                out.flush()  # crash-safe: each row is on disk before the next starts
+    except KeyboardInterrupt:
+        interrupted = True
 
+    # Always emit a summary, even on interrupt — a partial summary is honest
+    # and lets the registry rank the run by what actually completed. A run
+    # with zero scored items writes a summary with item_count=0, which the
+    # registry filter (registry._entry_for) drops as a zombie.
     wall_seconds = time.perf_counter() - t0
     compute_seconds = (
         sum(r.latency_ms for r in results if r.latency_ms is not None) / 1000.0
@@ -307,6 +328,7 @@ def run_eval(
         summary_path=summary_path,
         report_md_path=md_path,
         report_html_path=html_path,
+        interrupted=interrupted,
     )
 
 

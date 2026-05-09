@@ -187,6 +187,9 @@ def test_registry_sorted_newest_first(tmp_path: Path) -> None:
     for stamp, run in (("2025-01-01T00:00:00Z", "old"), ("2026-05-01T00:00:00Z", "new")):
         run_dir = output / run
         run_dir.mkdir()
+        # Minimal summary.json — registry now skips zombie runs (no summary
+        # or item_count=0), so a sort test needs at least one scored item.
+        (run_dir / "summary.json").write_text(json.dumps({"item_count": 1}))
         (run_dir / "manifest.json").write_text(
             json.dumps(
                 {

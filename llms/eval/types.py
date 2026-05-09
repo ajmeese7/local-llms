@@ -23,7 +23,13 @@ class Item:
 
 @dataclass(frozen=True, slots=True)
 class Prompt:
-    """A rendered prompt + sampling params for one HTTP request."""
+    """A rendered prompt + sampling params for one HTTP request.
+
+    `enable_thinking` overrides the http client's default "thinking off" for
+    Qwen-family servers. None = use the client default (off); True/False sets
+    the chat-template kwarg explicitly. Adapters that want long reasoning
+    traces (frontend_agentic's agentic items, for example) set this to True.
+    """
 
     text: str
     temperature: float = 0.0
@@ -31,6 +37,7 @@ class Prompt:
     top_k: int | None = None
     max_tokens: int = 1024
     stop: tuple[str, ...] = ()
+    enable_thinking: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
