@@ -280,22 +280,234 @@ function QBar({ q, qmax }) {
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-function highlightThinking(text) {
+
+// Split raw output into alternating "think" and "code" segments. Think
+// segments include any explicit <think>…</think> blocks plus heuristic
+// reasoning preambles ("Here's a thinking process", etc.). We split first
+// so syntax highlighting only runs over the actual non-reasoning content.
+function splitThinkSegments(text) {
+  const segs = [];
+  const reasonHead = /^\s*(here'?s a thinking process|thinking process|deconstruct(?:ing)? the prompt|analy(?:s|z)e (?:user|the)|drafting - attempt|identify )/i;
   const lines = text.split("\n");
-  let inThink = false;
-  return lines.map(line => {
-    if (/^\s*<think>/i.test(line))  { inThink = true;  return `<span class="think">${escapeHtml(line)}</span>`; }
-    if (/^\s*<\/think>/i.test(line)) { inThink = false; return `<span class="think">${escapeHtml(line)}</span>`; }
-    if (inThink) return `<span class="think">${escapeHtml(line)}</span>`;
-    if (/^\s*(here'?s a thinking process|thinking process|deconstruct(?:ing)? the prompt|analy(?:s|z)e (?:user|the)|drafting - attempt|identify )/i.test(line)) {
-      return `<span class="think">${escapeHtml(line)}</span>`;
+  let mode = "code";
+  let buf = [];
+  const flush = () => {
+    if (!buf.length) return;
+    segs.push({ kind: mode, text: buf.join("\n") });
+    buf = [];
+  };
+  for (const line of lines) {
+    if (/^\s*<think>/i.test(line)) {
+      flush();
+      mode = "think";
+      buf.push(line);
+      continue;
     }
-    return escapeHtml(line);
+    if (/^\s*<\/think>/i.test(line)) {
+      buf.push(line);
+      flush();
+      mode = "code";
+      continue;
+    }
+    if (mode === "code" && reasonHead.test(line)) {
+      // Single-line reasoning leak; emit as its own think segment so we
+      // don't poison the code highlighter with prose.
+      flush();
+      segs.push({ kind: "think", text: line });
+      continue;
+    }
+    buf.push(line);
+  }
+  flush();
+  return segs;
+}
+
+// Run Prism over `text` if a known language is given and Prism is loaded.
+// Returns escaped HTML either way.
+function highlightCode(text, language) {
+  const safe = escapeHtml(text);
+  if (!language || typeof window.Prism === "undefined") return safe;
+  const grammar = window.Prism.languages[language];
+  if (!grammar) return safe;
+  try {
+    return window.Prism.highlight(text, grammar, language);
+  } catch {
+    return safe;
+  }
+}
+
+// Public: turn raw output into highlighted HTML for the excerpt panel.
+// `language` is one of: "markup", "javascript", "css", "python", "json",
+// "bash", or null/undefined for no highlighting.
+function highlightExcerpt(text, language) {
+  return splitThinkSegments(text).map(seg => {
+    if (seg.kind === "think") {
+      return `<span class="think">${escapeHtml(seg.text)}</span>`;
+    }
+    return highlightCode(seg.text, language);
   }).join("\n");
+}
+
+// Pick a Prism language for a given item id + raw output. Errs on the side
+// of plain text — wrong highlighting is worse than no highlighting.
+function detectExcerptLanguage(itemId, raw) {
+  const id = String(itemId || "");
+  const head = String(raw || "").trimStart().slice(0, 200).toLowerCase();
+  if (id.startsWith("design_") || id.startsWith("canvas_")) return "markup";
+  if (id === "agentic_code_debug" || id === "agentic_self_critique") return "python";
+  if (id === "agentic_multi_step_planning") return "bash";
+  if (id === "agentic_tool_use_json" || id.startsWith("agentic_structured_extraction")) return "json";
+  if (id === "coding_bugfix") return "python";
+  if (id === "coding_shell") return "bash";
+  // Fall back to content sniffing for adapters we don't know about.
+  if (head.startsWith("<!doctype") || head.startsWith("<html")) return "markup";
+  if (head.startsWith("{") || head.startsWith("[")) return "json";
+  if (head.startsWith("#!/")) return "bash";
+  return null;
+}
+
+// Strip a leading markdown code fence (```html, ```python, etc.) plus its
+// matching trailing ``` from the raw output. Models routinely wrap their
+// answer in a fenced block, but the highlighter and HTML preview both
+// want the actual code, not the fence syntax. Returns the raw input
+// unchanged if no leading fence is present.
+function stripCodeFences(raw) {
+  const text = String(raw || "");
+  const m = text.match(/^\s*```([a-zA-Z0-9_+\-]*)\s*\n([\s\S]*?)\n\s*```\s*$/);
+  if (m) return m[2];
+  // Tolerate an unclosed fence (model truncated mid-output).
+  const open = text.match(/^\s*```([a-zA-Z0-9_+\-]*)\s*\n([\s\S]*)$/);
+  if (open) return open[2];
+  return text;
+}
+
+// Detect whether the raw output is renderable as a standalone HTML page.
+function looksLikeHtmlDoc(raw) {
+  const head = stripCodeFences(raw).trimStart().slice(0, 200).toLowerCase();
+  return head.startsWith("<!doctype") || head.startsWith("<html");
+}
+
+/* ---------- Diagnostic helpers ---------- */
+
+// Classify a failed/unscored row into one of: "ok", "low", "empty", "err".
+// Used to drive the diagnostic banner on the expanded row.
+function classifyRow(row) {
+  if (row.error) return "err";
+  if (Number(row.http_status) >= 400) return "err";
+  const cleanliness = classifyExcerpt(row);
+  if (cleanliness === "empty") return "empty";
+  const partial = Number(row.score?.partial);
+  const correct = !!row.score?.correct;
+  if (Number.isFinite(partial) && partial < 1 && !correct) return "low";
+  return "ok";
+}
+
+// Local copy of classifyCleanliness (defined in data.jsx) so this module
+// can run in any load order. Kept in sync with data.jsx — if you change one,
+// change the other.
+function classifyExcerpt(row) {
+  const raw = (row.raw || "").trim();
+  if (!raw) return "empty";
+  if (/^<think>\s*<\/think>/i.test(raw) && raw.length < 80) return "empty";
+  return "clean";
+}
+
+// Build a one-sentence diagnosis for a row. Returns null when no diagnosis
+// is needed (i.e. the row scored cleanly).
+function diagnoseRow(row) {
+  const kind = classifyRow(row);
+  if (kind === "ok") return null;
+  const status = Number(row.http_status);
+  const errStr = String(row.error || "");
+  const lat = Number(row.latency_ms);
+  if (kind === "err") {
+    if (status === 0 || /connection|refused|reset|enotfound/i.test(errStr)) {
+      return {
+        kind,
+        headline: "Connection failed",
+        detail: "The eval client never reached the inference server. Common causes: server not running, wrong port in the endpoint config, or systemd unit failed to start. Verify with `systemctl status llama-server-<endpoint>` and check the URL in the run's manifest.json.",
+      };
+    }
+    if (status === 504 || /timeout|timed.?out/i.test(errStr)) {
+      return {
+        kind,
+        headline: "Request timed out",
+        detail: `httpx ceiling is 600s. Either the server stalled, or generation legitimately needed more wall time than that — try lowering max_tokens, raising the client timeout, or checking server-side logs for OOM/queue-depth issues. Latency observed: ${Number.isFinite(lat) ? `${(lat/1000).toFixed(1)}s` : "unknown"}.`,
+      };
+    }
+    if (status >= 500) {
+      return {
+        kind,
+        headline: `Server error (HTTP ${status})`,
+        detail: "The server accepted the request and crashed/refused mid-flight. Check `journalctl -u llama-server-<endpoint>` or the inference process's stderr for the matching window.",
+      };
+    }
+    if (status >= 400) {
+      return {
+        kind,
+        headline: `Client error (HTTP ${status})`,
+        detail: "The server rejected the request shape. Usually means the OpenAI-compat payload disagrees with the server build (e.g. `chat_template_kwargs` ignored, model name mismatch, max_tokens too large for the loaded context).",
+      };
+    }
+    return { kind, headline: "Inference failed", detail: errStr || "Server returned no usable response." };
+  }
+  if (kind === "empty") {
+    const tokens = Number(row.output_tokens);
+    if (Number.isFinite(tokens) && tokens > 0) {
+      return {
+        kind,
+        headline: "Model produced only reasoning",
+        detail: `The model emitted ${tokens.toLocaleString()} output tokens but no usable answer — typically an unclosed <think> block where reasoning starved before the final answer. Increase max_tokens for this item, disable thinking with /no_think, or both.`,
+      };
+    }
+    return {
+      kind,
+      headline: "Model returned empty content",
+      detail: "Both `content` and `reasoning_content` were empty in the server's response. Often a chat-template issue: the model's prompt template may not match what the server is sending. Compare the server log's `formatted prompt:` line to what the model card expects.",
+    };
+  }
+  if (kind === "low") {
+    const misses = (row.score?.breakdown?.misses || []).length;
+    const hits = (row.score?.breakdown?.hits || []).length;
+    return {
+      kind,
+      headline: `Rubric matched ${hits} / ${hits + misses} checks`,
+      detail: "Substring-rubric scoring missed at least one expected pattern. See the missed-checks panel below — these are loose presence checks, not quality judgments. For design/canvas items the model may have produced a perfectly fine page that just happens to use different keywords than the rubric.",
+    };
+  }
+  return null;
+}
+
+/* ---------- Manual rating widget ---------- */
+function StarRating({ value, onChange }) {
+  const v = Number.isFinite(Number(value)) ? Number(value) : 0;
+  return (
+    <span className="star-rating" role="radiogroup" aria-label="Manual rating">
+      {[1, 2, 3, 4, 5].map(n => (
+        <button
+          key={n}
+          role="radio"
+          aria-checked={v === n}
+          className={`star ${n <= v ? "filled" : ""}`}
+          title={n === v ? "Click to clear" : `Rate ${n}/5`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange(n === v ? null : n);
+          }}>
+          ★
+        </button>
+      ))}
+      {v > 0 && (
+        <span className="star-num">{v}/5</span>
+      )}
+    </span>
+  );
 }
 
 Object.assign(window, {
   Txt, Eyebrow, Label, SectionHead, Chip, Flag, MiniFlag,
   BarChart, Scatter, CleanlinessGrid, CleanlinessBar, QBar,
-  escapeHtml, highlightThinking,
+  StarRating,
+  escapeHtml, highlightExcerpt, detectExcerptLanguage, looksLikeHtmlDoc,
+  stripCodeFences, classifyRow, diagnoseRow,
 });

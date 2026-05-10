@@ -70,6 +70,7 @@ function HomePage({ index, profilesSnap, leaderboards, onOpen }) {
 
         <div className="flex flex-col gap-4">
           {leaderboards && <LeaderboardsBlock leaderboards={leaderboards} onOpen={onOpen} />}
+          <RatingsImportExportCard />
           {profilesSnap && <ProfilesSnapshotCard snapshot={profilesSnap} />}
           <NextStepsCard />
         </div>
@@ -208,8 +209,17 @@ function BenchCard({ bench, showHwPill, onOpen }) {
 
 /* ---------- Leaderboards ---------- */
 function LeaderboardsBlock({ leaderboards, onOpen }) {
+  const [mode, setMode] = _hUseS("auto"); // "auto" | "user"
+  // Subscribe to ratings changes so toggling to "user" reflects the latest
+  // localStorage state without a manual refresh.
+  const [, bump] = _hUseS(0);
+  React.useEffect(() => window.BenchRatings.subscribe(() => bump(v => v + 1)), []);
+
+  const adapterNames = leaderboards._adapterNames || Object.keys(leaderboards.perAdapter || {});
+  const loaded = leaderboards._loadedBenches || [];
+
   const blocks = [];
-  // Top tok/s (any adapter, all benches)
+  // Top tok/s — always auto, no user-rating equivalent.
   if (leaderboards.tps && leaderboards.tps.length > 1) {
     blocks.push({
       id: "tps",
@@ -220,21 +230,38 @@ function LeaderboardsBlock({ leaderboards, onOpen }) {
       fmt: r => window.BenchData.fmtTps(r.value),
     });
   }
-  // Per-adapter quality leaderboards (only if 2+ contenders)
-  for (const [adapter, rows] of Object.entries(leaderboards.perAdapter || {})) {
+  // Per-adapter quality leaderboards — switch between auto and user mode.
+  for (const adapter of adapterNames) {
+    const rows = mode === "user"
+      ? window.BenchData.rankCellsByUser(loaded, adapter)
+      : (leaderboards.perAdapter || {})[adapter] || [];
     if (!rows || rows.length < 2) continue;
     blocks.push({
-      id: `q-${adapter}`,
+      id: `q-${adapter}-${mode}`,
       icon: "fa-list-check",
       title: `Top ${adapter}`,
-      sub: "quality",
+      sub: mode === "user" ? "your rating" : "quality",
       rows: rows.slice(0, 5),
-      fmt: r => `${Number(r.value).toFixed(1)}%`,
+      fmt: mode === "user"
+        ? r => `${r.userMean.toFixed(1)}/5`
+        : r => `${Number(r.value).toFixed(1)}%`,
+      sublineFor: mode === "user"
+        ? r => `${r.adapter?.name || "—"} · ${r.userCount}/${r.userTotal} rated`
+        : r => `${r.adapter?.name || "—"} · ${r.hardwareProfile}`,
     });
   }
+  // No quality blocks at all? Don't render anything (the toggle would be lonely).
+  const hasQualityBlocks = blocks.some(b => b.id.startsWith("q-"));
   if (!blocks.length) return null;
   return (
     <div className="flex flex-col gap-3">
+      {hasQualityBlocks && (
+        <div className="flex items-center gap-2">
+          <Label>Quality source</Label>
+          <Chip on={mode === "auto"} cyan={mode === "auto"} onClick={() => setMode("auto")}>Auto</Chip>
+          <Chip on={mode === "user"} cyan={mode === "user"} onClick={() => setMode("user")}>You</Chip>
+        </div>
+      )}
       {blocks.map(b => (
         <div key={b.id} className="me-card p-4 md:p-5">
           <div className="flex items-baseline justify-between mb-2">
@@ -248,11 +275,13 @@ function LeaderboardsBlock({ leaderboards, onOpen }) {
               <button
                 key={`${r.benchId}-${r.adapter?.name || ""}-${r.comparabilityPrefix || i}`}
                 onClick={() => onOpen(r.benchId)}
-                className="grid grid-cols-[18px_1fr_60px] gap-2 items-center text-[11px] font-mono text-left bg-transparent border-0 px-1 py-0.5 cursor-pointer hover:text-me-fg">
+                className="grid grid-cols-[18px_1fr_70px] gap-2 items-center text-[11px] font-mono text-left bg-transparent border-0 px-1 py-0.5 cursor-pointer hover:text-me-fg">
                 <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}</span>
                 <div className="min-w-0">
                   <div className="text-me-fg truncate" title={r.benchTitle}>{r.modelAlias}</div>
-                  <div className="text-me-fg-3 text-[10px] truncate">{r.adapter?.name || "—"} · {r.hardwareProfile}</div>
+                  <div className="text-me-fg-3 text-[10px] truncate">
+                    {b.sublineFor ? b.sublineFor(r) : `${r.adapter?.name || "—"} · ${r.hardwareProfile}`}
+                  </div>
                 </div>
                 <div className="text-right text-me-cyan">{b.fmt(r)}</div>
               </button>
@@ -260,6 +289,56 @@ function LeaderboardsBlock({ leaderboards, onOpen }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function RatingsImportExportCard() {
+  const fileRef = React.useRef(null);
+  const [msg, setMsg] = _hUseS(null);
+  const onExport = () => {
+    const blob = new Blob([window.BenchRatings.exportAll()], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bench-ratings-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    setMsg("exported");
+    setTimeout(() => setMsg(null), 2000);
+  };
+  const onImportClick = () => fileRef.current?.click();
+  const onImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const n = window.BenchRatings.importAll(text);
+    setMsg(n > 0 ? `imported ${n}` : "no ratings imported");
+    setTimeout(() => setMsg(null), 3000);
+    e.target.value = "";  // allow re-picking same file
+  };
+  return (
+    <div className="me-card p-4 md:p-5">
+      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
+        <i className="fa-solid fa-star text-me-warning mr-2"></i> Your ratings
+      </h3>
+      <p className="font-mono text-[11px] text-me-fg-3 mb-3">
+        Manual ratings are stored locally per browser. Export to share between machines or commit to the repo.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onExport}
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Export
+        </button>
+        <button
+          onClick={onImportClick}
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Import
+        </button>
+        <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
+        {msg && <span className="font-mono text-[11px] text-me-cyan self-center">{msg}</span>}
+      </div>
     </div>
   );
 }

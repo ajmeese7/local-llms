@@ -317,11 +317,46 @@ async function loadLeaderboards(index) {
     tps: rankCells(valid, "tps"),
     quality: rankCells(valid, "quality"),
     perAdapter: {},
+    perAdapterUser: {},
+    // Raw loaded benches kept around so consumers (LeaderboardsBlock) can
+    // re-rank by manual user rating, which lives in localStorage and can
+    // change between renders.
+    _loadedBenches: valid,
+    _adapterNames: [...adapterNames],
   };
   for (const adapter of adapterNames) {
     result.perAdapter[adapter] = rankCells(valid, "quality", adapter);
+    result.perAdapterUser[adapter] = rankCellsByUser(valid, adapter);
   }
   return result;
+}
+
+function rankCellsByUser(loadedBenches, adapterName) {
+  const rows = [];
+  for (const lb of loadedBenches) {
+    for (const cell of lb.cells) {
+      if (adapterName && cell.adapter?.name !== adapterName) continue;
+      const itemIds = (cell.run?.results || []).map(r => r.item_id);
+      const agg = window.BenchRatings.aggregate(cell.comparability_key, itemIds);
+      if (!agg || agg.count === 0) continue;
+      rows.push({
+        value: agg.mean * 20,  // 1-5 stars → 0-100% scale to share fmt with auto
+        userMean: agg.mean,
+        userCount: agg.count,
+        userTotal: itemIds.length,
+        metric: "userRating",
+        adapter: cell.adapter,
+        benchId: lb.bench.id,
+        benchTitle: lb.bench.title,
+        modelAlias: lb.bench.model_alias,
+        hardwareProfile: lb.bench.hardware_profile,
+        comparabilityPrefix: cell.comparability_prefix,
+        timestamp: cell.latest?.timestamp,
+      });
+    }
+  }
+  rows.sort((a, b) => b.value - a.value);
+  return rows;
 }
 
 function rankCells(loadedBenches, metric, adapterName) {
@@ -459,7 +494,7 @@ function fmtDateOnly(iso) {
 window.BenchData = {
   // loaders
   loadIndex, loadProfilesSnapshot, loadRun, loadBench, loadCellHistory,
-  loadLeaderboards,
+  loadLeaderboards, rankCellsByUser,
   // bench helpers
   deriveBenches, deriveCells, findBench, gpuShort,
   // dataset helpers

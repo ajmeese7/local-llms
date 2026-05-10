@@ -7,7 +7,7 @@
    results) and `rollup` (headline metrics + cleanliness counts).
    ============================================================ */
 
-const { useState: _useState, useMemo: _useMemo } = React;
+const { useState: _useState, useMemo: _useMemo, useCallback: _useCallback } = React;
 
 /* ====================== OVERVIEW ====================== */
 function OverviewSection({ bench, leaderboards, onOpenPrompts }) {
@@ -351,8 +351,13 @@ const PROMPTS_PAGE_SIZE = 50;
 function PromptsTable({ cell }) {
   const [filter, setFilter] = _useState("all");
   const [hideThinking, setHideThinking] = _useState(false);
+  const [previewHtml, setPreviewHtml] = _useState(true);
   const [open, setOpen] = _useState({});
   const [page, setPage] = _useState(0);
+  // Bumped when a rating is written so child rows re-read localStorage
+  // and the per-cell rating summary refreshes.
+  const [ratingsVersion, setRatingsVersion] = _useState(0);
+  const bumpRatings = _useCallback(() => setRatingsVersion(v => v + 1), []);
 
   const rows = cell.run.results;
   const cats = _useMemo(() => {
@@ -371,14 +376,25 @@ function PromptsTable({ cell }) {
   const end = Math.min(start + PROMPTS_PAGE_SIZE, filtered.length);
   const pageRows = filtered.slice(start, end);
 
+  const ratingAgg = _useMemo(
+    () => window.BenchRatings.aggregate(cell.comparability_key, rows.map(r => r.item_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cell.comparability_key, rows, ratingsVersion],
+  );
+
   return (
     <>
+      <RatingSummary aggregate={ratingAgg} totalItems={rows.length} />
+
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <Label>Category</Label>
         {cats.map(c => (
           <Chip key={c} on={filter === c} onClick={() => setFilter(c)}>{c}</Chip>
         ))}
         <span className="flex-1"></span>
+        <Chip on={previewHtml} onClick={() => setPreviewHtml(v => !v)}>
+          {previewHtml ? "Preview HTML on" : "Preview HTML off"}
+        </Chip>
         <Chip on={hideThinking} onClick={() => setHideThinking(v => !v)}>
           {hideThinking ? "Show thinking text" : "Hide thinking text"}
         </Chip>
@@ -394,9 +410,22 @@ function PromptsTable({ cell }) {
 
       <div className="me-card overflow-hidden">
         <table className="prun-table">
+          {/* Fixed column widths so the table layout doesn't reflow when an
+              expanded row's <td colSpan="7"> contains wide content (long
+              HTML lines, prose diagnostics). Without this, opening a row
+              widens the whole table and the column headers misalign. */}
+          <colgroup>
+            <col style={{ width: 30 }} />
+            <col />{/* Item id — takes remaining space */}
+            <col style={{ width: 110 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 150 }} />
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ width: 30 }}></th>
+              <th></th>
               <th>Item</th>
               <th>Category</th>
               <th className="numeric">Latency</th>
@@ -406,51 +435,17 @@ function PromptsTable({ cell }) {
             </tr>
           </thead>
           <tbody>
-            {pageRows.map(r => {
-              const isOpen = !!open[r.item_id];
-              const clean = window.BenchData.classifyCleanliness(r);
-              const lat = Number(r.latency_ms);
-              const tps = Number(r.tokens_per_sec);
-              const partial = Number(r.score?.partial);
-              const correct = !!r.score?.correct;
-              const excerpt = r.raw || "(no output)";
-              return (
-                <React.Fragment key={r.item_id}>
-                  <tr className={`toggle-row ${isOpen ? "open" : ""}`} onClick={() => setOpen(o => ({ ...o, [r.item_id]: !o[r.item_id] }))}>
-                    <td></td>
-                    <td><span className="pn break-all">{r.item_id}</span></td>
-                    <td className="text-me-fg-3 font-mono text-[11px]">{r.category || "—"}</td>
-                    <td className="numeric">{Number.isFinite(lat) ? `${(lat / 1000).toFixed(2)} s` : "—"}</td>
-                    <td className="numeric">{Number.isFinite(tps) ? tps.toFixed(1) : "—"}</td>
-                    <td className="numeric">
-                      <QBar
-                        q={Number.isFinite(partial) ? Math.round(partial * 100) : (correct ? 100 : 0)}
-                        qmax={100} />
-                    </td>
-                    <td>
-                      <MiniFlag kind={clean === "clean" ? "clean" : clean === "empty" ? "danger" : "leak"}>
-                        {clean === "clean" ? "clean" : clean === "empty" ? "empty" : "thinking"}
-                      </MiniFlag>
-                      {!correct && Number.isFinite(partial) && partial < 1 && <MiniFlag kind="leak">low</MiniFlag>}
-                      {r.error && <MiniFlag kind="danger">err</MiniFlag>}
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr className="excerpt-row">
-                      <td colSpan="7">
-                        <div className={`excerpt-inner ${hideThinking ? "hide-thinking" : ""}`}
-                             dangerouslySetInnerHTML={{ __html: highlightThinking(excerpt) }} />
-                        <div className="excerpt-foot">
-                          <span className="raw-path">run: {r.run_id}</span>
-                          {r.parse_failed && <span className="text-me-warning ml-3">parse_failed</span>}
-                          {r.error && <span className="text-me-danger ml-3">{String(r.error).slice(0, 80)}</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
+            {pageRows.map(r => (
+              <PromptRow
+                key={r.item_id}
+                row={r}
+                cell={cell}
+                isOpen={!!open[r.item_id]}
+                onToggle={() => setOpen(o => ({ ...o, [r.item_id]: !o[r.item_id] }))}
+                hideThinking={hideThinking}
+                previewHtml={previewHtml}
+                onRatingChange={bumpRatings} />
+            ))}
           </tbody>
         </table>
       </div>
@@ -464,6 +459,249 @@ function PromptsTable({ cell }) {
         onPage={setPage}
         bottom />
     </>
+  );
+}
+
+/* ---------- Per-row prompt panel ---------- */
+function PromptRow({ row, cell, isOpen, onToggle, hideThinking, previewHtml, onRatingChange }) {
+  const r = row;
+  const clean = window.BenchData.classifyCleanliness(r);
+  const lat = Number(r.latency_ms);
+  const tps = Number(r.tokens_per_sec);
+  const partial = Number(r.score?.partial);
+  const correct = !!r.score?.correct;
+  const kind = window.classifyRow(r);  // "ok" | "low" | "empty" | "err"
+  return (
+    <React.Fragment>
+      <tr className={`toggle-row ${isOpen ? "open" : ""}`} onClick={onToggle}>
+        <td></td>
+        <td><span className="pn break-all">{r.item_id}</span></td>
+        <td className="text-me-fg-3 font-mono text-[11px]">{r.category || "—"}</td>
+        <td className="numeric">{Number.isFinite(lat) ? `${(lat / 1000).toFixed(2)} s` : "—"}</td>
+        <td className="numeric">{Number.isFinite(tps) ? tps.toFixed(1) : "—"}</td>
+        <td className="numeric">
+          <QBar
+            q={Number.isFinite(partial) ? Math.round(partial * 100) : (correct ? 100 : 0)}
+            qmax={100} />
+        </td>
+        <td>
+          <MiniFlag kind={clean === "clean" ? "clean" : clean === "empty" ? "danger" : "leak"}>
+            {clean === "clean" ? "clean" : clean === "empty" ? "empty" : "thinking"}
+          </MiniFlag>
+          {kind === "low" && <MiniFlag kind="leak">low</MiniFlag>}
+          {kind === "err" && <MiniFlag kind="danger">err</MiniFlag>}
+        </td>
+      </tr>
+      {isOpen && (
+        <tr className="excerpt-row">
+          <td colSpan="7">
+            <ExpandedPanel
+              row={r}
+              cell={cell}
+              hideThinking={hideThinking}
+              previewHtml={previewHtml}
+              onRatingChange={onRatingChange} />
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  );
+}
+
+function ExpandedPanel({ row, cell, hideThinking, previewHtml, onRatingChange }) {
+  const r = row;
+  const diag = window.diagnoseRow(r);
+  const misses = r.score?.breakdown?.misses;
+  const hits = r.score?.breakdown?.hits;
+  const showMisses = Array.isArray(misses) && misses.length > 0 && Array.isArray(hits);
+  const isHtml = window.looksLikeHtmlDoc(r.raw);
+  return (
+    <div className="excerpt-panel">
+      {diag && <DiagnosticBanner diag={diag} row={r} cell={cell} />}
+      {showMisses && <MissedChecksPanel hits={hits} misses={misses} />}
+      <OutputArea row={r} previewHtml={previewHtml} hideThinking={hideThinking} />
+      <RatingEditor cell={cell} row={r} onChange={onRatingChange} />
+      <ExpandedFoot row={r} isHtml={isHtml} />
+    </div>
+  );
+}
+
+function DiagnosticBanner({ diag, row, cell }) {
+  const tone = diag.kind === "err" ? "danger" : diag.kind === "empty" ? "warn" : "info";
+  const status = Number(row.http_status);
+  const lat = Number(row.latency_ms);
+  const tok = Number(row.output_tokens);
+  const meta = [];
+  if (Number.isFinite(status) && status > 0) meta.push(`http=${status}`);
+  if (Number.isFinite(lat)) meta.push(`${(lat/1000).toFixed(1)}s`);
+  if (Number.isFinite(tok)) meta.push(`${tok.toLocaleString()} tok`);
+  if (cell?.adapter?.name) meta.push(`adapter=${cell.adapter.name}`);
+  return (
+    <div className={`diag-banner ${tone}`}>
+      <div className="diag-headline">
+        <span className="diag-kind">{diag.kind.toUpperCase()}</span>
+        {diag.headline}
+      </div>
+      <div className="diag-detail">{diag.detail}</div>
+      {meta.length > 0 && <div className="diag-meta">{meta.join(" · ")}</div>}
+      {row.error && (
+        <details className="diag-error">
+          <summary>Full error</summary>
+          <pre>{String(row.error)}</pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function MissedChecksPanel({ hits, misses }) {
+  const all = [
+    ...hits.map(h => ({ kind: "hit", text: typeof h === "string" ? h : JSON.stringify(h) })),
+    ...misses.map(m => ({ kind: "miss", text: Array.isArray(m) ? m.join(" / ") : String(m) })),
+  ];
+  return (
+    <div className="checks-panel">
+      <div className="checks-head">Rubric checks</div>
+      <ul>
+        {all.map((c, i) => (
+          <li key={i} className={c.kind}>
+            <span className="check-mark">{c.kind === "hit" ? "✓" : "✗"}</span>
+            <code>{c.text}</code>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function OutputArea({ row, previewHtml, hideThinking }) {
+  const raw = row.raw || "";
+  // Strip Markdown code fences so a leading "```html" doesn't break HTML
+  // detection or syntax highlighting. Models wrap their answer in a fenced
+  // block roughly 80% of the time; we want the actual code.
+  const stripped = window.stripCodeFences(raw);
+  const isHtml = window.looksLikeHtmlDoc(raw);
+  if (previewHtml && isHtml) {
+    return (
+      <div className="excerpt-preview">
+        <iframe
+          title={`preview-${row.item_id}`}
+          srcDoc={stripped}
+          sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
+          loading="lazy" />
+      </div>
+    );
+  }
+  const lang = window.detectExcerptLanguage(row.item_id, stripped);
+  const html = window.highlightExcerpt(stripped || "(no output)", lang);
+  return (
+    <pre className={`excerpt-inner ${hideThinking ? "hide-thinking" : ""} ${lang ? `language-${lang}` : ""}`}
+         dangerouslySetInnerHTML={{ __html: html }} />
+  );
+}
+
+function RatingEditor({ cell, row, onChange }) {
+  const ck = cell.comparability_key;
+  const itemId = row.item_id;
+  const [data, setData] = _useState(() => window.BenchRatings.read(ck, itemId) || { stars: null, note: "", tags: [] });
+  const [tagDraft, setTagDraft] = _useState("");
+
+  // If the underlying row changes (different item opened), re-read.
+  React.useEffect(() => {
+    setData(window.BenchRatings.read(ck, itemId) || { stars: null, note: "", tags: [] });
+  }, [ck, itemId]);
+
+  const persist = _useCallback((next) => {
+    setData(next);
+    window.BenchRatings.write(ck, itemId, next);
+    if (onChange) onChange();
+  }, [ck, itemId, onChange]);
+
+  const setStars = (n) => persist({ ...data, stars: n });
+  const setNote = (note) => persist({ ...data, note });
+  const addTag = () => {
+    const t = tagDraft.trim();
+    if (!t || data.tags.includes(t)) { setTagDraft(""); return; }
+    persist({ ...data, tags: [...data.tags, t] });
+    setTagDraft("");
+  };
+  const removeTag = (t) => persist({ ...data, tags: data.tags.filter(x => x !== t) });
+
+  return (
+    <div className="rating-editor" onClick={(e) => e.stopPropagation()}>
+      <div className="rating-row">
+        <span className="rating-label">Your rating</span>
+        <StarRating value={data.stars} onChange={setStars} />
+        <span className="rating-spacer"></span>
+        <input
+          className="tag-input"
+          type="text"
+          placeholder="add tag"
+          value={tagDraft}
+          onChange={(e) => setTagDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} />
+        {data.tags.map(t => (
+          <button key={t} className="rating-tag" onClick={() => removeTag(t)} title="Click to remove">
+            {t} <span className="tag-x">×</span>
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="rating-note"
+        placeholder="// optional notes"
+        value={data.note || ""}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2} />
+    </div>
+  );
+}
+
+function ExpandedFoot({ row, isHtml }) {
+  const [copied, setCopied] = _useState(false);
+  const copyPrompt = () => {
+    if (!row.prompt) return;
+    navigator.clipboard?.writeText(row.prompt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  const openInTab = () => {
+    if (!row.raw) return;
+    const blob = new Blob([row.raw], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+  return (
+    <div className="excerpt-foot">
+      <span className="raw-path">run: {row.run_id}</span>
+      {row.parse_failed && <span className="text-me-warning ml-3">parse_failed</span>}
+      <span className="flex-1"></span>
+      {row.prompt && (
+        <button onClick={copyPrompt} title="Copy the rendered prompt to clipboard">
+          {copied ? "✓ copied" : "copy prompt"}
+        </button>
+      )}
+      {isHtml && (
+        <button onClick={openInTab} title="Open the raw HTML in a new tab">
+          open in tab ↗
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RatingSummary({ aggregate, totalItems }) {
+  if (!aggregate || aggregate.count === 0) return null;
+  return (
+    <div className="rating-summary">
+      <span className="rating-summary-label">Your rating:</span>
+      <span className="rating-summary-mean">{aggregate.mean.toFixed(1)}/5</span>
+      <span className="rating-summary-count">
+        across {aggregate.count}/{totalItems} items rated
+      </span>
+    </div>
   );
 }
 
