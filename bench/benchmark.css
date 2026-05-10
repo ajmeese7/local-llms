@@ -152,9 +152,32 @@ table.me-table .pn { color: var(--me-fg); }
 .prun-table .numeric { text-align: right; color: var(--me-fg); }
 .prun-table .pn { color: var(--me-fg); }
 .prun-table .toggle-row { cursor: pointer; }
-.prun-table .toggle-row td:first-child::before { content: "▸"; color: var(--me-fg-3); }
-.prun-table .toggle-row.open td:first-child::before { content: "▾"; color: var(--me-magenta); }
-.prun-table .excerpt-row td { background: rgba(0,0,0,0.4); padding: 0; border-bottom: 1px solid var(--me-border); }
+.prun-table .toggle-row td:first-child::before {
+  content: "▸"; color: var(--me-fg-3); display: inline-block;
+  transition: transform 200ms ease, color 200ms ease;
+}
+.prun-table .toggle-row.open td:first-child::before {
+  transform: rotate(90deg); color: var(--me-magenta);
+}
+/* The excerpt row is always rendered so we can animate its open/close
+   transition. The td has no styling; the inner .excerpt-collapse owns
+   the height transition and bg, .excerpt-collapse-inner owns clipping. */
+.prun-table .excerpt-row td { padding: 0; border-bottom: none; background: transparent; }
+.excerpt-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+.excerpt-collapse.open { grid-template-rows: 1fr; }
+.excerpt-collapse-inner {
+  overflow: hidden;
+  background: rgba(0,0,0,0.4);
+  /* Collapsed state has zero min-height; open state inherits content. */
+  min-height: 0;
+}
+.excerpt-collapse.open > .excerpt-collapse-inner {
+  border-bottom: 1px solid var(--me-border);
+}
 .excerpt-inner {
   padding: 14px 18px;
   font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6;

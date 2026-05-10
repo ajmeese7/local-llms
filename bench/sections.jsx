@@ -471,6 +471,13 @@ function PromptRow({ row, cell, isOpen, onToggle, hideThinking, previewHtml, onR
   const partial = Number(r.score?.partial);
   const correct = !!r.score?.correct;
   const kind = window.classifyRow(r);  // "ok" | "low" | "empty" | "err"
+
+  // Lazy-mount the expanded panel: don't render its children (especially
+  // the iframe) until the row has been opened at least once. After that,
+  // keep it mounted so the close animation has content to collapse from.
+  const [wasOpened, setWasOpened] = _useState(isOpen);
+  React.useEffect(() => { if (isOpen && !wasOpened) setWasOpened(true); }, [isOpen, wasOpened]);
+
   return (
     <React.Fragment>
       <tr className={`toggle-row ${isOpen ? "open" : ""}`} onClick={onToggle}>
@@ -492,18 +499,25 @@ function PromptRow({ row, cell, isOpen, onToggle, hideThinking, previewHtml, onR
           {kind === "err" && <MiniFlag kind="danger">err</MiniFlag>}
         </td>
       </tr>
-      {isOpen && (
-        <tr className="excerpt-row">
-          <td colSpan="7">
-            <ExpandedPanel
-              row={r}
-              cell={cell}
-              hideThinking={hideThinking}
-              previewHtml={previewHtml}
-              onRatingChange={onRatingChange} />
-          </td>
-        </tr>
-      )}
+      {/* The excerpt row is always rendered; the open/close animation
+          lives on the inner grid wrapper (excerpt-collapse). React
+          unmount would skip the close transition. */}
+      <tr className="excerpt-row">
+        <td colSpan="7">
+          <div className={`excerpt-collapse ${isOpen ? "open" : ""}`} aria-hidden={!isOpen}>
+            <div className="excerpt-collapse-inner">
+              {wasOpened && (
+                <ExpandedPanel
+                  row={r}
+                  cell={cell}
+                  hideThinking={hideThinking}
+                  previewHtml={previewHtml}
+                  onRatingChange={onRatingChange} />
+              )}
+            </div>
+          </div>
+        </td>
+      </tr>
     </React.Fragment>
   );
 }
@@ -576,25 +590,34 @@ function MissedChecksPanel({ hits, misses }) {
 
 function OutputArea({ row, previewHtml, hideThinking }) {
   const raw = row.raw || "";
-  // Strip Markdown code fences so a leading "```html" doesn't break HTML
-  // detection or syntax highlighting. Models wrap their answer in a fenced
-  // block roughly 80% of the time; we want the actual code.
-  const stripped = window.stripCodeFences(raw);
+  // Iframe gets the stripped HTML so prose preambles don't end up in the
+  // <head>. The source-code panel below shows the FULL response so the
+  // user can see whatever the model actually emitted (preamble, fence
+  // language hint, closing remarks). Prism still highlights code blocks
+  // inside that full text via highlightExcerpt's fence-aware rendering.
   const isHtml = window.looksLikeHtmlDoc(raw);
   if (previewHtml && isHtml) {
+    const stripped = window.stripCodeFences(raw);
     return (
       <div className="excerpt-preview">
         <iframe
           title={`preview-${row.item_id}`}
           srcDoc={stripped}
-          sandbox="allow-scripts"
+          // Sandbox: allow-scripts (no allow-same-origin) keeps scripts
+          // unable to escape into the parent. allow-modals lets pages
+          // call alert/confirm if they want to.
+          sandbox="allow-scripts allow-modals"
+          // Permissions Policy: enable mic + camera + autoplay so the
+          // audio-reactive prompt's getUserMedia call actually works.
+          // Also enable pointer-lock for canvas demos that grab pointer.
+          allow="microphone; camera; autoplay; pointer-lock; fullscreen"
           referrerPolicy="no-referrer"
           loading="lazy" />
       </div>
     );
   }
-  const lang = window.detectExcerptLanguage(row.item_id, stripped);
-  const html = window.highlightExcerpt(stripped || "(no output)", lang);
+  const lang = window.detectExcerptLanguage(row.item_id, raw);
+  const html = window.highlightExcerpt(raw || "(no output)", lang);
   return (
     <pre className={`excerpt-inner ${hideThinking ? "hide-thinking" : ""} ${lang ? `language-${lang}` : ""}`}
          dangerouslySetInnerHTML={{ __html: html }} />
@@ -666,12 +689,31 @@ function ExpandedFoot({ row, isHtml }) {
       setTimeout(() => setCopied(false), 1500);
     });
   };
+  // Open the rendered HTML in a new tab. Strips fences so prose preambles
+  // ("Here is the solution: ```html …```") don't end up in the document.
   const openInTab = () => {
     if (!row.raw) return;
-    const blob = new Blob([row.raw], { type: "text/html" });
+    const html = window.stripCodeFences(row.raw);
+    const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank", "noopener,noreferrer");
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+  // Pop the rendered HTML out into a sized, resizable browser window so the
+  // user can stress-test responsiveness, use mic/camera (popup window has
+  // its own top-level permissions context, unlike the sandboxed iframe),
+  // and drag the window edges. Note: most browsers ignore window.open
+  // sizing for tabs but honor it for explicit popup features.
+  const popOut = () => {
+    if (!row.raw) return;
+    const html = window.stripCodeFences(row.raw);
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const w = Math.min(1280, Math.round(screen.availWidth  * 0.8));
+    const h = Math.min(900,  Math.round(screen.availHeight * 0.85));
+    const features = `popup,width=${w},height=${h},resizable=yes,scrollbars=yes`;
+    window.open(url, `bench-preview-${row.item_id}`, features);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
   return (
     <div className="excerpt-foot">
@@ -681,6 +723,11 @@ function ExpandedFoot({ row, isHtml }) {
       {row.prompt && (
         <button onClick={copyPrompt} title="Copy the rendered prompt to clipboard">
           {copied ? "✓ copied" : "copy prompt"}
+        </button>
+      )}
+      {isHtml && (
+        <button onClick={popOut} title="Open in a resizable popup window (best for testing responsiveness, mic, camera)">
+          pop out ⧉
         </button>
       )}
       {isHtml && (

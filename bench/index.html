@@ -64,9 +64,9 @@
     .me-miniflag.clean { @apply text-me-success border-me-success/40; }
     .me-miniflag.leak { @apply text-me-warning border-me-warning/40; }
     .me-miniflag.danger { @apply text-me-danger border-me-danger/40; }
-    .qbar { @apply inline-flex items-center gap-1.5; }
-    .qbar .qnum { @apply text-me-fg; }
-    .qbar .qtrack { @apply w-[60px] h-[5px] bg-white/5 relative; }
+    .qbar { @apply inline-flex items-center gap-1.5 whitespace-nowrap; }
+    .qbar .qnum { @apply text-me-fg whitespace-nowrap; }
+    .qbar .qtrack { @apply w-[60px] h-[5px] bg-white/5 relative shrink-0; }
     .qbar .qfill { @apply absolute inset-y-0 left-0 bg-me-warning; }
     .qbar.low .qfill { @apply bg-me-danger; }
     .qbar.full .qfill { @apply bg-me-success; }

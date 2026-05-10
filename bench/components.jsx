@@ -281,15 +281,15 @@ function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Split raw output into alternating "think" and "code" segments. Think
-// segments include any explicit <think>…</think> blocks plus heuristic
-// reasoning preambles ("Here's a thinking process", etc.). We split first
-// so syntax highlighting only runs over the actual non-reasoning content.
+// Split raw output into alternating "think" / "prose" segments. Think
+// segments cover explicit <think>…</think> blocks plus heuristic reasoning
+// preambles ("Here's a thinking process", etc.). The non-think segments
+// then get a second pass to extract fenced code blocks.
 function splitThinkSegments(text) {
   const segs = [];
   const reasonHead = /^\s*(here'?s a thinking process|thinking process|deconstruct(?:ing)? the prompt|analy(?:s|z)e (?:user|the)|drafting - attempt|identify )/i;
   const lines = text.split("\n");
-  let mode = "code";
+  let mode = "prose";
   let buf = [];
   const flush = () => {
     if (!buf.length) return;
@@ -306,10 +306,10 @@ function splitThinkSegments(text) {
     if (/^\s*<\/think>/i.test(line)) {
       buf.push(line);
       flush();
-      mode = "code";
+      mode = "prose";
       continue;
     }
-    if (mode === "code" && reasonHead.test(line)) {
+    if (mode === "prose" && reasonHead.test(line)) {
       // Single-line reasoning leak; emit as its own think segment so we
       // don't poison the code highlighter with prose.
       flush();
@@ -320,6 +320,52 @@ function splitThinkSegments(text) {
   }
   flush();
   return segs;
+}
+
+// Within a prose blob, peel out fenced code blocks (```lang … ```), keeping
+// the surrounding prose intact. Models routinely write a preamble before
+// the answer; the user wants that preserved in the source-code view.
+// Returns segments shaped like:
+//   {kind: "prose", text}
+//   {kind: "code",  text, language}
+function splitFencedCode(text) {
+  const segs = [];
+  let i = 0;
+  while (i < text.length) {
+    const rest = text.slice(i);
+    const open = rest.match(/```([a-zA-Z0-9_+\-]*)\s*\n/);
+    if (!open) {
+      if (i < text.length) segs.push({ kind: "prose", text: text.slice(i) });
+      break;
+    }
+    const fenceStart = i + open.index;
+    if (fenceStart > i) segs.push({ kind: "prose", text: text.slice(i, fenceStart) });
+    const codeStart = fenceStart + open[0].length;
+    const tail = text.slice(codeStart);
+    const close = tail.match(/\n\s*```\s*(?:\n|$)/);
+    if (close) {
+      segs.push({ kind: "code", text: tail.slice(0, close.index), language: open[1] || null });
+      i = codeStart + close.index + close[0].length;
+    } else {
+      segs.push({ kind: "code", text: tail, language: open[1] || null });
+      break;
+    }
+  }
+  return segs;
+}
+
+// Map a markdown fence language hint to a Prism component we have loaded.
+function languageAlias(lang) {
+  if (!lang) return null;
+  const l = String(lang).toLowerCase();
+  if (l === "html" || l === "xml" || l === "svg") return "markup";
+  if (l === "js" || l === "jsx" || l === "ts" || l === "tsx" || l === "javascript") return "javascript";
+  if (l === "py" || l === "python") return "python";
+  if (l === "sh" || l === "shell" || l === "bash" || l === "zsh") return "bash";
+  if (l === "css") return "css";
+  if (l === "json") return "json";
+  if (l === "markup") return "markup";
+  return null;
 }
 
 // Run Prism over `text` if a known language is given and Prism is loaded.
@@ -337,15 +383,36 @@ function highlightCode(text, language) {
 }
 
 // Public: turn raw output into highlighted HTML for the excerpt panel.
-// `language` is one of: "markup", "javascript", "css", "python", "json",
-// "bash", or null/undefined for no highlighting.
-function highlightExcerpt(text, language) {
-  return splitThinkSegments(text).map(seg => {
-    if (seg.kind === "think") {
-      return `<span class="think">${escapeHtml(seg.text)}</span>`;
+//
+// The full raw text is preserved (prose preambles, narrative around code,
+// closing remarks). Fenced code blocks get Prism-highlighted with the
+// language declared by the fence. Free-floating non-fenced content gets
+// `fallbackLanguage` if provided (for adapters where the entire response
+// is expected to be code, e.g. raw JSON for tool-use); otherwise it
+// renders as plain escaped text.
+function highlightExcerpt(text, fallbackLanguage) {
+  const out = [];
+  for (const t of splitThinkSegments(text)) {
+    if (t.kind === "think") {
+      out.push(`<span class="think">${escapeHtml(t.text)}</span>`);
+      continue;
     }
-    return highlightCode(seg.text, language);
-  }).join("\n");
+    const blocks = splitFencedCode(t.text);
+    const hasCode = blocks.some(b => b.kind === "code");
+    for (const b of blocks) {
+      if (b.kind === "code") {
+        out.push(highlightCode(b.text, languageAlias(b.language) || fallbackLanguage));
+      } else if (!hasCode && fallbackLanguage) {
+        // No fences in this segment but caller declared a language for
+        // the whole response (e.g. JSON tool-use). Highlight the prose
+        // as that language.
+        out.push(highlightCode(b.text, fallbackLanguage));
+      } else {
+        out.push(escapeHtml(b.text));
+      }
+    }
+  }
+  return out.join("\n");
 }
 
 // Pick a Prism language for a given item id + raw output. Errs on the side
@@ -366,19 +433,25 @@ function detectExcerptLanguage(itemId, raw) {
   return null;
 }
 
-// Strip a leading markdown code fence (```html, ```python, etc.) plus its
-// matching trailing ``` from the raw output. Models routinely wrap their
-// answer in a fenced block, but the highlighter and HTML preview both
-// want the actual code, not the fence syntax. Returns the raw input
-// unchanged if no leading fence is present.
+// Pull the first fenced code block out of a model response, ignoring any
+// prose before/after the fence. Models often wrap their answer with a
+// preamble like "Here's the complete solution:" before opening a ```html
+// block — without this the syntax highlighter and HTML preview both miss.
+//
+// If no fence is found, returns the input unchanged.
+// If a fence is opened but never closed (truncated output), returns
+// everything from after the opening fence to the end of the string.
 function stripCodeFences(raw) {
   const text = String(raw || "");
-  const m = text.match(/^\s*```([a-zA-Z0-9_+\-]*)\s*\n([\s\S]*?)\n\s*```\s*$/);
-  if (m) return m[2];
-  // Tolerate an unclosed fence (model truncated mid-output).
-  const open = text.match(/^\s*```([a-zA-Z0-9_+\-]*)\s*\n([\s\S]*)$/);
-  if (open) return open[2];
-  return text;
+  // Look for the first ```<lang>\n anywhere in the document.
+  const open = text.match(/```([a-zA-Z0-9_+\-]*)\s*\n/);
+  if (!open) return text;
+  const startIdx = open.index + open[0].length;
+  // Find the matching closing fence (``` on its own line, or end-of-string).
+  const tail = text.slice(startIdx);
+  const close = tail.match(/\n\s*```\s*(?:\n|$)/);
+  if (close) return tail.slice(0, close.index);
+  return tail;  // unclosed fence — return whatever was generated
 }
 
 // Detect whether the raw output is renderable as a standalone HTML page.
