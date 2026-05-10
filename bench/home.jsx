@@ -296,34 +296,46 @@ function LeaderboardsBlock({ leaderboards, onOpen }) {
 function RatingsImportExportCard() {
   const fileRef = React.useRef(null);
   const [msg, setMsg] = _hUseS(null);
+  const flash = (m, ms = 2500) => { setMsg(m); setTimeout(() => setMsg(null), ms); };
+
   const onExport = () => {
     const blob = new Blob([window.BenchRatings.exportAll()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bench-ratings-${new Date().toISOString().slice(0, 10)}.json`;
+    // Filename matches the repo's expected path so the user can drop it
+    // straight into bench/reports/ on commit.
+    a.download = "ratings.json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    setMsg("exported");
-    setTimeout(() => setMsg(null), 2000);
+    flash("exported as ratings.json");
   };
   const onImportClick = () => fileRef.current?.click();
   const onImportFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
-    const n = window.BenchRatings.importAll(text);
-    setMsg(n > 0 ? `imported ${n}` : "no ratings imported");
-    setTimeout(() => setMsg(null), 3000);
+    const n = window.BenchRatings.importAll(text, "overwrite");
+    flash(n > 0 ? `imported ${n}` : "no ratings imported");
     e.target.value = "";  // allow re-picking same file
   };
+  const onReloadFromRepo = async () => {
+    const n = await window.BenchRatings.loadFromRepo("overwrite");
+    flash(
+      n > 0
+        ? `pulled ${n} ratings from bench/reports/ratings.json`
+        : "no ratings.json in bench/reports/",
+      4000,
+    );
+  };
+
   return (
     <div className="me-card p-4 md:p-5">
       <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
         <i className="fa-solid fa-star text-me-warning mr-2"></i> Your ratings
       </h3>
       <p className="font-mono text-[11px] text-me-fg-3 mb-3">
-        Manual ratings are stored locally per browser. Export to share between machines or commit to the repo.
+        Ratings are stored in your browser. Export saves <code>ratings.json</code>; drop it in <code>bench/reports/</code> and commit to sync across machines.
       </p>
       <div className="flex flex-wrap gap-2">
         <button
@@ -334,11 +346,17 @@ function RatingsImportExportCard() {
         <button
           onClick={onImportClick}
           className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
-          Import
+          Import file
+        </button>
+        <button
+          onClick={onReloadFromRepo}
+          title="Overwrite local ratings with bench/reports/ratings.json"
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Reload from repo
         </button>
         <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
-        {msg && <span className="font-mono text-[11px] text-me-cyan self-center">{msg}</span>}
       </div>
+      {msg && <div className="mt-2 font-mono text-[11px] text-me-cyan">{msg}</div>}
     </div>
   );
 }

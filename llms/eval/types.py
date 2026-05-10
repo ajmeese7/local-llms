@@ -84,6 +84,11 @@ class ItemResult:
     http_status: int
     error: str | None = None
     prompt: str = ""  # rendered prompt text sent to the model
+    # Token-budget context for the diagnostic banner — lets the bench say
+    # "prompt was 4,200 tok of a 24,000 max, you didn't hit the cap" or
+    # "output hit max_tokens, raise the budget" without round-tripping.
+    prompt_tokens: int | None = None
+    max_tokens: int | None = None
 
 
 __all__ = ["Item", "ItemResult", "ParsedAnswer", "Prompt", "Score"]

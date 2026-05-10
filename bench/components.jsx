@@ -526,12 +526,13 @@ function diagnoseRow(row) {
   }
   if (kind === "empty") {
     const tokens = Number(row.output_tokens);
+    const cap = Number(row.max_tokens);
     if (Number.isFinite(tokens) && tokens > 0) {
-      return {
-        kind,
-        headline: "Model produced only reasoning",
-        detail: `The model emitted ${tokens.toLocaleString()} output tokens but no usable answer — typically an unclosed <think> block where reasoning starved before the final answer. Increase max_tokens for this item, disable thinking with /no_think, or both.`,
-      };
+      const hitCap = Number.isFinite(cap) && tokens >= cap - 4;
+      const detail = hitCap
+        ? `The model emitted ${tokens.toLocaleString()} output tokens — that's the configured max_tokens cap of ${cap.toLocaleString()} — and never exited the <think> block. Bump max_tokens for this item, or run with thinking disabled (/no_think prefix).`
+        : `The model emitted ${tokens.toLocaleString()} output tokens but no usable answer — typically an unclosed <think> block where reasoning starved before the final answer. Increase max_tokens${Number.isFinite(cap) ? ` (currently ${cap.toLocaleString()})` : ""} for this item, disable thinking with /no_think, or both.`;
+      return { kind, headline: "Model produced only reasoning", detail };
     }
     return {
       kind,

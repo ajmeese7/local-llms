@@ -206,6 +206,8 @@ def _iter_results(
             http_status=completion.http_status,
             error=completion.error,
             prompt=prompt.text,
+            prompt_tokens=completion.prompt_tokens,
+            max_tokens=prompt.max_tokens,
         )
         if telemetry is not None:
             telemetry.write(
@@ -350,6 +352,8 @@ def _result_to_json(result: ItemResult, *, run_id: str) -> dict[str, object]:
         "ttft_ms": result.ttft_ms,
         "latency_ms": result.latency_ms,
         "output_tokens": result.output_tokens,
+        "prompt_tokens": result.prompt_tokens,
+        "max_tokens": result.max_tokens,
         "tokens_per_sec": result.tokens_per_sec,
         "http_status": result.http_status,
         "error": result.error,

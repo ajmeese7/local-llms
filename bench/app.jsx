@@ -76,6 +76,18 @@ function App() {
   }, []);
   useE(() => { refresh(); }, [refresh]);
 
+  // On first load, merge any repo-committed ratings into localStorage. Merge
+  // strategy (not overwrite) means local edits made since the last commit
+  // stay intact; new ratings from a colleague's commit show up.
+  useE(() => {
+    let cancelled = false;
+    (async () => {
+      const n = await window.BenchRatings.loadFromRepo("merge");
+      if (!cancelled && n > 0) console.info(`bench: seeded ${n} ratings from bench/reports/ratings.json`);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Lazy-load leaderboards once we have an index (so home + bench both can use them).
   useE(() => {
     let cancelled = false;

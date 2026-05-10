@@ -103,7 +103,9 @@ function exportAll() {
   return JSON.stringify({ version: 1, exported_at: new Date().toISOString(), ratings: out }, null, 2);
 }
 
-function importAll(jsonText) {
+// Import strategy: "merge" only writes entries that aren't already in
+// localStorage (preserves local edits); "overwrite" replaces every entry.
+function importAll(jsonText, strategy = "overwrite") {
   let parsed;
   try { parsed = JSON.parse(jsonText); }
   catch { return 0; }
@@ -112,13 +114,31 @@ function importAll(jsonText) {
   let imported = 0;
   for (const [suffix, data] of Object.entries(ratings)) {
     if (typeof data !== "object" || data === null) continue;
+    const k = RATING_PREFIX + suffix;
+    if (strategy === "merge") {
+      try { if (localStorage.getItem(k) !== null) continue; } catch { /* */ }
+    }
     try {
-      localStorage.setItem(RATING_PREFIX + suffix, JSON.stringify(data));
+      localStorage.setItem(k, JSON.stringify(data));
       imported += 1;
     } catch { /* quota */ }
   }
   if (imported > 0) _notify();
   return imported;
+}
+
+// Fetch ratings.json from the repo's bench/reports/ directory. The bench's
+// `eval report` command doesn't emit this file — it's committed by the
+// user via the Export button. Returns the number of ratings merged in.
+async function loadFromRepo(strategy = "merge") {
+  try {
+    const r = await fetch("reports/ratings.json", { cache: "no-store" });
+    if (!r.ok) return 0;
+    const text = await r.text();
+    return importAll(text, strategy);
+  } catch {
+    return 0;
+  }
 }
 
 window.BenchRatings = {
@@ -129,4 +149,5 @@ window.BenchRatings = {
   subscribe,
   exportAll,
   importAll,
+  loadFromRepo,
 };

@@ -544,11 +544,19 @@ function DiagnosticBanner({ diag, row, cell }) {
   const tone = diag.kind === "err" ? "danger" : diag.kind === "empty" ? "warn" : "info";
   const status = Number(row.http_status);
   const lat = Number(row.latency_ms);
-  const tok = Number(row.output_tokens);
+  const outTok = Number(row.output_tokens);
+  const promTok = Number(row.prompt_tokens);
+  const maxTok = Number(row.max_tokens);
   const meta = [];
   if (Number.isFinite(status) && status > 0) meta.push(`http=${status}`);
   if (Number.isFinite(lat)) meta.push(`${(lat/1000).toFixed(1)}s`);
-  if (Number.isFinite(tok)) meta.push(`${tok.toLocaleString()} tok`);
+  if (Number.isFinite(promTok)) meta.push(`prompt=${promTok.toLocaleString()} tok`);
+  if (Number.isFinite(outTok) && Number.isFinite(maxTok)) {
+    const hitCap = outTok >= maxTok - 4;  // within 4 of the cap = effectively hit it
+    meta.push(`output=${outTok.toLocaleString()} / ${maxTok.toLocaleString()} tok${hitCap ? " (cap)" : ""}`);
+  } else if (Number.isFinite(outTok)) {
+    meta.push(`output=${outTok.toLocaleString()} tok`);
+  }
   if (cell?.adapter?.name) meta.push(`adapter=${cell.adapter.name}`);
   return (
     <div className={`diag-banner ${tone}`}>
