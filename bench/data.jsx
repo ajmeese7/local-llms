@@ -227,6 +227,7 @@ function buildBenchMeta(bench, cells) {
     latest_timestamp: bench.latest_timestamp,
     cell_count: bench.cell_count,
     run_count: bench.run_count,
+    partial_run_count: bench.partial_run_count || 0,
     suite_seconds: suiteSeconds,
   };
 }

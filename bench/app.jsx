@@ -1,11 +1,13 @@
 /* ============================================================
    app.jsx — Hub SPA shell.
    Hash routing:
-     #/                                    → home
-     #/bench/<id>                          → bench overview
-     #/bench/<id>/prompts/<adapter>        → prompts drilldown for a capability
-     #/bench/<id>/config                   → model profile config
-     #/methodology                         → top-level methodology page
+     #/                                          → home
+     #/bench/<id>                                → bench overview
+     #/bench/<id>/prompts/<adapter>              → prompts for the latest full run
+     #/bench/<id>/prompts/<adapter>/<runId>      → prompts for a specific run
+                                                   (used by partial / subset re-runs)
+     #/bench/<id>/config                         → model profile config
+     #/methodology                               → top-level methodology page
    A `bench` is one (hardware_profile, model_profile) pair.
    data.jsx#findBench tolerates renames/legacy ids gracefully.
    ============================================================ */
@@ -19,7 +21,8 @@ function parseHash(h) {
   if (parts[0] === "bench" && parts[1]) {
     const id = decodeURIComponent(parts[1]);
     if (parts[2] === "prompts" && parts[3]) {
-      return { view: "bench", id, tab: "prompts", adapter: decodeURIComponent(parts[3]) };
+      const runId = parts[4] ? decodeURIComponent(parts[4]) : null;
+      return { view: "bench", id, tab: "prompts", adapter: decodeURIComponent(parts[3]), runId };
     }
     if (parts[2] === "config") {
       return { view: "bench", id, tab: "config" };
@@ -33,7 +36,8 @@ function parseHash(h) {
 function buildHash(route) {
   if (route.view === "bench") {
     if (route.tab === "prompts" && route.adapter) {
-      return `#/bench/${encodeURIComponent(route.id)}/prompts/${encodeURIComponent(route.adapter)}`;
+      const base = `#/bench/${encodeURIComponent(route.id)}/prompts/${encodeURIComponent(route.adapter)}`;
+      return route.runId ? `${base}/${encodeURIComponent(route.runId)}` : base;
     }
     if (route.tab === "config") {
       return `#/bench/${encodeURIComponent(route.id)}/config`;
@@ -233,13 +237,16 @@ function App() {
               <OverviewSection
                 bench={active}
                 leaderboards={leaderboards}
-                onOpenPrompts={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })} />
+                onOpenPrompts={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })}
+                onOpenPartial={(adapter, runId) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter, runId })} />
             )}
             {route.tab === "prompts" && route.adapter && (
               <PromptsSection
                 bench={active}
                 adapterName={route.adapter}
-                onSwitch={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })} />
+                runId={route.runId || null}
+                onSwitch={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })}
+                onSwitchRun={(runId) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter: route.adapter, runId })} />
             )}
             {route.tab === "config" && (
               <ConfigSection bench={active} profilesSnap={profilesSnap} />

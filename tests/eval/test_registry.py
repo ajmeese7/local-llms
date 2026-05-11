@@ -132,6 +132,73 @@ def test_registry_surfaces_timing_per_cell_and_suite(tmp_path: Path) -> None:
 
 
 def test_registry_groups_into_benches(tmp_path: Path) -> None:
+    """A single full run produces one cell with one full run, no partials."""
+    output = tmp_path / "reports"
+    run_eval(
+        adapter=LocalSmokeAdapter(),
+        runtime=_runtime(),
+        endpoint_name="ep",
+        base_url="http://stub",
+        output_root=output,
+        transport=_ok_transport(),
+    )
+    registry = build_registry(output)
+    assert registry["version"] >= 5
+    benches = registry["benches"]
+    assert len(benches) == 1
+    bench = benches[0]
+    assert bench["model_profile"] == "p"
+    assert bench["hardware_profile"] == "hw"
+    assert bench["cell_count"] == 1
+    assert bench["run_count"] == 1
+    assert bench["partial_run_count"] == 0
+    cell = bench["cells"][0]
+    assert cell["adapter"]["name"] == "local_smoke"
+    assert cell["run_count"] == 1
+    assert cell["partial_run_count"] == 0
+    assert cell["partial_only"] is False
+    assert cell["history_ids"] == [registry["reports"][0]["id"]]
+    assert cell["comparability_key"] == registry["reports"][0]["comparability_key"]
+
+
+def test_subset_rerun_attaches_to_full_run_cell(tmp_path: Path) -> None:
+    """A subset re-run lands in `partial_runs` of the full-run cell rather
+    than spawning a new capability."""
+    output = tmp_path / "reports"
+    args = {
+        "adapter": LocalSmokeAdapter(),
+        "runtime": _runtime(),
+        "endpoint_name": "ep",
+        "base_url": "http://stub",
+        "output_root": output,
+        "transport": _ok_transport(),
+    }
+    full = run_eval(**args)
+    partial = run_eval(**args, subset="coding_bugfix")
+
+    registry = build_registry(output)
+    benches = registry["benches"]
+    assert len(benches) == 1
+    bench = benches[0]
+    assert bench["cell_count"] == 1
+    assert bench["run_count"] == 1
+    assert bench["partial_run_count"] == 1
+    cell = bench["cells"][0]
+    assert cell["run_count"] == 1
+    assert cell["history_ids"] == [full.manifest.run_id]
+    assert cell["partial_run_count"] == 1
+    assert len(cell["partial_runs"]) == 1
+    p = cell["partial_runs"][0]
+    assert p["id"] == partial.manifest.run_id
+    assert p["subset"] == "coding_bugfix"
+    assert isinstance(p["item_count"], int)
+    # Parent key matches across full and subset; full key differs.
+    assert full.manifest.comparability_key != partial.manifest.comparability_key
+
+
+def test_subset_only_history_renders_as_partial_cell(tmp_path: Path) -> None:
+    """If the only runs against a model are subset re-runs, they still show
+    up — as a cell flagged `partial_only` so the UI can tag it."""
     output = tmp_path / "reports"
     run_eval(
         adapter=LocalSmokeAdapter(),
@@ -143,24 +210,18 @@ def test_registry_groups_into_benches(tmp_path: Path) -> None:
         subset="coding_bugfix",
     )
     registry = build_registry(output)
-    assert registry["version"] >= 4
-    benches = registry["benches"]
-    assert len(benches) == 1
-    bench = benches[0]
-    assert bench["model_profile"] == "p"
-    assert bench["hardware_profile"] == "hw"
-    assert bench["cell_count"] == 1
-    assert bench["run_count"] == 1
+    bench = registry["benches"][0]
     cell = bench["cells"][0]
-    assert cell["adapter"]["name"] == "local_smoke"
-    assert cell["run_count"] == 1
-    assert cell["history_ids"] == [registry["reports"][0]["id"]]
-    assert cell["comparability_key"] == registry["reports"][0]["comparability_key"]
+    assert cell["partial_only"] is True
+    assert cell["run_count"] == 0
+    assert cell["partial_run_count"] == 1
+    assert bench["run_count"] == 0
+    assert bench["partial_run_count"] == 1
 
 
 def test_bench_cell_history_accumulates_across_reruns(tmp_path: Path) -> None:
-    """Two runs of the same adapter against the same model land in one cell,
-    newest first, with both ids preserved."""
+    """Two full runs of the same adapter against the same model land in one
+    cell, newest first, with both ids preserved."""
     output = tmp_path / "reports"
     args = {
         "adapter": LocalSmokeAdapter(),
@@ -169,7 +230,6 @@ def test_bench_cell_history_accumulates_across_reruns(tmp_path: Path) -> None:
         "base_url": "http://stub",
         "output_root": output,
         "transport": _ok_transport(),
-        "subset": "coding_bugfix",
     }
     a = run_eval(**args)
     b = run_eval(**args)

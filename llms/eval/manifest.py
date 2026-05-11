@@ -168,6 +168,76 @@ def compute_comparability_key(
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
+def _as_list(value: object) -> list[object]:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, tuple):
+        return list(value)
+    return []
+
+
+def compute_parent_key_from_manifest(manifest: dict[str, object]) -> str:
+    """SHA-256 of the comparability fields with dataset-slice inputs cleared.
+
+    A 2-item subset re-run and the 17-item full run it was carved from share
+    everything except `dataset.subset`, `dataset.item_count`, and the derived
+    `decode.max_tokens` hint (which is the max budget across the prompts that
+    happened to be sampled). The registry uses this parent key to attach
+    subset re-runs to the full-run cell instead of spawning a new "capability".
+    The full `comparability_key` is still the bootstrap-stats partition; this
+    key is strictly a UI-grouping aid.
+    """
+    def _dict(key: str) -> dict[str, object]:
+        value = manifest.get(key)
+        return value if isinstance(value, dict) else {}
+
+    model = _dict("model")
+    provider = _dict("provider")
+    decode = _dict("decode")
+    dataset = _dict("dataset")
+    adapter = _dict("adapter")
+    payload = {
+        "model": {
+            "profile": model.get("profile"),
+            "alias": model.get("alias"),
+            "model_sha256": model.get("model_sha256"),
+            "hf_repo": model.get("hf_repo"),
+            "hf_file": model.get("hf_file"),
+        },
+        "provider": {
+            "name": provider.get("name"),
+            "git_commit": provider.get("git_commit"),
+            "cmake_args": _as_list(provider.get("cmake_args")),
+        },
+        "decode": {
+            "temperature": decode.get("temperature"),
+            "top_p": decode.get("top_p"),
+            "top_k": decode.get("top_k"),
+            "min_p": decode.get("min_p"),
+            "presence_penalty": decode.get("presence_penalty"),
+            "repeat_penalty": decode.get("repeat_penalty"),
+            # max_tokens is derived from which items happened to be sampled,
+            # so it varies with the subset and is excluded here on purpose.
+            "max_tokens": None,
+        },
+        "dataset": {
+            "name": dataset.get("name"),
+            "version": dataset.get("version"),
+            "subset": None,
+            "item_count": 0,
+        },
+        "adapter": {
+            "name": adapter.get("name"),
+            "version": adapter.get("version"),
+            "track": adapter.get("track"),
+            "prompt_template_version": adapter.get("prompt_template_version"),
+            "scorer_version": adapter.get("scorer_version", "v1"),
+        },
+    }
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 def file_sha256(path: Path, *, chunk_size: int = 1 << 20) -> str:
     """Hex SHA-256 of a file. Streams in chunks so 10GB models don't OOM."""
     hasher = hashlib.sha256()
@@ -262,6 +332,7 @@ __all__ = [
     "ProviderFingerprint",
     "ServerInfo",
     "compute_comparability_key",
+    "compute_parent_key_from_manifest",
     "file_sha256",
     "hostname",
     "repo_sha",

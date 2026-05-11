@@ -21,9 +21,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from llms.eval.manifest import compute_parent_key_from_manifest
 from llms.serving.config.loader import load_bundle
 
-REGISTRY_VERSION = 4
+REGISTRY_VERSION = 5
 
 
 def build_registry(output_root: Path) -> dict[str, Any]:
@@ -64,6 +65,11 @@ def _build_benches(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
         head = members[0]
         cells = _build_cells(members)
         suite_seconds = _sum_or_none(c.get("wall_seconds") for c in cells)
+        # `run_count` and `cell_count` cover full runs only — partials are a
+        # separate "+N" badge so a 2-item smoke test doesn't read as a brand
+        # new capability against the model.
+        full_run_count = sum(c.get("run_count", 0) for c in cells)
+        partial_run_count = sum(c.get("partial_run_count", 0) for c in cells)
         benches.append(
             {
                 "id": _bench_id(hw_profile, model_profile),
@@ -75,7 +81,8 @@ def _build_benches(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "hardware": head.get("hardware"),
                 "server": head.get("server"),
                 "cell_count": len(cells),
-                "run_count": len(members),
+                "run_count": full_run_count,
+                "partial_run_count": partial_run_count,
                 "suite_seconds": suite_seconds,
                 "cells": cells,
             }
@@ -96,27 +103,53 @@ def _sum_or_none(values: Any) -> float | None:
 
 
 def _build_cells(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One cell per comparability_key inside a bench."""
-    by_key: dict[str, list[dict[str, Any]]] = {}
+    """One cell per (model, decode, adapter) — subset re-runs fold into the
+    same cell as their full-run parent.
+
+    Bucketing is keyed by `parent_key`: the same SHA-256 used for
+    `comparability_key` but with dataset-slice fields (subset, item_count,
+    max_tokens hint) cleared. That way a 2-item subset re-run lands in the
+    same cell as the 17-item full run, instead of inflating "CAPABILITIES"
+    by one each time you smoke-test a couple of items.
+
+    Inside a cell:
+      - `history_ids` keeps full runs (subset=None), newest first.
+      - `partial_runs` lists subset re-runs separately so they don't pollute
+        the cell's primary accuracy/CI numbers.
+      - `latest` prefers the newest full run; falls back to the newest subset
+        run only when no full run exists for this parent_key.
+    """
+    by_parent: dict[str, list[dict[str, Any]]] = {}
     for r in members:
-        key = r.get("comparability_key")
-        if not key:
+        parent = r.get("parent_key") or r.get("comparability_key")
+        if not parent:
             continue
-        by_key.setdefault(key, []).append(r)
+        by_parent.setdefault(parent, []).append(r)
 
     cells: list[dict[str, Any]] = []
-    for key, runs in by_key.items():
+    for parent_key, runs in by_parent.items():
         runs.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
-        latest = runs[0]
+        full_runs = [r for r in runs if not r.get("dataset_subset")]
+        partial_runs = [r for r in runs if r.get("dataset_subset")]
+        latest = full_runs[0] if full_runs else runs[0]
         latest_timing = latest.get("timing") if isinstance(latest.get("timing"), dict) else None
+        # `comparability_key` on the cell is the latest full run's full key so
+        # downstream consumers that match on it still work; falls back to the
+        # parent key when the cell is partial-only.
+        cell_key = latest.get("comparability_key") or parent_key
         cells.append(
             {
-                "comparability_key": key,
-                "comparability_prefix": key[:8],
+                "comparability_key": cell_key,
+                "comparability_prefix": cell_key[:8],
+                "parent_key": parent_key,
+                "parent_prefix": parent_key[:8],
                 "adapter": latest.get("adapter") or {},
                 "latest": latest,
-                "history_ids": [r["id"] for r in runs],  # newest first; includes latest
-                "run_count": len(runs),
+                "history_ids": [r["id"] for r in full_runs],
+                "run_count": len(full_runs),
+                "partial_runs": [_partial_run_view(r) for r in partial_runs],
+                "partial_run_count": len(partial_runs),
+                "partial_only": not full_runs,
                 "wall_seconds": (latest_timing or {}).get("wall_seconds"),
                 "compute_seconds": (latest_timing or {}).get("compute_seconds"),
             }
@@ -130,6 +163,25 @@ def _build_cells(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
         reverse=True,
     )
     return cells
+
+
+def _partial_run_view(run: dict[str, Any]) -> dict[str, Any]:
+    """Compact descriptor for a subset re-run rendered under a cell."""
+    timing = run.get("timing") if isinstance(run.get("timing"), dict) else None
+    return {
+        "id": run.get("id"),
+        "timestamp": run.get("timestamp"),
+        "subset": run.get("dataset_subset"),
+        "item_count": run.get("dataset_item_count") or run.get("item_count"),
+        "comparability_key": run.get("comparability_key"),
+        "comparability_prefix": run.get("comparability_prefix"),
+        "accuracy": run.get("accuracy"),
+        "partial": run.get("partial"),
+        "correct_count": run.get("correct_count"),
+        "error_count": run.get("error_count"),
+        "wall_seconds": (timing or {}).get("wall_seconds"),
+        "compute_seconds": (timing or {}).get("compute_seconds"),
+    }
 
 
 def _bench_id(hw_profile: str, model_profile: str) -> str:
@@ -298,11 +350,13 @@ def _entry_for(run_dir: Path) -> dict[str, Any] | None:
     adapter = manifest.get("adapter", {})
     model = manifest.get("model", {})
     provider = manifest.get("provider", {})
+    dataset = manifest.get("dataset") if isinstance(manifest.get("dataset"), dict) else {}
     accuracy = _normalize_ci(summary.get("accuracy"))
     partial = _normalize_ci(summary.get("partial"))
     hardware = manifest.get("hardware") if isinstance(manifest.get("hardware"), dict) else None
     server = manifest.get("server") if isinstance(manifest.get("server"), dict) else None
     timing = summary.get("timing") if isinstance(summary.get("timing"), dict) else None
+    parent_key = compute_parent_key_from_manifest(manifest)
     return {
         "id": run_dir.name,
         "timestamp": manifest.get("timestamp"),
@@ -318,6 +372,10 @@ def _entry_for(run_dir: Path) -> dict[str, Any] | None:
         },
         "comparability_key": manifest.get("comparability_key"),
         "comparability_prefix": (manifest.get("comparability_key") or "")[:8],
+        "parent_key": parent_key,
+        "parent_prefix": parent_key[:8],
+        "dataset_subset": dataset.get("subset"),
+        "dataset_item_count": dataset.get("item_count"),
         "item_count": summary.get("item_count"),
         "correct_count": summary.get("correct_count"),
         "parse_failure_count": summary.get("parse_failure_count"),

@@ -180,6 +180,12 @@ function BenchCard({ bench, showHwPill, onOpen }) {
         <div className="p-2 bg-white/[0.02] border border-me-border min-w-0">
           <div className="me-label">Runs</div>
           <div className="text-me-fg text-[14px] mt-0.5">{bench.run_count}</div>
+          {bench.partial_run_count > 0 && (
+            <div className="font-mono text-[9px] tracking-[0.08em] uppercase text-me-fg-3 mt-1"
+                 title="Subset re-runs aren't comparable to full runs, so they're counted separately.">
+              + {bench.partial_run_count} partial
+            </div>
+          )}
         </div>
       </div>
 

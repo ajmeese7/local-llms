@@ -10,7 +10,7 @@
 const { useState: _useState, useMemo: _useMemo, useCallback: _useCallback } = React;
 
 /* ====================== OVERVIEW ====================== */
-function OverviewSection({ bench, leaderboards, onOpenPrompts }) {
+function OverviewSection({ bench, leaderboards, onOpenPrompts, onOpenPartial }) {
   const meta = bench.meta;
   const cells = bench.cells;
   return (
@@ -19,7 +19,11 @@ function OverviewSection({ bench, leaderboards, onOpenPrompts }) {
 
       {meta.hardware && <GpuStateRibbon hardware={meta.hardware} />}
 
-      <SectionHead num="01" title="Capabilities" sub={`// ${cells.length} cell${cells.length === 1 ? "" : "s"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"} accumulated`} />
+      <SectionHead
+        num="01"
+        title="Capabilities"
+        sub={`// ${cells.length} cell${cells.length === 1 ? "" : "s"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"}${meta.partial_run_count ? ` +${meta.partial_run_count} partial` : ""} accumulated`}
+      />
       {cells.length === 0 ? (
         <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
           No capability cells yet. Run an adapter against this model and it'll appear here.
@@ -30,7 +34,8 @@ function OverviewSection({ bench, leaderboards, onOpenPrompts }) {
             <CapabilityCell
               key={cell.comparability_key}
               cell={cell}
-              onOpenPrompts={() => onOpenPrompts(cell.adapter.name)} />
+              onOpenPrompts={() => onOpenPrompts(cell.adapter.name)}
+              onOpenPartial={(runId) => onOpenPartial(cell.adapter.name, runId)} />
           ))}
         </div>
       )}
@@ -57,7 +62,11 @@ function BenchHero({ meta }) {
     id: "engine", icon: "fa-server",
     value: `${server.engine}${server.version ? ` @ ${server.version}` : ""}`,
   });
-  stats.push({ id: "cells", icon: "fa-list-check", value: `${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"}` });
+  stats.push({
+    id: "cells",
+    icon: "fa-list-check",
+    value: `${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"}${meta.partial_run_count ? ` +${meta.partial_run_count} partial` : ""}`,
+  });
   if (meta.suite_seconds != null) stats.push({
     id: "suite", icon: "fa-stopwatch",
     value: `≈ ${window.BenchData.fmtDuration(meta.suite_seconds)} total`,
@@ -108,7 +117,7 @@ function GpuStateRibbon({ hardware }) {
   );
 }
 
-function CapabilityCell({ cell, onOpenPrompts }) {
+function CapabilityCell({ cell, onOpenPrompts, onOpenPartial }) {
   const adapter = cell.adapter || {};
   const r = cell.rollup;
   const qualityClass = qualityColor(r?.quality);
@@ -176,7 +185,10 @@ function CapabilityCell({ cell, onOpenPrompts }) {
 
       <div className="flex items-center justify-between mt-4">
         <div className="font-mono text-[10px] text-me-fg-3">
-          key {cell.comparability_prefix} · {cell.run_count} run{cell.run_count === 1 ? "" : "s"}
+          key {cell.comparability_prefix} ·{" "}
+          {cell.partial_only
+            ? <span title="No full-suite run yet — only subset re-runs against this configuration.">partial coverage ({cell.partial_run_count})</span>
+            : `${cell.run_count} run${cell.run_count === 1 ? "" : "s"}`}
         </div>
         <button
           onClick={onOpenPrompts}
@@ -186,6 +198,54 @@ function CapabilityCell({ cell, onOpenPrompts }) {
       </div>
 
       {cell.run_count > 1 && <CellHistoryDisclosure cell={cell} />}
+      {cell.partial_run_count > 0 && (
+        <CellPartialRunsDisclosure cell={cell} onOpenPartial={onOpenPartial} />
+      )}
+    </div>
+  );
+}
+
+function CellPartialRunsDisclosure({ cell, onOpenPartial }) {
+  const [open, setOpen] = _useState(false);
+  const partials = cell.partial_runs || [];
+  if (!partials.length) return null;
+  const n = partials.length;
+  return (
+    <div className="mt-2 border-t border-me-border pt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Subset re-runs aren't comparable to full-suite runs, so they're listed separately."
+        className="font-mono text-[10px] text-me-fg-3 hover:text-me-fg cursor-pointer bg-transparent border-0 p-0">
+        {open ? "▾" : "▸"} partial re-run{n === 1 ? "" : "s"} ({n})
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {partials.map(p => {
+            const acc = p.accuracy?.point != null
+              ? (Number(p.accuracy.point) * 100).toFixed(1) + "%"
+              : (p.partial?.point != null ? (Number(p.partial.point) * 100).toFixed(1) + "%" : "—");
+            const items = p.item_count != null ? `${p.item_count} item${p.item_count === 1 ? "" : "s"}` : "—";
+            const clickable = typeof onOpenPartial === "function";
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={!clickable}
+                onClick={() => clickable && onOpenPartial(p.id)}
+                className={`grid grid-cols-[auto_1fr_auto_auto] gap-3 font-mono text-[10px] text-me-fg-3 items-baseline w-full text-left bg-transparent border-0 p-1 -mx-1 ${clickable ? "hover:bg-white/[0.03] hover:text-me-fg cursor-pointer" : ""}`}>
+                <span className="text-me-fg-2 whitespace-nowrap">{window.BenchData.fmtTimestamp(p.timestamp)}</span>
+                <span className="truncate text-me-fg-2" title={p.subset || ""}>
+                  <span className="text-me-fg-3">subset:</span> {p.subset || "—"} · {items}
+                </span>
+                <span className="text-me-fg-2 whitespace-nowrap">{acc}</span>
+                {clickable && (
+                  <span className="text-me-cyan whitespace-nowrap">open →</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -309,10 +369,35 @@ function tpsColor(t) {
 }
 
 /* ====================== PROMPTS ====================== */
-function PromptsSection({ bench, adapterName, onSwitch }) {
+function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
   const cell = bench.cells.find(c => c.adapter.name === adapterName);
   const cells = bench.cells.filter(c => c.run && c.run.results.length);
-  if (!cell || !cell.run) {
+  // If a specific runId is requested and it's not the cell's preloaded latest,
+  // fetch that run on demand. Used by partial / subset re-runs whose results
+  // (and ratings, keyed by their own comparability_key) live separately.
+  const [partialRun, setPartialRun] = _useState(null);
+  const [partialErr, setPartialErr] = _useState(null);
+  React.useEffect(() => {
+    setPartialRun(null);
+    setPartialErr(null);
+    if (!runId || !cell) return;
+    if (cell.run && runId === cell.run.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const run = await window.BenchData.loadRun(runId);
+        if (!cancelled) {
+          if (run) setPartialRun(run);
+          else setPartialErr(`Run ${runId} not found.`);
+        }
+      } catch (e) {
+        if (!cancelled) setPartialErr(String(e?.message || e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [runId, cell]);
+
+  if (!cell) {
     return (
       <section data-screen-label="02 Prompts">
         <SectionHead num="03" title="Prompts" sub="// pick a capability above" />
@@ -323,12 +408,86 @@ function PromptsSection({ bench, adapterName, onSwitch }) {
       </section>
     );
   }
+
+  const wantsPartial = runId && cell.run && runId !== cell.run.id;
+  const viewCell = wantsPartial
+    ? (partialRun ? _viewCellForRun(cell, partialRun) : null)
+    : cell;
+  const activeRunId = viewCell?.run?.id || (wantsPartial ? runId : cell.run?.id);
+  const subtitle = wantsPartial
+    ? `// subset re-run · ${_partialSubsetLabel(cell, runId)}`
+    : `// per-item runs from the latest ${adapterName} cell`;
+
   return (
     <section data-screen-label="02 Prompts">
-      <SectionHead num="03" title={`Prompts · ${adapterName}`} sub={`// per-item runs from the latest ${adapterName} cell`} />
+      <SectionHead num="03" title={`Prompts · ${adapterName}`} sub={subtitle} />
       <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
-      <PromptsTable cell={cell} />
+      <RunPicker cell={cell} activeRunId={activeRunId} onSwitchRun={onSwitchRun} />
+      {wantsPartial && !viewCell && !partialErr && (
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          <i className="fa-solid fa-spinner fa-spin mr-2"></i>Loading partial re-run…
+        </div>
+      )}
+      {partialErr && (
+        <div className="me-card p-6 font-mono text-[12px] text-me-danger">{partialErr}</div>
+      )}
+      {viewCell && viewCell.run && <PromptsTable cell={viewCell} />}
+      {viewCell && !viewCell.run && (
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          No results recorded for this run.
+        </div>
+      )}
     </section>
+  );
+}
+
+function _partialSubsetLabel(cell, runId) {
+  const p = (cell.partial_runs || []).find(r => r.id === runId);
+  if (!p) return runId;
+  const items = p.item_count != null ? ` · ${p.item_count} item${p.item_count === 1 ? "" : "s"}` : "";
+  return `subset: ${p.subset || "—"}${items}`;
+}
+
+function _viewCellForRun(cell, run) {
+  // Synthetic cell wrapping a non-latest run. The shape mirrors what
+  // PromptsTable/PromptRow/RatingEditor read: a `run` payload and a
+  // `comparability_key` to scope ratings under. The run's own key takes
+  // precedence so ratings recorded on a subset re-run stay tied to *that*
+  // run, not the cell's full-run key.
+  const ck = run.manifest?.comparability_key || cell.comparability_key;
+  return {
+    ...cell,
+    run,
+    comparability_key: ck,
+    comparability_prefix: ck ? ck.slice(0, 8) : cell.comparability_prefix,
+  };
+}
+
+function RunPicker({ cell, activeRunId, onSwitchRun }) {
+  const partials = cell.partial_runs || [];
+  if (!partials.length) return null;
+  const fullId = cell.run?.id || cell.latest?.id;
+  const hasFull = !cell.partial_only && fullId;
+  const fullActive = hasFull && (activeRunId === fullId || !activeRunId);
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <Label>Run</Label>
+      {hasFull && (
+        <Chip on={fullActive} cyan onClick={() => onSwitchRun(null)}>
+          Full run
+        </Chip>
+      )}
+      {partials.map(p => (
+        <Chip
+          key={p.id}
+          on={activeRunId === p.id}
+          cyan
+          onClick={() => onSwitchRun(p.id)}
+          title={p.subset || ""}>
+          partial · {p.item_count ?? "?"} item{p.item_count === 1 ? "" : "s"}
+        </Chip>
+      ))}
+    </div>
   );
 }
 
