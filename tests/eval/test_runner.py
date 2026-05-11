@@ -59,16 +59,31 @@ def _stub_runtime():
     return resolve_runtime(bundle, endpoint_name="ep", hardware_name="hw")
 
 
+def _sse_body(content: str, *, prompt_tokens: int, completion_tokens: int) -> bytes:
+    """Encode a chat-completions response as an OpenAI-style SSE stream."""
+    chunks = [
+        {"choices": [{"index": 0, "delta": {"content": content}}]},
+        {
+            "choices": [],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+            },
+        },
+    ]
+    lines = [f"data: {json.dumps(c)}\n\n" for c in chunks]
+    lines.append("data: [DONE]\n\n")
+    return "".join(lines).encode("utf-8")
+
+
 def _mock_transport() -> httpx.BaseTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert body["model"]
         return httpx.Response(
             200,
-            json={
-                "choices": [{"message": {"role": "assistant", "content": _CANNED_RESPONSE}}],
-                "usage": {"prompt_tokens": 100, "completion_tokens": 50},
-            },
+            headers={"content-type": "text/event-stream"},
+            content=_sse_body(_CANNED_RESPONSE, prompt_tokens=100, completion_tokens=50),
         )
 
     return httpx.MockTransport(handler)

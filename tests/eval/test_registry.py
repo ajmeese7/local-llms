@@ -48,12 +48,15 @@ def _runtime():
 
 def _ok_transport() -> httpx.BaseTransport:
     def handler(_: httpx.Request) -> httpx.Response:
+        sse = (
+            'data: {"choices":[{"index":0,"delta":{"content":"ok"}}]}\n\n'
+            'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":5}}\n\n'
+            "data: [DONE]\n\n"
+        )
         return httpx.Response(
             200,
-            json={
-                "choices": [{"message": {"role": "assistant", "content": "ok"}}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-            },
+            headers={"content-type": "text/event-stream"},
+            content=sse.encode("utf-8"),
         )
 
     return httpx.MockTransport(handler)
