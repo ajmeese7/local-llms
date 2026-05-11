@@ -77,3 +77,58 @@ def test_persists_across_instances(tmp_path: Path) -> None:
     a.append_revision(hardware="hw", endpoint_name="ep")
     b = StateStore(path=tmp_path / "state.db")
     assert b.all_active_endpoints() == {"hw": "ep"}
+
+
+def test_provider_override_is_persisted(store: StateStore) -> None:
+    rev = store.append_revision(
+        hardware="hw", endpoint_name="ep", provider_override="ik_llama.cpp"
+    )
+    assert rev.provider_override == "ik_llama.cpp"
+    fetched = store.get_revision(rev.id)
+    assert fetched is not None and fetched.provider_override == "ik_llama.cpp"
+    assert store.all_active()["hw"].provider_override == "ik_llama.cpp"
+
+
+def test_provider_override_defaults_to_none(store: StateStore) -> None:
+    rev = store.append_revision(hardware="hw", endpoint_name="ep")
+    assert rev.provider_override is None
+    assert store.all_active()["hw"].provider_override is None
+
+
+def test_provider_override_migration_on_legacy_db(tmp_path: Path) -> None:
+    """A v1 DB without the provider_override column gets migrated transparently
+    when opened by current code."""
+    import sqlite3
+
+    db = tmp_path / "legacy.db"
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        """
+        CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
+        INSERT INTO schema_version (version) VALUES (1);
+        CREATE TABLE endpoint_revisions (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            hardware      TEXT NOT NULL,
+            endpoint_name TEXT NOT NULL,
+            reason        TEXT NOT NULL DEFAULT '',
+            actor         TEXT NOT NULL,
+            created_at    TEXT NOT NULL
+        );
+        INSERT INTO endpoint_revisions (hardware, endpoint_name, reason, actor, created_at)
+            VALUES ('hw', 'legacy-ep', '', 'tester', '2026-01-01T00:00:00Z');
+        CREATE TABLE active_endpoint (
+            hardware    TEXT PRIMARY KEY,
+            revision_id INTEGER NOT NULL
+        );
+        INSERT INTO active_endpoint (hardware, revision_id) VALUES ('hw', 1);
+        """
+    )
+    conn.close()
+    store = StateStore(path=db)
+    # Legacy row reads back with provider_override=None.
+    rev = store.get_revision(1)
+    assert rev is not None
+    assert rev.provider_override is None
+    # New rows can persist an override on the migrated DB.
+    fresh = store.append_revision(hardware="hw", endpoint_name="ep", provider_override="ik_llama.cpp")
+    assert fresh.provider_override == "ik_llama.cpp"

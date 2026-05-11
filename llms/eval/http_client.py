@@ -93,6 +93,24 @@ class CompletionClient:
     def close(self) -> None:
         self._client.close()
 
+    def health_check(self, *, timeout_s: float = 5.0) -> tuple[bool, str | None]:
+        """Cheap reachability ping. Returns (ok, error_message).
+
+        Hits `GET /v1/models` — every OpenAI-compatible server we target
+        (llama-server, vLLM, ollama) implements it. We don't care about the
+        body, only that the server accepted the connection and didn't 5xx.
+        Used by the runner as a pre-flight so an empty `~/models/` or
+        crash-looping systemd unit doesn't burn an entire 17-prompt suite
+        on connect timeouts before anyone notices.
+        """
+        try:
+            r = self._client.get("/v1/models", timeout=timeout_s)
+        except httpx.HTTPError as exc:
+            return False, str(exc) or type(exc).__name__
+        if r.status_code >= 500:
+            return False, f"http {r.status_code}: {r.text[:200]!r}"
+        return True, None
+
     def complete(self, prompt: Prompt) -> CompletionResult:
         body: dict[str, object] = {
             "model": self.model or "default",

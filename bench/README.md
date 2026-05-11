@@ -41,17 +41,20 @@ cd bench && python -m http.server 5173
 
 Then open <http://127.0.0.1:5173/>.
 
-## Schema
+## Schema (registry v5)
 
-- `loadIndex()` reads `reports/reports.json`, built by `llms eval report` from each run's `manifest.json` + `summary.json`. The registry's `suites` block groups runs by `comparability_key` (one suite = one adapter/dataset/decode, varying profiles).
+- `loadIndex()` reads `reports/reports.json`, built by `llms eval report` from each run's `manifest.json` + `summary.json`.
+- `benches` group reports by `(hardware_profile, model_profile)` — one bench per GPU + model on the host. Each bench owns capability **cells**.
+- `cells` are bucketed by a `parent_key`: the same SHA-256 used for the run's full `comparability_key` but with `dataset.subset`, `dataset.item_count`, and `decode.max_tokens` cleared. Subset re-runs (e.g. `--subset design`) therefore land inside the cell of the full run they were carved from instead of inflating the "CAPABILITIES" count.
+- Within a cell:
+  - `history_ids` — full runs (subset=None), newest first.
+  - `partial_runs` — subset re-runs, listed separately (click-through routes to `#/bench/<id>/prompts/<adapter>/<runId>`).
+  - `partial_only: true` when the only runs against this parent_key are subset runs.
 - `loadProfilesSnapshot()` reads `reports/profiles.json`, a flat snapshot of the active config tree.
-- `loadSuite(id)` lazily fetches each member run's `manifest.json`, `summary.json`, `results.jsonl`, then rolls them up into per-profile + per-prompt views.
-- Profile config rendering reads from `profiles.json` (shipped by `llms eval report`); legacy `.conf` lookups were removed when the source-of-truth migrated to YAML.
+- `loadBench(id)` lazily fetches each cell's latest run; `loadRun(id)` is used by the partial-re-run drilldown to pull a specific run on demand.
 
-The home page shows the latest suite as a hero, a suite grid, and a cross-suite leaderboard. Each suite report has five tabs:
+The home page shows a per-bench card grid. Each bench has three tabs:
 
-- **Summary** — recommendations, bar chart, scatter, cleanliness grid.
-- **Profiles** — sortable manifest with role highlights.
-- **Prompts** — per-prompt × per-profile output with expandable excerpts.
-- **Configs** — per-profile snapshot cards (read from `profiles.json`).
-- **Methodology** — timings / rubric / cleanliness explainers + GGUF reading guide.
+- **Overview** — capability cells with rollup metrics, cleanliness grid, and optional cross-bench leaderboards. Cells expose `▸ history (N earlier)` and `▸ partial re-runs (N)` disclosures for drill-down.
+- **Prompts** — per-item runs from the selected cell (or partial re-run). A run picker toggles between "Full run" and each partial; ratings are scoped to the active run's `comparability_key`.
+- **Config** — profile + provider + hardware fingerprint for the bench.

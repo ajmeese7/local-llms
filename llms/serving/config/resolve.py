@@ -61,8 +61,10 @@ def _resolve_provider(
     bundle: ConfigBundle,
     endpoint: EndpointConfig,
     hardware: HardwareConfig,
+    *,
+    override: str | None = None,
 ) -> ProviderConfig:
-    name = endpoint.provider or hardware.default_provider
+    name = override or endpoint.provider or hardware.default_provider
     for candidate in bundle.providers.values():
         if candidate.matches(name):
             return candidate
@@ -81,6 +83,7 @@ def resolve_runtime(
     *,
     endpoint_name: str,
     hardware_name: str,
+    provider_override: str | None = None,
 ) -> RuntimeConfig:
     """Walk the precedence chain and produce a fully-merged RuntimeConfig.
 
@@ -88,6 +91,12 @@ def resolve_runtime(
     The hardware is supplied by the caller (typically the GPU detector or an
     explicit override) rather than auto-resolved here so the resolver stays
     pure and unit-testable.
+
+    `provider_override` lets callers (CLI flags, persisted state) pin a
+    different inference backend than the endpoint's bound provider. Capability
+    checks still run, so a profile that requires jinja against a provider that
+    can't do jinja still raises — overriding the binding is supported,
+    overriding the laws of physics is not.
     """
     endpoint = bundle.endpoints.get(endpoint_name)
     if endpoint is None:
@@ -103,7 +112,7 @@ def resolve_runtime(
         )
 
     profile = _resolve_profile(bundle, endpoint)
-    provider = _resolve_provider(bundle, endpoint, hardware)
+    provider = _resolve_provider(bundle, endpoint, hardware, override=provider_override)
     _check_provider_compat(profile, provider)
     _check_capabilities(profile, provider)
 

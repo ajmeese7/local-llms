@@ -205,3 +205,38 @@ def test_unknown_endpoint(stub_bundle: ConfigBundle) -> None:
 def test_unknown_hardware(stub_bundle: ConfigBundle) -> None:
     with pytest.raises(ConfigReferenceError):
         resolve_runtime(stub_bundle, endpoint_name="ep-default", hardware_name="ghost")
+
+
+def test_provider_override_swaps_backend(stub_bundle: ConfigBundle) -> None:
+    """`--provider` lets a caller pin a different backend than the endpoint
+    binds, without editing YAML."""
+    rt = resolve_runtime(
+        stub_bundle,
+        endpoint_name="ep-default",
+        hardware_name="rtx-test",
+        provider_override="ik_llama.cpp",
+    )
+    assert rt.provider.name == "ik_llama.cpp"
+
+
+def test_provider_override_unknown_name_raises(stub_bundle: ConfigBundle) -> None:
+    with pytest.raises(ConfigReferenceError):
+        resolve_runtime(
+            stub_bundle,
+            endpoint_name="ep-default",
+            hardware_name="rtx-test",
+            provider_override="nonexistent-backend",
+        )
+
+
+def test_provider_override_can_unblock_a_failing_endpoint(stub_bundle: ConfigBundle) -> None:
+    """`ep-unproven` binds a llama-only profile to ik_llama.cpp and normally
+    fails. Override to llama.cpp on the same endpoint resolves cleanly."""
+    rt = resolve_runtime(
+        stub_bundle,
+        endpoint_name="ep-unproven",
+        hardware_name="rtx-test",
+        provider_override="llama.cpp",
+    )
+    assert rt.provider.name == "llama.cpp"
+    assert rt.profile.name == "proven-llama-only"

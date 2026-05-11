@@ -16,9 +16,20 @@ After the service is running:
 
 ```sh
 .venv/bin/llms endpoint list                    # see what endpoints are defined
+.venv/bin/llms model fetch <profile>            # pull missing model files from HF
 .venv/bin/llms endpoint activate chat-default   # switch active endpoint, then systemctl restart
 .venv/bin/llms eval run mmlu --endpoint chat-default --max-items 50
 .venv/bin/llms eval report                      # refresh the hub registry
+```
+
+`endpoint activate` and `eval run` both check that the configured profile's `model_path` exists on disk; missing files trigger an interactive "download from Hugging Face?" prompt. Pass `--yes` to auto-accept, or pre-fetch with `llms model fetch <profile>` (useful for CI).
+
+Want to bench the same model against a different backend? Pass `--provider` to `endpoint activate` (and to `eval run`, so the manifest records it) instead of authoring a new endpoint YAML:
+
+```sh
+.venv/bin/llms endpoint activate chat-carnice --provider ik_llama.cpp
+sudo systemctl restart llama-server
+.venv/bin/llms eval run frontend_agentic --endpoint chat-carnice --provider ik_llama.cpp
 ```
 
 ## Configuration
@@ -39,13 +50,21 @@ Precedence at runtime: endpoint overrides win, then profile, then hardware defau
 ```sh
 llms config lint                                  # validate the YAML tree
 llms provider list                                # show inference backends + capabilities
+llms provider install <name>                      # build a provider from source (e.g. ik_llama.cpp)
+llms model status|fetch <profile>                 # report / download model files for a profile
 llms endpoint list|status|activate|rollback|revisions|stats
+  llms endpoint activate <name> --provider <p>    # pin a backend without authoring a new endpoint YAML
 llms launcher render|exec                         # systemd entry, plus a dry-run printer
 llms eval run <adapter> --endpoint <name>         # run a benchmark
+  --provider <p>                                  # record/override the backend on the manifest
+  --subset <category|csv-ids>                     # cap to one category or an explicit prompt list
+  --skip-preflight                                # don't `GET /v1/models` before the run
+  --max-consecutive-errors N                      # abort after N connect-class failures (default 1)
+  --yes                                           # auto-accept the missing-model download prompt
 llms eval list|show|report                        # browse runs, refresh the hub registry
 ```
 
-Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k`, `niah`. Deferred adapters and other follow-ups are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k`, `niah`, `frontend_agentic` (17-prompt front-end + agentic suite — see [`docs/FRONTEND_AGENTIC_EVAL.md`](docs/FRONTEND_AGENTIC_EVAL.md)). Deferred adapters and other follow-ups are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 

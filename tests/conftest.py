@@ -22,6 +22,10 @@ TEST_HOME = "/home/test"
 def _stable_home(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Force a deterministic HOME for every test."""
     monkeypatch.setenv("HOME", TEST_HOME)
+    # Under the test HOME, no real .gguf files exist on disk. Skip the
+    # missing-model check by default so unrelated CLI tests don't hit it.
+    # Tests that specifically exercise the check delete this env var.
+    monkeypatch.setenv("LLMS_SKIP_MODEL_CHECK", "1")
     yield
 
 

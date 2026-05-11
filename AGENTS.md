@@ -10,9 +10,10 @@
 
 - The launcher is python: `llms.serving.launcher.exec_launcher`. systemd calls `.venv/bin/llms launcher exec`.
 - Config is YAML under `config/{hardware,providers,profiles,endpoints}/`; `llms config lint` validates the tree.
-- Endpoint state lives in SQLite at `~/.local/state/llms/state.db`; `llms endpoint activate <name>` writes a revision.
+- Endpoint state lives in SQLite at `~/.local/state/llms/state.db`; `llms endpoint activate <name>` writes a revision. Revisions also persist an optional `provider_override` so `--provider X` on activation actually swaps the running binary on next restart.
 - Benchmark adapters live in `llms/eval/adapters/`. The runner writes per-run artifacts under `bench/reports/<id>/`.
-- The static hub at `bench/` is intended to be published; the home page indexes runs and renders the model reading guide.
+- Pre-flight before iterating items: `llms eval run` (a) checks the profile's `model_path`/`mmproj_path` exist on disk and offers an interactive `huggingface_hub` download when not (`LLMS_SKIP_MODEL_CHECK=1` bypasses this; conftest sets it), (b) issues `GET /v1/models` against the resolved base URL. Connectivity failures abort the run via `--max-consecutive-errors` (default 1). All three behaviors are testable knobs on `run_eval`.
+- The static hub at `bench/` is intended to be published; the home page indexes runs and renders the model reading guide. Subset re-runs (same profile + adapter, different `dataset.subset`/`item_count`) attach to the parent cell rather than spawning a new "capability"; the parent-key hash strips dataset-slice fields, but the full `comparability_key` is still recorded per run for bootstrap-stats partitioning.
 
 ## Current config layout
 
@@ -36,10 +37,13 @@ Providers in `config/providers/`: `llama.cpp`, `ik_llama.cpp`.
 ## Files worth checking first
 
 - `README.md`
-- `docs/SETUP.md`, `docs/CONFIGURATION.md`, `docs/MODELS.md`
+- `docs/SETUP.md`, `docs/CONFIGURATION.md`, `docs/MODELS.md`, `docs/BENCHMARKING.md`
 - `llms/serving/launcher/render.py` and `tests/serving/snapshots/`
 - `llms/serving/config/models.py`
-- `llms/eval/manifest.py`
+- `llms/serving/models.py` (missing-model detection + HF download)
+- `llms/eval/manifest.py` (`comparability_key` and `compute_parent_key_from_manifest`)
+- `llms/eval/http_client.py` (SSE streaming + `health_check`)
+- `llms/eval/runner.py` (`run_eval` knobs: `skip_preflight`, `max_consecutive_errors`, `on_abort`)
 
 ## Normal verification
 

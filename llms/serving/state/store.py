@@ -16,7 +16,7 @@ from pathlib import Path
 
 from platformdirs import user_state_path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +29,7 @@ class Revision:
     reason: str
     actor: str
     created_at: datetime
+    provider_override: str | None = None
 
 
 def _default_db_path() -> Path:
@@ -44,6 +45,8 @@ def _parse_iso(s: str) -> datetime:
 
 
 def _row_to_revision(row: sqlite3.Row) -> Revision:
+    keys = row.keys() if hasattr(row, "keys") else []
+    provider_override = row["provider_override"] if "provider_override" in keys else None
     return Revision(
         id=row["id"],
         hardware=row["hardware"],
@@ -51,6 +54,7 @@ def _row_to_revision(row: sqlite3.Row) -> Revision:
         reason=row["reason"],
         actor=row["actor"],
         created_at=_parse_iso(row["created_at"]),
+        provider_override=provider_override,
     )
 
 
@@ -82,12 +86,13 @@ class StateStore:
                     version INTEGER PRIMARY KEY
                 );
                 CREATE TABLE IF NOT EXISTS endpoint_revisions (
-                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                    hardware      TEXT NOT NULL,
-                    endpoint_name TEXT NOT NULL,
-                    reason        TEXT NOT NULL DEFAULT '',
-                    actor         TEXT NOT NULL,
-                    created_at    TEXT NOT NULL
+                    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                    hardware          TEXT NOT NULL,
+                    endpoint_name     TEXT NOT NULL,
+                    reason            TEXT NOT NULL DEFAULT '',
+                    actor             TEXT NOT NULL,
+                    created_at        TEXT NOT NULL,
+                    provider_override TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_endpoint_revisions_hardware
                     ON endpoint_revisions(hardware);
@@ -100,6 +105,11 @@ class StateStore:
                 );
                 """
             )
+            # v1 → v2: add provider_override column to existing tables. SQLite
+            # has no IF NOT EXISTS for columns; introspect first.
+            cols = {row["name"] for row in conn.execute("PRAGMA table_info(endpoint_revisions)")}
+            if "provider_override" not in cols:
+                conn.execute("ALTER TABLE endpoint_revisions ADD COLUMN provider_override TEXT")
             current = conn.execute(
                 "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
             ).fetchone()
@@ -107,6 +117,10 @@ class StateStore:
                 conn.execute(
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,),
+                )
+            elif current["version"] < SCHEMA_VERSION:
+                conn.execute(
+                    "INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,)
                 )
 
     # ── revisions ───────────────────────────────────────────────────────────
@@ -118,18 +132,24 @@ class StateStore:
         endpoint_name: str,
         reason: str = "",
         actor: str | None = None,
+        provider_override: str | None = None,
     ) -> Revision:
-        """Append a revision row and atomically point `active_endpoint` at it."""
+        """Append a revision row and atomically point `active_endpoint` at it.
+
+        `provider_override` pins a non-default inference backend for this
+        endpoint without requiring a separate endpoint YAML file. The launcher
+        reads this on the next exec to pick the right server binary.
+        """
         actor_name = actor or _current_actor()
         created = _utc_now_iso()
         with self._conn() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO endpoint_revisions
-                    (hardware, endpoint_name, reason, actor, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                    (hardware, endpoint_name, reason, actor, created_at, provider_override)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (hardware, endpoint_name, reason, actor_name, created),
+                (hardware, endpoint_name, reason, actor_name, created, provider_override),
             )
             new_id = cursor.lastrowid
             assert new_id is not None

@@ -46,6 +46,23 @@ class RunOutcome:
     report_md_path: Path
     report_html_path: Path
     interrupted: bool = False
+    aborted_reason: str | None = None
+
+
+class EndpointUnreachableError(RuntimeError):
+    """Pre-flight `GET /v1/models` failed. Raised before any items run so we
+    don't waste a connect-timeout per prompt on a dead server.
+
+    Carries structured fields so the CLI can format the failure cleanly
+    (multi-line, escaped) instead of jamming the raw httpx exception text
+    through a single Rich markup string where bracketed errno content
+    corrupts the output.
+    """
+
+    def __init__(self, base_url: str, inner: str) -> None:
+        self.base_url = base_url
+        self.inner = inner
+        super().__init__(f"{base_url} not reachable: {inner}")
 
 
 def _decode_fingerprint(rt: RuntimeConfig, *, max_tokens_hint: int | None) -> DecodeFingerprint:
@@ -173,6 +190,21 @@ def _new_run_id(adapter_name: str) -> str:
     return f"{adapter_name}-{stamp}-{suffix}"
 
 
+def _is_connectivity_error(completion_http_status: int, completion_error: str | None) -> bool:
+    """True when an item failed before/while reaching the server, not from
+    the server returning bad content. `http_status==0` means we never got a
+    response; specific httpx exception class names cover the network-class
+    surface (connect refused, DNS failure, read timeout against an unresponsive
+    socket). Used by the early-abort heuristic so a dead backend kills the
+    suite instead of burning a connect timeout per prompt.
+    """
+    if completion_http_status != 0:
+        return False
+    err = (completion_error or "").lower()
+    needles = ("connect", "timed out", "timeout", "refused", "reset", "resolve", "name or service")
+    return any(n in err for n in needles)
+
+
 def _iter_results(
     adapter: BenchmarkAdapter,
     items: list[Item],
@@ -181,10 +213,13 @@ def _iter_results(
     telemetry: TelemetryWriter | None,
     run_id: str,
     profile: str,
+    max_consecutive_errors: int,
     on_item_start: Callable[[int, int, Item], None] | None = None,
     on_item_finish: Callable[[int, int, ItemResult], None] | None = None,
+    on_abort: Callable[[str], None] | None = None,
 ) -> Iterable[ItemResult]:
     total = len(items)
+    consecutive_conn_errors = 0
     for idx, item in enumerate(items, start=1):
         if on_item_start is not None:
             on_item_start(idx, total, item)
@@ -228,6 +263,19 @@ def _iter_results(
             on_item_finish(idx, total, result)
         yield result
 
+        if _is_connectivity_error(completion.http_status, completion.error):
+            consecutive_conn_errors += 1
+            if consecutive_conn_errors >= max_consecutive_errors:
+                reason = (
+                    f"aborting after {consecutive_conn_errors} consecutive "
+                    f"connectivity error(s); last: {completion.error}"
+                )
+                if on_abort is not None:
+                    on_abort(reason)
+                return
+        else:
+            consecutive_conn_errors = 0
+
 
 def run_eval(
     *,
@@ -243,10 +291,26 @@ def run_eval(
     telemetry: TelemetryWriter | None = None,
     repo_root: Path | None = None,
     notes: str = "",
+    skip_preflight: bool = False,
+    max_consecutive_errors: int = 1,
     on_item_start: Callable[[int, int, Item], None] | None = None,
     on_item_finish: Callable[[int, int, ItemResult], None] | None = None,
+    on_abort: Callable[[str], None] | None = None,
 ) -> RunOutcome:
-    """Drive `adapter` end-to-end against `base_url`. Writes artifacts to disk."""
+    """Drive `adapter` end-to-end against `base_url`. Writes artifacts to disk.
+
+    Two safety rails so a broken backend can't quietly burn the whole suite:
+
+    - **Pre-flight**: `GET /v1/models` before iterating items. A crash-looping
+      systemd unit (or a wrong port, or a missing model file) shows up as
+      `EndpointUnreachableError` in milliseconds, not as 17 connect timeouts.
+      Skippable via `skip_preflight=True` for test transports that don't
+      implement the route.
+    - **Early abort**: stop after `max_consecutive_errors` consecutive
+      connectivity-class failures (default 1). A 200 response with bad content
+      keeps the suite running — that's a model quality signal — but a dead
+      socket kills it.
+    """
     items = list(adapter.load_dataset(subset=subset, seed=seed))
     if not items:
         raise ValueError("adapter returned no items for the requested subset")
@@ -279,6 +343,14 @@ def run_eval(
     started_at = utc_now_iso()
     t0 = time.perf_counter()
     interrupted = False
+    aborted_reason: str | None = None
+
+    def _record_abort(reason: str) -> None:
+        nonlocal aborted_reason
+        aborted_reason = reason
+        if on_abort is not None:
+            on_abort(reason)
+
     try:
         with (
             CompletionClient(
@@ -289,6 +361,10 @@ def run_eval(
             ) as client,
             results_path.open("w", encoding="utf-8") as out,
         ):
+            if not skip_preflight:
+                ok, err = client.health_check()
+                if not ok:
+                    raise EndpointUnreachableError(base_url, err or "no response")
             for result in _iter_results(
                 adapter,
                 items,
@@ -296,8 +372,10 @@ def run_eval(
                 telemetry=telemetry,
                 run_id=manifest.run_id,
                 profile=runtime.profile.name,
+                max_consecutive_errors=max_consecutive_errors,
                 on_item_start=on_item_start,
                 on_item_finish=on_item_finish,
+                on_abort=_record_abort,
             ):
                 results.append(result)
                 out.write(json.dumps(_result_to_json(result, run_id=manifest.run_id)) + "\n")
@@ -331,6 +409,7 @@ def run_eval(
         report_md_path=md_path,
         report_html_path=html_path,
         interrupted=interrupted,
+        aborted_reason=aborted_reason,
     )
 
 

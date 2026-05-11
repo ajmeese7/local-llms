@@ -26,15 +26,21 @@ The launcher resolves the runtime in this order:
 ## Endpoint lifecycle
 
 ```sh
-llms endpoint list                                # show every endpoint defined
-llms endpoint status                              # show active per hardware
-llms endpoint activate chat-default               # write a revision, swap active pointer
-llms endpoint rollback                            # revert to the prior revision
-llms endpoint rollback --to-revision 7            # revert to a specific historical revision
-llms endpoint revisions --hardware rtx-5090       # show history
+llms endpoint list                                       # show every endpoint defined
+llms endpoint status                                     # show active per hardware
+llms endpoint activate chat-default                      # write a revision, swap active pointer
+llms endpoint activate chat-carnice --provider ik_llama.cpp  # pin a non-default backend
+llms endpoint activate chat-default --yes                # auto-accept the model-download prompt
+llms endpoint rollback                                   # revert to the prior revision
+llms endpoint rollback --to-revision 7                   # revert to a specific historical revision
+llms endpoint revisions --hardware rtx-5090              # show history
 ```
 
-State lives in SQLite at `~/.local/state/llms/state.db`. Each `activate` and `rollback` appends a row; the active pointer is upserted in the same transaction. The CLI does not auto-restart systemd; it prints the `systemctl restart llama-server` command.
+State lives in SQLite at `~/.local/state/llms/state.db`. Each `activate` and `rollback` appends a row; the active pointer is upserted in the same transaction. The revision row also persists an optional `provider_override` (schema v2), so `--provider X` on activation actually swaps the binary the launcher exec's on next start.
+
+Activation refuses to proceed when the resolved profile's `model_path` (or `mmproj_path`) is missing on disk; the CLI prompts to download from `hf_repo`/`hf_file` (or errors cleanly under non-TTY contexts with a hint to re-run with `--yes` or pre-fetch via `llms model fetch <profile>`).
+
+The CLI does not auto-restart systemd; it prints the `systemctl restart llama-server` command.
 
 ## Capability checks
 

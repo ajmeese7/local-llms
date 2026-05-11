@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
 from llms.eval.adapters.local_smoke import LocalSmokeAdapter
 from llms.eval.runner import run_eval
@@ -78,6 +79,8 @@ def _sse_body(content: str, *, prompt_tokens: int, completion_tokens: int) -> by
 
 def _mock_transport() -> httpx.BaseTransport:
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/v1/models"):
+            return httpx.Response(200, json={"object": "list", "data": []})
         body = json.loads(request.content)
         assert body["model"]
         return httpx.Response(
@@ -121,7 +124,11 @@ def test_runner_end_to_end(tmp_path: Path) -> None:
 
 def test_runner_records_errors_on_http_500(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        del request
+        # Preflight `GET /v1/models` must succeed or run_eval bails before
+        # ever issuing a chat-completions call; we want to observe the 500
+        # response path, not the preflight path.
+        if request.url.path.endswith("/v1/models"):
+            return httpx.Response(200, json={"object": "list", "data": []})
         return httpx.Response(500, json={"error": "boom"})
 
     runtime = _stub_runtime()
@@ -139,6 +146,61 @@ def test_runner_records_errors_on_http_500(tmp_path: Path) -> None:
     rows = [json.loads(r) for r in outcome.results_path.read_text().strip().splitlines()]
     assert rows[0]["http_status"] == 500
     assert rows[0]["error"]
+
+
+def test_preflight_failure_raises_before_iteration(tmp_path: Path) -> None:
+    """`GET /v1/models` returning 5xx means the server can't even tell us what
+    it's serving. Bail out before any chat-completions call so a dead backend
+    doesn't burn one connect timeout per prompt."""
+    from llms.eval.runner import EndpointUnreachableError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/v1/models"):
+            return httpx.Response(503, text="service unavailable")
+        # Should never be reached.
+        raise AssertionError("chat-completions hit despite preflight failure")
+
+    with pytest.raises(EndpointUnreachableError):
+        run_eval(
+            adapter=LocalSmokeAdapter(),
+            runtime=_stub_runtime(),
+            endpoint_name="ep",
+            base_url="http://stub",
+            output_root=tmp_path / "runs",
+            transport=httpx.MockTransport(handler),
+            subset="coding_bugfix",
+        )
+
+
+def test_consecutive_connectivity_errors_abort_the_run(tmp_path: Path) -> None:
+    """A backend that accepts preflight but then drops every chat-completions
+    call should abort the run on the first item, not burn through all of them.
+    """
+    call_log: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/v1/models"):
+            return httpx.Response(200, json={"object": "list", "data": []})
+        call_log.append(request.url.path)
+        # Simulate the network-class failure the user actually hit: server
+        # crashed and the socket times out / refuses. httpx will raise; the
+        # client catches and returns http_status=0 with the error.
+        raise httpx.ConnectError("Connection refused")
+
+    outcome = run_eval(
+        adapter=LocalSmokeAdapter(),
+        runtime=_stub_runtime(),
+        endpoint_name="ep",
+        base_url="http://stub",
+        output_root=tmp_path / "runs",
+        transport=httpx.MockTransport(handler),
+        max_consecutive_errors=1,
+    )
+    assert outcome.aborted_reason is not None
+    assert "connectivity" in outcome.aborted_reason
+    # Exactly one chat-completions attempt before aborting (the local_smoke
+    # full suite has 5 items; we should not have called the rest).
+    assert len(call_log) == 1
 
 
 def test_runner_records_timing(tmp_path: Path) -> None:

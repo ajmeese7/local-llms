@@ -5,23 +5,49 @@ The eval plane drives an OpenAI-compatible endpoint and writes a per-run directo
 ## Running
 
 ```sh
-uv run llms eval run <adapter> --endpoint <name> [--max-items N] [--subset spec] [--seed 0]
+uv run llms eval run <adapter> --endpoint <name> \
+    [--provider <p>] [--max-items N] [--subset spec] [--seed 0] \
+    [--skip-preflight] [--max-consecutive-errors N] [--yes]
 ```
 
 A typical session, confirming an endpoint is active and llama-server is up before driving an adapter against it:
 
 ```sh
 uv run llms endpoint status                                         # which endpoint is active
-curl -s http://127.0.0.1:9999/health                                # llama-server reachable?
+uv run llms model status chat-default                               # is the .gguf actually on disk?
+curl -s http://127.0.0.1:9999/v1/models                             # llama-server reachable?
 uv run llms eval run local_smoke --endpoint chat-default            # ~5 items, sanity check
 uv run llms eval run gsm8k       --endpoint chat-default -n 50      # 50 items, ~2 min on a 5090
 uv run llms eval run mmlu        --endpoint chat-default -n 100 \
     --subset abstract_algebra,college_physics                       # subject filter
 uv run llms eval run niah        --endpoint chat-default            # 9 items at 3 lengths × 3 depths
+uv run llms eval run frontend_agentic --endpoint chat-default       # 17-prompt front-end + agentic suite
+uv run llms eval run frontend_agentic --endpoint chat-default \
+    --subset design                                                 # one category (design|canvas|agentic)
+uv run llms eval run frontend_agentic --endpoint chat-default \
+    --subset design_saas_landing,design_pricing_page                # ad-hoc subset by id
 uv run llms eval report                                             # refresh the hub registry
 ```
 
-`--max-items` (`-n`) caps `mmlu` and `gsm8k`; `local_smoke` and `niah` ignore it (their item counts are fixed by construction). Without it, full splits are 14k (mmlu) / 1.3k (gsm8k).
+`--max-items` (`-n`) caps `mmlu` and `gsm8k`; `local_smoke`, `niah`, and `frontend_agentic` ignore it (their item counts are fixed by construction). Without it, full splits are 14k (mmlu) / 1.3k (gsm8k).
+
+### Safety rails
+
+The runner won't blindly burn through a suite when the backend is broken:
+
+- **Missing model file**: before resolving anything else, the CLI checks the profile's `model_path` (and `mmproj_path`) exist. Missing files trigger an interactive "download from Hugging Face?" prompt (or a clean exit-2 error under non-TTY contexts; pass `--yes` to accept, or pre-fetch with `llms model fetch <profile>`).
+- **Pre-flight HTTP check**: a `GET /v1/models` ping against the endpoint URL before the first prompt. A crash-looping systemd unit shows up as `EndpointUnreachableError` in milliseconds rather than 17 connect timeouts. Pass `--skip-preflight` for servers that don't implement that route.
+- **Early abort**: tracks consecutive connectivity failures (connect refused, timeout, reset) and aborts after `--max-consecutive-errors` (default 1). HTTP 200 with bad content never counts — that's a model quality signal, not infrastructure. Aborted runs emit a partial summary with an `aborted_reason` so the registry doesn't claim they finished.
+
+### Comparing backends on the same model
+
+`--provider` on both `endpoint activate` and `eval run` swaps the inference backend without authoring a new endpoint YAML. The active revision persists the override, so the systemd unit picks up the right binary on restart, and the eval manifest records the override so the two runs land in distinct comparability cells:
+
+```sh
+uv run llms endpoint activate chat-carnice --provider ik_llama.cpp
+sudo systemctl restart llama-server
+uv run llms eval run frontend_agentic --endpoint chat-carnice --provider ik_llama.cpp
+```
 
 ### Full suite
 
@@ -58,6 +84,7 @@ uv run llms eval report
 | `mmlu` | `general_capability` | `cais/mmlu`, split=test | 4-choice MCQ across 57 academic subjects |
 | `gsm8k` | `general_capability` | `gsm8k`, split=test | Grade-school math, exact-match on the final integer |
 | `niah` | `reliability_factuality` | synthesized in package | Long-context recall: a unique secret code embedded in filler text |
+| `frontend_agentic` | `general_capability` | bundled 17-prompt JSON | 5 web-design briefs + 6 canvas/WebGL + 6 agentic reasoning tasks — keyword rubric scoring. See [FRONTEND_AGENTIC_EVAL.md](FRONTEND_AGENTIC_EVAL.md). |
 
 Deferred adapters (HumanEval, SWE-ReBench, MMMU) are tracked in [ROADMAP.md](ROADMAP.md).
 
@@ -104,10 +131,13 @@ uv run llms endpoint stats --window 24h
 
 ## Building providers separately
 
-If you only want the build path (no full setup):
+If you only want the build path (no full setup), either of these works:
 
 ```sh
-./scripts/provider.sh install llama.cpp
+uv run llms provider install llama.cpp
+uv run llms provider install ik_llama.cpp --rebuild --jobs 4
+
+# Equivalent — the CLI wrapper shells out to this script under the hood.
 ./scripts/provider.sh install ik_llama.cpp --rebuild --jobs 4
 ```
 

@@ -47,7 +47,9 @@ def _runtime():
 
 
 def _ok_transport() -> httpx.BaseTransport:
-    def handler(_: httpx.Request) -> httpx.Response:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/v1/models"):
+            return httpx.Response(200, json={"object": "list", "data": []})
         sse = (
             'data: {"choices":[{"index":0,"delta":{"content":"ok"}}]}\n\n'
             'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":5}}\n\n'

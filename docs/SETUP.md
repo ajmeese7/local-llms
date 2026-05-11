@@ -73,6 +73,15 @@ Pick an endpoint after setup:
 sudo systemctl restart llama-server
 ```
 
+If the chosen profile's model file isn't on disk yet, `endpoint activate` prompts you to download it from `hf_repo` / `hf_file`. Auto-accept with `--yes`, or pre-fetch ahead of time:
+
+```sh
+.venv/bin/llms model status chat-default
+.venv/bin/llms model fetch chat-default
+```
+
+Want a different inference backend than the endpoint's bound provider? Build it with `llms provider install <name>` (a thin wrapper over `scripts/provider.sh install`) and pass `--provider <name>` to `endpoint activate`. The override is persisted on the revision and the launcher exec's the right binary on next restart.
+
 ## Reinstalling
 
 Rerunning `./setup.sh` is idempotent. It re-syncs the venv, re-validates the config tree, optionally rebuilds the providers, overwrites the systemd unit if you confirm, and restarts the service.

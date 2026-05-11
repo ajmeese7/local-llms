@@ -38,8 +38,14 @@ def resolve_for_gpu(
     gpu: GPUInfo,
     *,
     active_endpoint_per_hardware: dict[str, str],
+    provider_override_per_hardware: dict[str, str | None] | None = None,
 ) -> ActiveResolution:
-    """Pick the right hardware for `gpu`, look up its active endpoint, resolve."""
+    """Pick the right hardware for `gpu`, look up its active endpoint, resolve.
+
+    `provider_override_per_hardware` carries the per-hardware provider pin
+    persisted on the active revision (so `endpoint activate --provider X`
+    actually swaps the running binary on next launch).
+    """
     hardware = match_hardware(bundle, gpu.name)
     stored = active_endpoint_per_hardware.get(hardware.name)
     if stored is not None:
@@ -53,7 +59,13 @@ def resolve_for_gpu(
             f"hardware '{hardware.name}'", "active or default endpoint", "<none>"
         )
 
-    runtime = resolve_runtime(bundle, endpoint_name=endpoint_name, hardware_name=hardware.name)
+    provider_override = (provider_override_per_hardware or {}).get(hardware.name)
+    runtime = resolve_runtime(
+        bundle,
+        endpoint_name=endpoint_name,
+        hardware_name=hardware.name,
+        provider_override=provider_override,
+    )
     return ActiveResolution(
         gpu=gpu,
         hardware=hardware,

@@ -48,8 +48,12 @@ def prepare(
         raise LauncherError(str(exc)) from exc
 
     store = StateStore(path=state_path)
+    active = store.all_active()
     resolution = resolve_for_gpu(
-        bundle, gpu, active_endpoint_per_hardware=store.all_active_endpoints()
+        bundle,
+        gpu,
+        active_endpoint_per_hardware={hw: rev.endpoint_name for hw, rev in active.items()},
+        provider_override_per_hardware={hw: rev.provider_override for hw, rev in active.items()},
     )
     argv = render_argv(resolution.runtime)
     problems = check_runtime(resolution.runtime)
