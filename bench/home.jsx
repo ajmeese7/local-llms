@@ -224,6 +224,18 @@ function LeaderboardsBlock({ leaderboards, onOpen }) {
   const adapterNames = leaderboards._adapterNames || Object.keys(leaderboards.perAdapter || {});
   const loaded = leaderboards._loadedBenches || [];
 
+  // Whether *either* mode has enough data for a quality leaderboard. Used to
+  // decide if the auto/you toggle is meaningful at all — independent of which
+  // mode is currently active, so a user who flips to "You" without ratings
+  // can still see the toggle and flip back.
+  const autoHasQualityBlocks = adapterNames.some(
+    a => ((leaderboards.perAdapter || {})[a] || []).length >= 2,
+  );
+  const userHasQualityBlocks = adapterNames.some(
+    a => (window.BenchData.rankCellsByUser(loaded, a) || []).length >= 2,
+  );
+  const showToggle = autoHasQualityBlocks || userHasQualityBlocks;
+
   const blocks = [];
   // Top tok/s — always auto, no user-rating equivalent.
   if (leaderboards.tps && leaderboards.tps.length > 1) {
@@ -256,16 +268,27 @@ function LeaderboardsBlock({ leaderboards, onOpen }) {
         : r => `${r.adapter?.name || "—"} · ${r.hardwareProfile}`,
     });
   }
-  // No quality blocks at all? Don't render anything (the toggle would be lonely).
-  const hasQualityBlocks = blocks.some(b => b.id.startsWith("q-"));
-  if (!blocks.length) return null;
+  // Render nothing only when there's truly nothing to show in either mode.
+  if (!blocks.length && !showToggle) return null;
   return (
     <div className="flex flex-col gap-3">
-      {hasQualityBlocks && (
+      {showToggle && (
         <div className="flex items-center gap-2">
           <Label>Quality source</Label>
           <Chip on={mode === "auto"} cyan={mode === "auto"} onClick={() => setMode("auto")}>Auto</Chip>
           <Chip on={mode === "user"} cyan={mode === "user"} onClick={() => setMode("user")}>You</Chip>
+        </div>
+      )}
+      {mode === "user" && !userHasQualityBlocks && (
+        <div className="me-card p-4 md:p-5 font-mono text-[11px] text-me-fg-3">
+          No user ratings yet. Open a bench, drill into Prompts, and rate at least
+          two cells per adapter to populate this leaderboard. Or switch back to
+          <button
+            type="button"
+            onClick={() => setMode("auto")}
+            className="ml-1 underline decoration-dotted hover:text-me-fg bg-transparent border-0 p-0 cursor-pointer">
+            Auto
+          </button>.
         </div>
       )}
       {blocks.map(b => (

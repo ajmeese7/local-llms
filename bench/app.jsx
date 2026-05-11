@@ -144,69 +144,106 @@ function App() {
     return route.tab;
   }, [route, inBench]);
 
-  return (
-    <>
-      <nav className="sticky top-0 z-50 h-14 bg-me-bg/85 backdrop-blur border-b border-me-border flex items-center px-4 nav:px-8 gap-3 nav:gap-6">
+  // Menu items rendered twice: inline in the desktop bar, and stacked inside
+  // the mobile drawer. The orientation flag tweaks layout-only classes; the
+  // click handlers + active-state styling are identical.
+  const renderMenuItems = (vertical) => {
+    if (inBench) {
+      return (
+        <>
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => navigate({ view: "bench", id: route.id, tab: t.kind === "overview" ? "overview" : t.key })}
+              className={`nav-tab relative bg-transparent border-0 font-display text-[12px] tracking-[0.18em] uppercase cursor-pointer transition-colors hover:text-me-fg ${currentTab === t.key ? "active text-me-fg" : "text-me-fg-2"} ${vertical ? "px-3.5 py-2.5 text-left w-full border-b border-me-border" : "px-3.5 py-2 text-center"}`}>
+              {t.label}
+            </button>
+          ))}
+          <button
+            onClick={() => navigate({ view: "home" })}
+            className={`font-mono text-[10px] tracking-[0.18em] uppercase text-me-fg-3 border border-me-border hover:text-me-fg hover:border-me-border-strong transition-colors ${vertical ? "px-3.5 py-2.5 mt-1 text-left" : "ml-2 px-3.5 py-1.5 text-center"}`}>
+            <i className="fa-solid fa-arrow-left mr-1.5"></i> All benches
+          </button>
+        </>
+      );
+    }
+    return (
+      <>
         <a
-          href="#/"
-          onClick={(e) => { e.preventDefault(); navigate({ view: "home" }); }}
-          className="nav-logo text-[18px] nav:text-[22px] tracking-[0.08em] uppercase select-none flex-shrink-0 cursor-pointer">
-          Meese · Bench
+          href="#/methodology"
+          onClick={(e) => { e.preventDefault(); navigate({ view: "methodology" }); }}
+          className={`tracking-[0.16em] uppercase ${route.view === "methodology" ? "text-me-fg" : "text-me-fg-2 hover:text-me-fg"} ${vertical ? "px-3.5 py-2.5" : ""}`}>
+          Methodology
         </a>
-
-        {inBench && (
-          <span
-            className="hidden md:inline-flex items-center gap-2 ml-1 font-mono text-[11px] text-me-fg-3 max-w-[40ch] truncate"
-            title={active.meta.title}>
-            <i className="fa-solid fa-chevron-right text-[8px]"></i>
-            <span className="text-me-fg-2 truncate">{active.meta.title}</span>
+        {route.view === "methodology" && (
+          <button
+            onClick={() => navigate({ view: "home" })}
+            className={`font-mono text-[10px] tracking-[0.18em] uppercase text-me-fg-3 border border-me-border hover:text-me-fg hover:border-me-border-strong transition-colors ${vertical ? "px-3.5 py-2.5 text-left" : "px-3 py-1.5"}`}>
+            <i className="fa-solid fa-arrow-left mr-1.5"></i> All benches
+          </button>
+        )}
+        {route.view !== "methodology" && (
+          <span className={`inline-flex items-center gap-2 ${vertical ? "px-3.5 py-2.5" : ""}`}>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-me-success [box-shadow:0_0_6px_var(--me-success)]"></span>
+            {(index?.benches?.length || 0)} bench{(index?.benches?.length || 0) === 1 ? "" : "es"} · {(index?.reports?.length || 0)} run{(index?.reports?.length || 0) === 1 ? "" : "s"}
           </span>
         )}
+      </>
+    );
+  };
 
-        <button
-          className="nav:hidden ml-auto w-9 h-8 inline-flex items-center justify-center border border-me-border text-me-fg hover:border-me-magenta-60 transition-colors text-sm"
-          aria-label="Menu"
-          onClick={() => setDrawerOpen(d => !d)}>
-          <i className="fa-solid fa-bars"></i>
-        </button>
+  return (
+    <>
+      {/*
+        Nav is flex-col: a fixed-height bar on top + a collapsible mobile
+        drawer below it. The drawer participates in normal document flow
+        (sticky, not fixed) so opening it grows the nav and pushes page
+        content down rather than overlaying it. Animation rolls grid-rows
+        from 0fr → 1fr; the inner overflow:hidden clips during the
+        transition so content slides into view.
+      */}
+      <nav className="sticky top-0 z-50 bg-me-bg/85 backdrop-blur border-b border-me-border flex flex-col">
+        <div className="h-14 flex items-center px-4 nav:px-8 gap-3 nav:gap-6">
+          <a
+            href="#/"
+            onClick={(e) => { e.preventDefault(); navigate({ view: "home" }); }}
+            className="nav-logo text-[18px] nav:text-[22px] tracking-[0.08em] uppercase select-none flex-shrink-0 cursor-pointer">
+            Meese · Bench
+          </a>
 
-        {inBench ? (
-          <div className={`${drawerOpen ? "flex" : "hidden"} nav:flex nav:ml-auto nav:gap-1 nav:static fixed top-14 left-0 right-0 flex-col nav:flex-row bg-me-bg/95 nav:bg-transparent backdrop-blur nav:backdrop-blur-0 border-b border-me-border nav:border-0 p-2 nav:p-0`}>
-            {tabs.map(t => (
-              <button
-                key={t.key}
-                onClick={() => navigate({ view: "bench", id: route.id, tab: t.kind === "overview" ? "overview" : t.key })}
-                className={`nav-tab relative bg-transparent border-0 font-display text-[12px] tracking-[0.18em] uppercase px-3.5 py-2.5 nav:py-2 cursor-pointer text-left nav:text-center w-full nav:w-auto border-b nav:border-b-0 border-me-border transition-colors hover:text-me-fg ${currentTab === t.key ? "active text-me-fg" : "text-me-fg-2"}`}>
-                {t.label}
-              </button>
-            ))}
-            <button
-              onClick={() => navigate({ view: "home" })}
-              className="nav:ml-2 px-3.5 py-2.5 nav:py-1.5 font-mono text-[10px] tracking-[0.18em] uppercase text-me-fg-3 border border-me-border hover:text-me-fg hover:border-me-border-strong transition-colors text-left nav:text-center">
-              <i className="fa-solid fa-arrow-left mr-1.5"></i> All benches
-            </button>
+          {inBench && (
+            <span
+              className="hidden md:inline-flex items-center gap-2 ml-1 font-mono text-[11px] text-me-fg-3 max-w-[40ch] truncate"
+              title={active.meta.title}>
+              <i className="fa-solid fa-chevron-right text-[8px]"></i>
+              <span className="text-me-fg-2 truncate">{active.meta.title}</span>
+            </span>
+          )}
+
+          <button
+            className="nav:hidden ml-auto w-9 h-8 inline-flex items-center justify-center border border-me-border text-me-fg hover:border-me-magenta-60 transition-colors text-sm"
+            aria-label="Menu"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen(d => !d)}>
+            <i className={`fa-solid fa-bars transition-transform duration-200 ${drawerOpen ? "rotate-90" : ""}`}></i>
+          </button>
+
+          {/* Desktop inline nav — same items, horizontal. */}
+          <div className={`hidden nav:flex nav:ml-auto ${inBench ? "nav:gap-1" : "nav:items-center nav:gap-4 font-mono text-[11px] text-me-fg-3"}`}>
+            {renderMenuItems(false)}
           </div>
-        ) : (
-          <div className="hidden nav:flex ml-auto items-center gap-4 font-mono text-[11px] text-me-fg-3">
-            <a href="#/methodology" onClick={(e) => { e.preventDefault(); navigate({ view: "methodology" }); }}
-               className={`tracking-[0.16em] uppercase ${route.view === "methodology" ? "text-me-fg" : "text-me-fg-2 hover:text-me-fg"}`}>
-              Methodology
-            </a>
-            {route.view === "methodology" && (
-              <button
-                onClick={() => navigate({ view: "home" })}
-                className="px-3 py-1.5 font-mono text-[10px] tracking-[0.18em] uppercase text-me-fg-3 border border-me-border hover:text-me-fg hover:border-me-border-strong transition-colors">
-                <i className="fa-solid fa-arrow-left mr-1.5"></i> All benches
-              </button>
-            )}
-            {route.view !== "methodology" && (
-              <>
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-me-success [box-shadow:0_0_6px_var(--me-success)]"></span>
-                {(index?.benches?.length || 0)} bench{(index?.benches?.length || 0) === 1 ? "" : "es"} · {(index?.reports?.length || 0)} run{(index?.reports?.length || 0) === 1 ? "" : "s"}
-              </>
-            )}
+        </div>
+
+        {/* Mobile drawer — collapses in document flow, animated. */}
+        <div
+          className={`nav:hidden grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out ${drawerOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+          aria-hidden={!drawerOpen}>
+          <div className="overflow-hidden">
+            <div className={`flex flex-col border-t border-me-border p-2 ${inBench ? "gap-1" : "gap-1 font-mono text-[11px] text-me-fg-3"}`}>
+              {renderMenuItems(true)}
+            </div>
           </div>
-        )}
+        </div>
       </nav>
 
       <div className="max-w-[1366px] mx-auto px-4 md:px-8 pt-6 md:pt-10 pb-24 min-h-screen">
