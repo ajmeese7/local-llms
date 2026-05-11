@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-qwopus36
+description: Qwopus3.6-35B-A3B on RTX 5090.
+profile: qwopus36-35B-A3B
+provider: llama.cpp

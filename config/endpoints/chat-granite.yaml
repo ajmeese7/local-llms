@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-granite
+description: Default RTX 5090 chat endpoint serving Granite-4.1-30B.
+profile: granite-4.1-30b
+provider: llama.cpp

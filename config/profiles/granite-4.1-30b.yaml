@@ -1,0 +1,8 @@
+kind: profile
+name: granite-4.1-30b
+alias: Granite-4.1-30B
+model_path: ~/models/granite-4.1-30b-Q6_K.gguf
+hf_repo: unsloth/granite-4.1-30b-GGUF
+hf_file: granite-4.1-30b-Q6_K.gguf
+
+jinja: true

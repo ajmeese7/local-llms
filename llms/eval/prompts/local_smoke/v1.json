@@ -1,0 +1,141 @@
+[
+  {
+    "id": "coding_bugfix",
+    "category": "coding",
+    "temperature": 0,
+    "max_tokens": 1000,
+    "prompt": "You are reviewing this Python function for production use:\n\ndef add_tag(tag, tags=[]):\n    tags.append(tag)\n    return tags\n\nExplain the bug, provide a corrected implementation, and include one minimal pytest test that proves the fix. Keep the answer practical.",
+    "checks": [
+      [
+        "mutable default",
+        "default argument"
+      ],
+      [
+        "None"
+      ],
+      [
+        "is None"
+      ],
+      [
+        "pytest",
+        "def test_"
+      ],
+      [
+        "append"
+      ]
+    ]
+  },
+  {
+    "id": "coding_shell",
+    "category": "coding",
+    "temperature": 0,
+    "max_tokens": 900,
+    "prompt": "Write a Bash function named wait_for_http_ok that accepts a URL, max attempts, and sleep seconds. It should use curl with a connect timeout, return 0 on HTTP 200, return non-zero after exhausting attempts, and avoid printing noisy output on success. Include the function only, plus a very short explanation.",
+    "checks": [
+      [
+        "wait_for_http_ok"
+      ],
+      [
+        "curl"
+      ],
+      [
+        "--connect-timeout",
+        "connect-timeout"
+      ],
+      [
+        "http_code",
+        "%{http_code}"
+      ],
+      [
+        "return 0"
+      ],
+      [
+        "return 1",
+        "return \"$status\"",
+        "return $status"
+      ]
+    ]
+  },
+  {
+    "id": "assistant_ops",
+    "category": "assistant",
+    "temperature": 0,
+    "max_tokens": 900,
+    "prompt": "A local llama.cpp OpenAI-compatible server on a 32 GB NVIDIA GPU sometimes fails when switching to a larger model. Give a prioritized troubleshooting checklist for a developer. Focus on concrete commands and configuration knobs, not generic advice.",
+    "checks": [
+      [
+        "journalctl",
+        "systemctl status"
+      ],
+      [
+        "nvidia-smi"
+      ],
+      [
+        "context",
+        "CONTEXT_LENGTH"
+      ],
+      [
+        "KV",
+        "cache"
+      ],
+      [
+        "quant",
+        "Q4",
+        "Q5"
+      ],
+      [
+        "GPU_LAYERS",
+        "ngl"
+      ]
+    ]
+  },
+  {
+    "id": "creative_constraints",
+    "category": "creative",
+    "temperature": 0.7,
+    "max_tokens": 700,
+    "prompt": "Write a 180-240 word micro-scene about a systems engineer alone in a server room at 2 AM. Constraints: include exactly one line of terminal output, avoid explaining the theme, and end with an unresolved choice.",
+    "checks": [
+      [
+        "server room"
+      ],
+      [
+        "2 AM",
+        "2 a.m."
+      ],
+      [
+        "$ ",
+        "ERROR",
+        "OK",
+        "systemctl",
+        "curl"
+      ],
+      [
+        "choice",
+        "choose",
+        "decision"
+      ]
+    ]
+  },
+  {
+    "id": "long_context_recall",
+    "category": "long-context",
+    "temperature": 0,
+    "max_tokens": 500,
+    "prompt": "You will receive a long operational note. Extract only the requested facts.\n\nImportant fact A: project codename is Atlas-17.\nImportant fact B: rollback window is 42 minutes.\n\nReference block 001: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 002: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 003: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 004: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 005: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 006: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 007: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 008: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 009: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 010: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 011: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 012: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 013: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 014: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 015: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 016: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 017: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 018: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 019: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 020: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 021: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 022: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 023: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 024: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 025: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 026: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 027: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 028: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 029: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 030: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 031: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 032: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 033: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 034: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 035: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 036: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 037: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 038: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 039: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 040: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 041: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 042: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 043: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 044: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 045: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 046: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 047: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 048: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 049: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 050: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 051: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 052: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 053: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 054: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 055: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 056: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 057: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 058: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 059: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 060: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 061: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 062: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 063: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 064: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 065: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 066: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 067: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 068: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 069: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 070: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 071: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 072: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 073: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 074: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 075: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 076: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 077: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 078: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 079: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 080: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 081: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 082: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 083: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 084: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 085: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 086: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 087: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 088: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 089: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 090: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 091: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 092: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 093: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 094: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 095: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 096: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 097: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 098: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 099: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 100: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 101: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 102: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 103: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 104: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 105: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 106: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 107: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 108: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 109: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 110: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 111: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 112: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 113: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 114: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 115: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 116: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 117: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 118: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 119: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 120: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 121: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 122: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 123: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 124: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 125: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 126: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 127: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 128: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 129: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 130: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 131: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 132: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 133: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 134: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 135: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 136: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 137: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 138: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 139: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 140: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 141: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 142: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 143: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 144: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 145: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 146: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 147: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 148: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 149: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 150: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 151: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 152: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 153: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 154: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 155: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 156: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 157: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 158: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 159: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 160: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 161: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 162: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 163: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 164: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 165: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 166: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 167: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 168: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 169: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 170: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 171: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 172: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 173: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 174: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 175: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 176: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 177: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 178: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 179: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 180: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 181: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 182: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 183: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 184: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 185: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 186: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 187: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 188: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\nReference block 189: maintainers should preserve config layering, benchmark repeatability, and concise operational notes.\n\nImportant fact C: API port is 48129.\nImportant fact D: database table is ledger_events.\n\nReturn compact JSON with keys codename, rollback_window_minutes, api_port, database_table. Do not add commentary.",
+    "checks": [
+      [
+        "Atlas-17"
+      ],
+      [
+        "42"
+      ],
+      [
+        "48129"
+      ],
+      [
+        "ledger_events"
+      ]
+    ]
+  }
+]

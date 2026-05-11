@@ -1,0 +1,5 @@
+{"id": "mmlu-1", "question": "What is the capital of France?", "choices": ["London", "Paris", "Berlin", "Madrid"], "subject": "world_facts", "answer": 1}
+{"id": "mmlu-2", "question": "Which is a prime number?", "choices": ["4", "6", "7", "9"], "subject": "math", "answer": 2}
+{"id": "mmlu-3", "question": "What gas do plants absorb during photosynthesis?", "choices": ["Oxygen", "Nitrogen", "Carbon dioxide", "Hydrogen"], "subject": "biology", "answer": 2}
+{"id": "mmlu-4", "question": "Speed of light in vacuum is roughly?", "choices": ["3e5 km/s", "3e8 km/s", "3e8 m/s", "3e6 m/s"], "subject": "physics", "answer": 2}
+{"id": "mmlu-5", "question": "Which year did WWII end?", "choices": ["1942", "1945", "1939", "1948"], "subject": "history", "answer": 1}

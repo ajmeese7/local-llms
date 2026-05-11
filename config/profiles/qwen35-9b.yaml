@@ -1,0 +1,10 @@
+kind: profile
+name: qwen35-9b
+alias: Qwen3.5-9B
+model_path: ~/models/Qwen3.5-9B.Q4_K_M.gguf
+hf_repo: huihui-ai/Huihui-Qwen3.5-9B-abliterated-GGUF
+hf_file: huihui-qwen3.5-9b-abliterated-q4_k_m.gguf
+jinja: true
+provider_compat:
+  proven:
+    - llama.cpp

@@ -1,84 +1,96 @@
 # local-llms
 
-Run a local LLM as a persistent systemd service using [llama.cpp](https://github.com/ggerganov/llama.cpp), compiled from source with CUDA. The repo supports native Linux and WSL2 and exposes an OpenAI-compatible API backed by your NVIDIA GPU.
+Run a local LLM as a persistent systemd service using [llama.cpp](https://github.com/ggerganov/llama.cpp), compiled from source with CUDA. Native Linux and WSL2. OpenAI-compatible API on top of an NVIDIA GPU. Includes a benchmark harness, a static report hub, and CLI tooling for endpoint lifecycle.
 
-## Quick Start
+## Quick start
 
-Before running the commands below on your own machine, edit `config/llama-server.service`. It is hardcoded to `User=ajmeese7`, `Group=ajmeese7`, and `/home/ajmeese7`, so those values must match your username and home path.
-
-```bash
-git clone https://github.com/ajmeese7/local-llms.git
+```sh
+git clone https://github.com/meese-family/local-llms.git
 cd local-llms
-
-# Review the config for your GPU, such as `config/rtx-5090.conf` or `config/rtx-5060.conf`
-# and optionally set API_KEY before exposing the service on your network
-nano config/rtx-5090.conf  # example for RTX 5090
-
-# Run the interactive setup
 ./setup.sh
-
-# Pick the runtime model profile after setup
-sudo /etc/llama-server/select-model.sh
 ```
 
-The GPU config owns hardware defaults and optional authentication. Leave `API_KEY` unset to run without bearer auth, or set it before treating the service as reachable on your LAN. After setup installs the runtime files into `/etc/llama-server/`, use the selector to switch between supported model profiles without editing the GPU config again. The selector shows whether each supported profile is installed, missing, or backed by an empty file, and can download the selected model before restart when needed.
+`setup.sh` checks prereqs, runs `uv sync --all-extras`, lints the YAML config tree, optionally builds the llama.cpp / ik_llama.cpp binaries, renders `config/llama-server.service.template` with the invoking user/group and repo path, installs the resulting unit to `/etc/systemd/system/llama-server.service`, and (re)starts the service. Nothing is machine-specific in the repo itself.
+
+After the service is running:
+
+```sh
+.venv/bin/llms endpoint list                    # see what endpoints are defined
+.venv/bin/llms model fetch <profile>            # pull missing model files from HF
+.venv/bin/llms endpoint activate chat-default   # switch active endpoint, then systemctl restart
+.venv/bin/llms eval run mmlu --endpoint chat-default --max-items 50
+.venv/bin/llms eval report                      # refresh the hub registry
+```
+
+`endpoint activate` and `eval run` both check that the configured profile's `model_path` exists on disk; missing files trigger an interactive "download from Hugging Face?" prompt. Pass `--yes` to auto-accept, or pre-fetch with `llms model fetch <profile>` (useful for CI).
+
+Want to bench the same model against a different backend? Pass `--provider` to `endpoint activate` (and to `eval run`, so the manifest records it) instead of authoring a new endpoint YAML:
+
+```sh
+.venv/bin/llms endpoint activate chat-carnice --provider ik_llama.cpp
+sudo systemctl restart llama-server
+.venv/bin/llms eval run frontend_agentic --endpoint chat-carnice --provider ik_llama.cpp
+```
+
+## Configuration
+
+The config tree is YAML under `config/`. Files are typed; `llms config lint` validates the whole tree.
+
+| Directory | Kind | What it carries |
+|---|---|---|
+| `config/hardware/` | hardware | GPU detection regex, host/port floor, default endpoint |
+| `config/providers/` | provider | inference backend (llama.cpp, ik_llama.cpp), capability flags |
+| `config/profiles/` | profile | one model + decode params + provider compatibility |
+| `config/endpoints/` | endpoint | binds a profile to a provider; this is what `llms endpoint activate` points at |
+
+Precedence at runtime: endpoint overrides win, then profile, then hardware defaults. Capability mismatches (a profile asking for `kv_unified` against a provider that does not support it) raise at `config lint` rather than at launch.
+
+## CLI
+
+```sh
+llms config lint                                  # validate the YAML tree
+llms provider list                                # show inference backends + capabilities
+llms provider install <name>                      # build a provider from source (e.g. ik_llama.cpp)
+llms model status|fetch <profile>                 # report / download model files for a profile
+llms endpoint list|status|activate|rollback|revisions|stats
+  llms endpoint activate <name> --provider <p>    # pin a backend without authoring a new endpoint YAML
+llms launcher render|exec                         # systemd entry, plus a dry-run printer
+llms eval run <adapter> --endpoint <name>         # run a benchmark
+  --provider <p>                                  # record/override the backend on the manifest
+  --subset <category|csv-ids>                     # cap to one category or an explicit prompt list
+  --skip-preflight                                # don't `GET /v1/models` before the run
+  --max-consecutive-errors N                      # abort after N connect-class failures (default 1)
+  --yes                                           # auto-accept the missing-model download prompt
+llms eval list|show|report                        # browse runs, refresh the hub registry
+```
+
+Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k`, `niah`, `frontend_agentic` (17-prompt front-end + agentic suite — see [`docs/FRONTEND_AGENTIC_EVAL.md`](docs/FRONTEND_AGENTIC_EVAL.md)). Deferred adapters and other follow-ups are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 
-The detailed guides now live under [`docs/`](docs/README.md).
-
 | Guide | Purpose |
 |---|---|
-| [docs/SETUP.md](docs/SETUP.md) | Prerequisites, CUDA install, quick start, and manual setup |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | GPU config files, launcher behavior, and model switching |
-| [docs/USAGE.md](docs/USAGE.md) | Web UI, API examples, compatible apps, and useful commands |
-| [docs/MODELS.md](docs/MODELS.md) | Model recommendations and notes for Qwen3.6, MYTHOS, and Gemma NVFP4 |
-| [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | Scripted API timing, `llama-bench`, compare mode, and benchmark workflow |
-| [docs/SWE-BENCH.md](docs/SWE-BENCH.md) | Software-task benchmarking playbook for SWE-bench |
-| [docs/WSL2.md](docs/WSL2.md) | Networking, auto-start, and keep-alive guidance for WSL2 |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | CUDA, OOM, service startup, and build failures |
-| [docs/DRIVER-RECOVERY.md](docs/DRIVER-RECOVERY.md) | NVIDIA driver recovery after a broken install |
+| [docs/SETUP.md](docs/SETUP.md) | Prereqs, CUDA toolkit notes, manual setup |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | YAML config tree, merge precedence, capability checks |
+| [docs/USAGE.md](docs/USAGE.md) | API examples, useful commands |
+| [docs/MODELS.md](docs/MODELS.md) | Model recommendations and notes |
+| [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | Eval adapters, run manifests, the report hub |
+| [docs/SWE-BENCH.md](docs/SWE-BENCH.md) | Notes for SWE-bench integration |
+| [docs/WSL2.md](docs/WSL2.md) | Networking, auto-start, keep-alive |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | CUDA, OOM, service startup, build failures |
+| [docs/DRIVER-RECOVERY.md](docs/DRIVER-RECOVERY.md) | NVIDIA driver recovery |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | What is left |
 
-## Runtime Scripts
+Reading order by goal:
 
-The main operational entrypoints are:
+- **Bring up a new machine**: [SETUP](docs/SETUP.md) → [CONFIGURATION](docs/CONFIGURATION.md) → [USAGE](docs/USAGE.md)
+- **Experiment with local models**: [MODELS](docs/MODELS.md) → [BENCHMARKING](docs/BENCHMARKING.md) → [SWE-BENCH](docs/SWE-BENCH.md)
+- **WSL-specific setup**: [SETUP](docs/SETUP.md) → [WSL2](docs/WSL2.md) → [TROUBLESHOOTING](docs/TROUBLESHOOTING.md)
 
-- [`setup.sh`](setup.sh): interactive installer that builds provider binaries, installs runtime files into `/etc/llama-server`, restarts the service, and waits for the local API to respond with bounded readiness checks.
-- [`config/llama-launcher.sh`](config/llama-launcher.sh): systemd entrypoint that detects the GPU, resolves the active model profile, loads the overlay, and execs `llama-server`.
-- [`config/runtime-common.sh`](config/runtime-common.sh): shared shell helpers used by setup-time API verification and launcher-time optional `--api-key` handling.
-- [`config/provider-common.sh`](config/provider-common.sh): maps runtime providers to source checkouts and binaries.
-- [`config/select-model.sh`](config/select-model.sh): writes `/etc/llama-server/active-model.conf` for the next restart.
-- [`scripts/provider.sh`](scripts/provider.sh): installs or rebuilds supported providers such as `llama.cpp` and `ik_llama.cpp`.
-- [`scripts/benchmark.sh`](scripts/benchmark.sh): benchmark helper for active API aliases, API timing, `llama-bench`, and compare mode.
-- [`scripts/bench.sh`](scripts/bench.sh): packages benchmark suite output into the static [`bench/`](bench) report hub and serves it locally.
+## Hub
 
-## Suggested Reading Paths
+The static SPA at `bench/` reads runs from `bench/reports/`. It is meant to be published; see [`bench/README.md`](bench/README.md).
 
-### New machine
-
-1. [docs/SETUP.md](docs/SETUP.md)
-2. [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
-3. [docs/USAGE.md](docs/USAGE.md)
-
-### Model experiments
-
-1. [docs/MODELS.md](docs/MODELS.md)
-2. [docs/BENCHMARKING.md](docs/BENCHMARKING.md)
-3. [docs/SWE-BENCH.md](docs/SWE-BENCH.md)
-
-### WSL2-specific deployment
-
-1. [docs/SETUP.md](docs/SETUP.md)
-2. [docs/WSL2.md](docs/WSL2.md)
-3. [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-
-## Benchmark Helper
-
-This repo includes a helper script for repeatable local benchmark runs:
-
-```bash
-./scripts/benchmark.sh --help
-./scripts/bench.sh --help
+```sh
+cd bench && python -m http.server 5173
 ```
-
-Use [docs/BENCHMARKING.md](docs/BENCHMARKING.md) for the benchmark workflow and [docs/SWE-BENCH.md](docs/SWE-BENCH.md) for software-task evaluation.

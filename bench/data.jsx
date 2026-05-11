@@ -1,444 +1,507 @@
 /* ============================================================
    data.jsx
-   Pure functions for parsing results.jsonl + deriving the
-   shape the UI consumes. No React in this file.
+   Schema loaders + bench rollup. No React. Pure functions and
+   fetch glue.
+
+   Top-level entity: a **bench**, keyed by (hardware_profile,
+   model_profile). Each bench owns capability **cells** (one per
+   comparability_key — i.e. one capability against this model).
+   Each cell keeps history: re-running the same adapter against
+   the same model preserves earlier results, latest highlighted.
+
+   Hub reads:
+     reports/reports.json                  registry index (with `benches`)
+     reports/profiles.json                 profile/provider snapshot
+     reports/<id>/manifest.json            full run fingerprint
+     reports/<id>/summary.json             aggregated metrics
+     reports/<id>/results.jsonl            per-item rows (lazy)
    ============================================================ */
 
-/* ---------- JSONL parsing ---------- */
+const REPORTS_BASE = "reports/";
+
+/* ---------- JSONL ---------- */
 function parseJsonl(text) {
   const out = [];
-  for (const line of text.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t) continue;
-    try { out.push(JSON.parse(t)); }
-    catch (e) { console.warn("bad jsonl line:", t.slice(0, 80)); }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    try { out.push(JSON.parse(line)); }
+    catch (err) { console.warn("bad jsonl line:", line.slice(0, 80), err); }
   }
   return out;
 }
 
-/* ---------- Cleanliness classification ----------
-   leak  = visible <think> block or "thinking process" preamble in content
-   empty = used_reasoning_fallback=true AND output starts with empty <think></think>
-           or response is mostly empty content
-   clean = answer text only, no preamble
----------------------------------------------------- */
+/* ---------- Network ---------- */
+async function fetchJson(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+async function fetchText(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return "";
+    return await r.text();
+  } catch { return ""; }
+}
+
+async function loadIndex() {
+  const empty = { version: 4, reports: [], benches: [], generated_at: null };
+  try {
+    const r = await fetch(`${REPORTS_BASE}reports.json`);
+    if (!r.ok) return empty;
+    const json = await r.json();
+    if (!json || !Array.isArray(json.reports)) return empty;
+    if (!Array.isArray(json.benches)) {
+      json.benches = deriveBenches(json.reports);
+    }
+    return json;
+  } catch (err) {
+    console.warn("failed to load registry:", err);
+    return empty;
+  }
+}
+
+async function loadProfilesSnapshot() {
+  return fetchJson(`${REPORTS_BASE}profiles.json`);
+}
+
+async function loadRun(id) {
+  const base = `${REPORTS_BASE}${encodeURIComponent(id)}/`;
+  const [manifest, summary, results] = await Promise.all([
+    fetchJson(base + "manifest.json"),
+    fetchJson(base + "summary.json"),
+    fetchText(base + "results.jsonl"),
+  ]);
+  if (!manifest) return null;
+  return {
+    id, base, manifest,
+    summary: summary || null,
+    results: results ? parseJsonl(results) : [],
+  };
+}
+
+/* ---------- Bench resolution ---------- */
+function deriveBenches(reports) {
+  // Client-side fallback when the registry is older than v4.
+  const grouped = new Map();
+  for (const r of reports) {
+    const hw = r.hardware?.profile || "unknown";
+    const model = r.profile || r.alias || "unknown";
+    const key = `${hw}::${model}`;
+    if (!grouped.has(key)) grouped.set(key, { hw, model, members: [] });
+    grouped.get(key).members.push(r);
+  }
+  const benches = [];
+  for (const { hw, model, members } of grouped.values()) {
+    members.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+    const head = members[0];
+    benches.push({
+      id: hashId(`${hw}::${model}`),
+      hardware_profile: hw,
+      model_profile: model,
+      model_alias: head.alias || model,
+      title: benchTitleFromHead(head, hw, model),
+      latest_timestamp: head.timestamp,
+      hardware: head.hardware || null,
+      server: head.server || null,
+      cell_count: 0,  // re-derived in buildCells
+      run_count: members.length,
+      cells: deriveCells(members),
+    });
+    benches[benches.length - 1].cell_count = benches[benches.length - 1].cells.length;
+  }
+  benches.sort((a, b) => (b.latest_timestamp || "").localeCompare(a.latest_timestamp || ""));
+  return benches;
+}
+
+function deriveCells(reports) {
+  const byKey = new Map();
+  for (const r of reports) {
+    const key = r.comparability_key;
+    if (!key) continue;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(r);
+  }
+  const cells = [];
+  for (const [key, runs] of byKey.entries()) {
+    runs.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+    const latest = runs[0];
+    cells.push({
+      comparability_key: key,
+      comparability_prefix: key.slice(0, 8),
+      adapter: latest.adapter || {},
+      latest,
+      history_ids: runs.map(r => r.id),
+      run_count: runs.length,
+    });
+  }
+  cells.sort((a, b) =>
+    (b.latest.timestamp || "").localeCompare(a.latest.timestamp || "") ||
+    (a.adapter.name || "").localeCompare(b.adapter.name || "")
+  );
+  return cells;
+}
+
+function hashId(s) {
+  // Lightweight, browser-friendly stable id. Not cryptographic; only used
+  // when the server hasn't already produced a sha256 id.
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  const hex = (h >>> 0).toString(16).padStart(8, "0");
+  return `${hex}${hex}`.slice(0, 16);
+}
+
+function benchTitleFromHead(head, hwProfile, modelProfile) {
+  const alias = head.alias || modelProfile;
+  const gpu = head.hardware?.gpu_name || hwProfile;
+  if (!gpu || gpu === "unknown") return alias;
+  return `${alias} on ${gpuShort(gpu)}`;
+}
+
+function gpuShort(name) {
+  if (!name) return "";
+  return name.replace(/^NVIDIA\s+/i, "").replace(/^GeForce\s+/i, "");
+}
+
+function findBench(index, benchId) {
+  if (!index || !Array.isArray(index.benches)) return null;
+  return index.benches.find(b => b.id === benchId) || null;
+}
+
+async function loadBench(benchId) {
+  const index = await loadIndex();
+  const bench = findBench(index, benchId);
+  if (!bench) return null;
+  // For each cell, eagerly load the latest run (manifest+summary+results).
+  // History is loaded lazily via loadCellHistory().
+  const cells = await Promise.all(
+    (bench.cells || []).map(async cell => {
+      const latestId = cell.latest?.id;
+      const run = latestId ? await loadRun(latestId) : null;
+      return {
+        ...cell,
+        run,
+        rollup: run ? buildCellRollup(cell, run) : null,
+      };
+    })
+  );
+  return {
+    bench,
+    meta: buildBenchMeta(bench, cells),
+    cells,
+  };
+}
+
+async function loadCellHistory(cell) {
+  const ids = (cell.history_ids || []).slice(1);  // drop the latest (already loaded)
+  const runs = await Promise.all(ids.map(id => loadRun(id)));
+  return runs.filter(Boolean);
+}
+
+function buildBenchMeta(bench, cells) {
+  const latestCell = cells[0];
+  const head = latestCell?.run?.manifest || {};
+  // Prefer the registry-computed total; fall back to summing cell rollups.
+  let suiteSeconds = bench.suite_seconds ?? null;
+  if (suiteSeconds == null) {
+    let sum = 0;
+    let any = false;
+    for (const c of cells) {
+      const w = c.rollup?.wallSeconds;
+      if (Number.isFinite(Number(w))) { sum += Number(w); any = true; }
+    }
+    suiteSeconds = any ? sum : null;
+  }
+  return {
+    id: bench.id,
+    title: bench.title,
+    model_alias: bench.model_alias,
+    model_profile: bench.model_profile,
+    hardware_profile: bench.hardware_profile,
+    hardware: bench.hardware || head.hardware || null,
+    server: bench.server || head.server || null,
+    provider: head.provider?.name || null,
+    latest_timestamp: bench.latest_timestamp,
+    cell_count: bench.cell_count,
+    run_count: bench.run_count,
+    partial_run_count: bench.partial_run_count || 0,
+    suite_seconds: suiteSeconds,
+  };
+}
+
+/* ---------- Per-cell rollup ---------- */
+function buildCellRollup(cell, run) {
+  const summary = run.summary || {};
+  const results = run.results || [];
+  const adapter = cell.adapter || run.manifest?.adapter || {};
+  // Adapters where partial mean is the right headline (rubric-graded);
+  // everything else uses accuracy.
+  const rubricAdapters = new Set(["local_smoke", "frontend_agentic"]);
+  const useRubric = rubricAdapters.has(adapter.name);
+  const ci = useRubric ? summary.partial : summary.accuracy;
+  const qualityKind = useRubric ? "partial" : "accuracy";
+  const quality = ci && Number.isFinite(Number(ci.point))
+    ? Number(ci.point) * 100
+    : null;
+
+  let cleanCount = 0, leakCount = 0, emptyCount = 0;
+  const tpsValues = [];
+  const latencyValues = [];
+  for (const row of results) {
+    const c = classifyCleanliness(row);
+    if (c === "clean") cleanCount++;
+    else if (c === "leak") leakCount++;
+    else if (c === "empty") emptyCount++;
+    if (Number.isFinite(Number(row.tokens_per_sec))) tpsValues.push(Number(row.tokens_per_sec));
+    if (Number.isFinite(Number(row.latency_ms))) latencyValues.push(Number(row.latency_ms) / 1000);
+  }
+  const timing = summary.timing || null;
+  return {
+    quality,
+    qualityCi: ci || null,
+    qualityKind,
+    accuracyCi: summary.accuracy || null,
+    partialCi: summary.partial || null,
+    tps: summary.median_tokens_per_sec ?? median(tpsValues),
+    latency: summary.median_latency_ms != null
+      ? summary.median_latency_ms / 1000
+      : median(latencyValues),
+    medianLatencyMs: summary.median_latency_ms ?? null,
+    medianTtftMs: summary.median_ttft_ms ?? null,
+    itemCount: summary.item_count ?? results.length,
+    correctCount: summary.correct_count ?? null,
+    parseFailureCount: summary.parse_failure_count ?? 0,
+    errorCount: summary.error_count ?? 0,
+    cleanCount, leakCount, emptyCount,
+    totalRows: results.length,
+    wallSeconds: timing?.wall_seconds ?? null,
+    computeSeconds: timing?.compute_seconds ?? null,
+  };
+}
+
+/* ---------- Cleanliness ---------- */
 const THINK_PREAMBLE_RE =
   /^\s*(<think>|here'?s a thinking process|thinking process|deconstruct(?:ing)? the prompt|analy(?:s|z)e (?:user|the) (?:input|requirements?|prompt))/i;
 
 function classifyCleanliness(row) {
-  const ex = (row.excerpt || "").trim();
-  // Empty <think></think> followed by JSON-only is the AEON long_context pattern
-  if (/^<think>\s*<\/think>/.test(ex) && row.word_count != null && row.word_count < 30) return "empty";
-  if (row.used_reasoning_fallback === false && row.word_count != null && row.word_count < 20) {
-    // model produced almost nothing in content — treat as empty
-    return "empty";
-  }
-  if (THINK_PREAMBLE_RE.test(ex)) return "leak";
-  if (/^\s*<think>/i.test(ex)) return "leak";
+  const raw = (row.raw || "").trim();
+  if (!raw) return "empty";
+  if (/^<think>\s*<\/think>/i.test(raw) && raw.length < 80) return "empty";
+  if (THINK_PREAMBLE_RE.test(raw)) return "leak";
+  if (/^\s*<think>/i.test(raw)) return "leak";
   return "clean";
 }
 
-/* ---------- Aggregation ---------- */
-function buildDataset(rows) {
-  // Group by profile
-  const byProfile = new Map();
-  const byPrompt = new Map();
+/* ---------- Per-metric leaderboards ----------
+   A leaderboard ranks bench cells across the registry by one metric.
+   Cells from the same hardware_profile are apples-to-apples (their
+   comparability_keys agree on hardware). Cross-hardware ranking is
+   shown but flagged as "cross-hw" so the user reads it accordingly.
+*/
+async function loadLeaderboards(index) {
+  const idx = index || (await loadIndex());
+  const benches = (idx.benches || []);
+  // Eagerly load each bench so we can read every cell's rollup. With one
+  // bench in the common case this is cheap.
+  const loaded = await Promise.all(benches.map(b => loadBench(b.id)));
+  const valid = loaded.filter(Boolean);
 
-  for (const r of rows) {
-    if (!byProfile.has(r.profile)) byProfile.set(r.profile, []);
-    byProfile.get(r.profile).push(r);
-    if (!byPrompt.has(r.prompt_id)) byPrompt.set(r.prompt_id, { id: r.prompt_id, category: r.category, runs: [] });
-    byPrompt.get(r.prompt_id).runs.push(r);
-  }
+  // Discover what adapters exist across the registry.
+  const adapterNames = new Set();
+  for (const lb of valid) for (const c of lb.cells) if (c.adapter?.name) adapterNames.add(c.adapter.name);
 
-  // Compute prompt order (first appearance) and category order from data
-  const promptOrder = [];
-  for (const r of rows) if (!promptOrder.includes(r.prompt_id)) promptOrder.push(r.prompt_id);
-
-  // Per-profile averages
-  const profiles = [];
-  for (const [profile, runs] of byProfile.entries()) {
-    const tps = avg(runs.map(r => r.tokens_per_sec));
-    const latency = avg(runs.map(r => r.time_total_sec));
-    const quality = avg(runs.map(r => r.quality_ratio)) * 100;
-    const cleanliness = promptOrder.map(pid => {
-      const run = runs.find(r => r.prompt_id === pid);
-      return run ? classifyCleanliness(run) : null;
-    }).filter(Boolean);
-    profiles.push({
-      profile,
-      alias: runs[0].alias || profile,
-      runs,
-      tps, latency, quality, cleanliness,
-      cleanCount: cleanliness.filter(c => c === "clean").length,
-      leakCount:  cleanliness.filter(c => c === "leak").length,
-      emptyCount: cleanliness.filter(c => c === "empty").length,
-      runCount: runs.length,
-      ok: runs.every(r => r.http_code === "200" || r.http_code === 200),
-    });
-  }
-
-  // Roles: balanced (best quality*speed product among non-degraded), fastest, top-quality
-  const sortedByTps = [...profiles].sort((a, b) => b.tps - a.tps);
-  const fastest = sortedByTps[0];
-  const sortedByQuality = [...profiles].sort((a, b) => b.quality - a.quality || b.tps - a.tps);
-  const topQuality = sortedByQuality[0];
-
-  // Balanced: highest tps among profiles within 1.5pp of top quality
-  const qualityFloor = topQuality.quality - 1.5;
-  const balancedCandidates = profiles.filter(p => p.quality >= qualityFloor);
-  const balanced = balancedCandidates.sort((a, b) => b.tps - a.tps)[0] || topQuality;
-
-  for (const p of profiles) {
-    p.role = (p === balanced) ? "balanced"
-           : (p === fastest && p !== balanced) ? "fastest"
-           : (p === topQuality && p !== balanced && p !== fastest) ? "top-quality"
-           : "baseline";
-  }
-
-  // Prompts in observed order
-  const prompts = promptOrder.map(pid => byPrompt.get(pid));
-
-  // Run-level metadata
-  const totalRuns = rows.length;
-  const okRuns = rows.filter(r => String(r.http_code) === "200").length;
-  const runDir = (() => {
-    const f = rows[0]?.response_file || "";
-    const m = f.match(/benchmark-results\/([^\/]+)/);
-    return m ? m[1] : "(unknown run)";
-  })();
-
-  return { profiles, prompts, balanced, fastest, topQuality, totalRuns, okRuns, runDir, raw: rows };
-}
-
-function avg(xs) {
-  const finite = xs
-    .filter(value => value !== null && value !== undefined && value !== "")
-    .map(Number)
-    .filter(Number.isFinite);
-  return finite.length ? finite.reduce((a, b) => a + b, 0) / finite.length : 0;
-}
-
-/* ---------- Auto-generated copy (overridable) ----------
-   Every authored text element has a stable `id`. The runtime
-   merges any `window.REPORT_OVERRIDES[id]` over the auto value,
-   so a local model can selectively rewrite text without
-   touching the data layer.
------------------------------------------------------------- */
-function generateNarrative(d, meta = {}) {
-  const b = d.balanced, f = d.fastest, tq = d.topQuality;
-  const speedup = (b.tps / median(d.profiles.map(p => p.tps))).toFixed(1);
-  const fastSpeedup = (f.tps / b.tps).toFixed(1);
-  const qualityDelta = (b.quality - f.quality).toFixed(0);
-
-  const o = window.REPORT_OVERRIDES || {};
-  const pick = (id, fallback) => o[id] != null ? o[id] : fallback;
-
-  return {
-    "hero.title": pick("hero.title", meta.title || "Local LLM Benchmark"),
-    "hero.subtitle": pick("hero.subtitle",
-      `// ${d.profiles.length} local profiles · ${d.totalRuns} runs through llama-server's OpenAI-compatible /chat/completions endpoint`),
-    "hero.body": pick("hero.body",
-      `The fastest profile in this run is ${f.profile} at ${f.tps.toFixed(1)} tok/s — roughly ${fastSpeedup}× the throughput of ${b.profile}, but its rubric quality drops by ${Math.abs(qualityDelta)} points.\n\nFor a daily driver, ${b.profile} wins on balance: it ${b === tq ? "ties for" : "lands within striking distance of"} top quality (${b.quality.toFixed(1)}%) while running ~${speedup}× faster than the median profile.`),
-    "rec.balanced.tradeoff": pick("rec.balanced.tradeoff",
-      `Cleanest balance of speed and rubric quality in this run. ${b.cleanCount}/${b.runCount} prompts produced clean output. The default to ship.`),
-    "rec.fastest.tradeoff": pick("rec.fastest.tradeoff",
-      `Fastest by ${fastSpeedup}× but rubric quality is ${qualityDelta > 0 ? "down " + qualityDelta + " points" : "comparable"}. Audit the per-prompt scores before putting this on the critical path.`),
-    "rec.quality.tradeoff": pick("rec.quality.tradeoff",
-      `Highest quality average (${tq.quality.toFixed(1)}%). Use when correctness matters more than throughput.`),
-    "rec.creative.tradeoff": pick("rec.creative.tradeoff",
-      `Distinct writing voice with the cleanest output of any profile in this run.`),
-    "summary.cleanliness.note": pick("summary.cleanliness.note",
-      `// per-prompt reasoning leakage — left-to-right: ${d.prompts.map(p => p.id.split("_")[0]).join(" · ")}`),
-    "methodology.timings": pick("methodology.timings",
-      `All ${d.profiles.length} profiles were tested through llama-server's /chat/completions endpoint with stream:false. Reported latency is end-to-end response time.`),
-    "methodology.ttft": pick("methodology.ttft",
-      `The raw report column ttft_sec is curl's time_starttransfer, but because requests were non-streaming this is effectively full-response time. This page omits the misleading column.`),
-    "methodology.rubric": pick("methodology.rubric",
-      `Quality is a lightweight automated keyword/requirement rubric scored per prompt with a max score that varies by prompt. Quality % is the average ratio across the prompts.`),
-    "methodology.cleanliness": pick("methodology.cleanliness",
-      `Several profiles emit visible <think> blocks or "Here's a thinking process:" preambles in their content field. Some emit empty content and place the answer in reasoning_content.`),
+  // For each metric we care about, build a leaderboard.
+  const result = {
+    tps: rankCells(valid, "tps"),
+    quality: rankCells(valid, "quality"),
+    perAdapter: {},
+    perAdapterUser: {},
+    // Raw loaded benches kept around so consumers (LeaderboardsBlock) can
+    // re-rank by manual user rating, which lives in localStorage and can
+    // change between renders.
+    _loadedBenches: valid,
+    _adapterNames: [...adapterNames],
   };
+  for (const adapter of adapterNames) {
+    result.perAdapter[adapter] = rankCells(valid, "quality", adapter);
+    result.perAdapterUser[adapter] = rankCellsByUser(valid, adapter);
+  }
+  return result;
 }
 
-function median(xs) {
-  const s = xs
-    .filter(value => value !== null && value !== undefined && value !== "")
-    .map(Number)
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
-  if (!s.length) return 0;
-  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+function rankCellsByUser(loadedBenches, adapterName) {
+  const rows = [];
+  for (const lb of loadedBenches) {
+    for (const cell of lb.cells) {
+      if (adapterName && cell.adapter?.name !== adapterName) continue;
+      const itemIds = (cell.run?.results || []).map(r => r.item_id);
+      const agg = window.BenchRatings.aggregate(cell.comparability_key, itemIds);
+      if (!agg || agg.count === 0) continue;
+      rows.push({
+        value: agg.mean * 20,  // 1-5 stars → 0-100% scale to share fmt with auto
+        userMean: agg.mean,
+        userCount: agg.count,
+        userTotal: itemIds.length,
+        metric: "userRating",
+        adapter: cell.adapter,
+        benchId: lb.bench.id,
+        benchTitle: lb.bench.title,
+        modelAlias: lb.bench.model_alias,
+        hardwareProfile: lb.bench.hardware_profile,
+        comparabilityPrefix: cell.comparability_prefix,
+        timestamp: cell.latest?.timestamp,
+      });
+    }
+  }
+  rows.sort((a, b) => b.value - a.value);
+  return rows;
 }
 
-/* ---------- Auto recommendation cards ---------- */
-function generateRecommendations(d, copy) {
+function rankCells(loadedBenches, metric, adapterName) {
+  const rows = [];
+  for (const lb of loadedBenches) {
+    for (const cell of lb.cells) {
+      if (!cell.rollup) continue;
+      if (adapterName && cell.adapter?.name !== adapterName) continue;
+      const raw = cell.rollup[metric];
+      // Explicitly skip null/undefined: Number(null) === 0 is finite, which
+      // would put unscored cells (zombie runs, missing summary) on the
+      // leaderboard at 0%.
+      if (raw == null) continue;
+      const value = Number(raw);
+      if (!Number.isFinite(value)) continue;
+      rows.push({
+        value,
+        metric,
+        adapter: cell.adapter,
+        benchId: lb.bench.id,
+        benchTitle: lb.bench.title,
+        modelAlias: lb.bench.model_alias,
+        hardwareProfile: lb.bench.hardware_profile,
+        comparabilityPrefix: cell.comparability_prefix,
+        timestamp: cell.latest?.timestamp,
+      });
+    }
+  }
+  rows.sort((a, b) => b.value - a.value);
+  return rows;
+}
+
+/* ---------- Recommendations ---------- */
+function generateRecommendations(loadedBenches, currentBench) {
+  // Compare cells across benches sharing the same hardware_profile.
+  const sameHw = loadedBenches.filter(b => b.bench.hardware_profile === currentBench.bench.hardware_profile);
+  if (sameHw.length < 2) return [];  // need a peer to recommend against
   const recs = [];
-  recs.push({
-    id: "rec.balanced",
-    tag: "Balanced default",
-    profile: d.balanced.profile,
-    metric_speed: d.balanced.tps.toFixed(1) + " tok/s",
-    metric_quality: d.balanced.quality.toFixed(1) + "%",
-    tradeoff: copy["rec.balanced.tradeoff"],
-    flags: [
-      [d.balanced.cleanCount > 0 ? "clean" : "leak", `${d.balanced.cleanCount}/${d.balanced.runCount} clean`],
-      d.balanced.leakCount ? ["leak", `${d.balanced.leakCount} leaks`] : null,
-    ].filter(Boolean),
-    highlight: true,
-  });
-  if (d.fastest !== d.balanced) {
-    recs.push({
-      id: "rec.fastest",
-      tag: "Fastest",
-      profile: d.fastest.profile,
-      metric_speed: d.fastest.tps.toFixed(1) + " tok/s",
-      metric_quality: d.fastest.quality.toFixed(1) + "%",
-      tradeoff: copy["rec.fastest.tradeoff"],
-      flags: [
-        d.fastest.emptyCount ? ["danger", `${d.fastest.emptyCount} empty`] : null,
-        d.fastest.leakCount  ? ["leak", `${d.fastest.leakCount} leaks`] : null,
-      ].filter(Boolean),
-      cyan: true,
-    });
-  }
-  if (d.topQuality !== d.balanced && d.topQuality !== d.fastest) {
-    recs.push({
-      id: "rec.quality",
-      tag: "Top quality",
-      profile: d.topQuality.profile,
-      metric_speed: d.topQuality.tps.toFixed(1) + " tok/s",
-      metric_quality: d.topQuality.quality.toFixed(1) + "%",
-      tradeoff: copy["rec.quality.tradeoff"],
-      flags: [],
-    });
-  }
-  // Add a "cleanest output" pick if distinct
-  const cleanest = [...d.profiles].sort((a, b) => b.cleanCount - a.cleanCount || b.quality - a.quality)[0];
-  if (cleanest && cleanest !== d.balanced && cleanest !== d.fastest && cleanest !== d.topQuality && cleanest.cleanCount > 0) {
-    recs.push({
-      id: "rec.creative",
-      tag: "Cleanest output",
-      profile: cleanest.profile,
-      metric_speed: cleanest.tps.toFixed(1) + " tok/s",
-      metric_quality: cleanest.quality.toFixed(1) + "%",
-      tradeoff: copy["rec.creative.tradeoff"],
-      flags: [["clean", `${cleanest.cleanCount}/${cleanest.runCount} clean`]],
-    });
+  // For each adapter present in the current bench, find best on this hw.
+  for (const cell of currentBench.cells) {
+    const name = cell.adapter?.name;
+    if (!name) continue;
+    const peers = [];
+    for (const lb of sameHw) {
+      const peer = lb.cells.find(c => c.adapter?.name === name);
+      if (peer && peer.rollup) peers.push({ bench: lb.bench, cell: peer });
+    }
+    if (peers.length < 2) continue;
+    const winner = peers.reduce(
+      (best, p) => Number(p.cell.rollup.quality) > Number(best.cell.rollup.quality) ? p : best,
+    );
+    if (winner.bench.id !== currentBench.bench.id) {
+      recs.push({
+        adapter: name,
+        winnerTitle: winner.bench.title,
+        winnerBenchId: winner.bench.id,
+        winnerQuality: winner.cell.rollup.quality,
+        currentQuality: cell.rollup?.quality,
+      });
+    }
   }
   return recs;
 }
 
+/* ---------- Format helpers ---------- */
+function median(xs) {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+}
+
+function extractQuant(filename) {
+  if (typeof filename !== "string" || !filename) return "";
+  const stripped = filename.replace(/\.gguf$/i, "");
+  const match = stripped.match(/(?:UD-)?(IQ?\d+_[A-Z0-9]+(?:_[A-Z0-9]+)?|Q\d+_[A-Z0-9]+(?:_[A-Z0-9]+)?|BF16|F16|F32)/i);
+  return match ? match[1] : "";
+}
+
+function fmtAccuracy(ci) {
+  if (!ci || ci.point == null) return "—";
+  return (Number(ci.point) * 100).toFixed(1) + "%";
+}
+function fmtCi(ci) {
+  if (!ci || ci.point == null) return "—";
+  if (ci.lo == null || ci.hi == null) return fmtAccuracy(ci);
+  return `${(ci.point * 100).toFixed(1)}% [${(ci.lo * 100).toFixed(1)}, ${(ci.hi * 100).toFixed(1)}]`;
+}
+function fmtMs(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(0)} ms` : "—";
+}
+function fmtTps(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(1)} tok/s` : "—";
+}
+function fmtSeconds(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(2)} s` : "—";
+}
+function fmtQuality(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(1)}%` : "—";
+}
+function fmtDuration(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n < 0) return "—";
+  if (n < 1) return `${(n * 1000).toFixed(0)} ms`;
+  if (n < 60) return `${n.toFixed(1)} s`;
+  const totalSec = Math.round(n);
+  const minutes = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (minutes < 60) return `${minutes}m ${sec.toString().padStart(2, "0")}s`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h ${mins.toString().padStart(2, "0")}m`;
+}
+function fmtTimestamp(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().replace("T", " ").replace("Z", " UTC");
+  } catch { return iso; }
+}
+function fmtDateOnly(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().slice(0, 10);
+  } catch { return iso; }
+}
+
 /* ---------- Public ---------- */
-window.BenchData = { parseJsonl, buildDataset, generateNarrative, generateRecommendations, classifyCleanliness };
-
-/* ============================================================
-   .conf parser — reads llama-server overlay files
-   Format is shell `KEY=value` (with optional quotes) plus comments.
-   ============================================================ */
-function parseConf(text, filename) {
-  const fields = {};
-  const order = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$/);
-    if (!m) continue;
-    let val = m[2];
-    // Strip matching quotes
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-    fields[m[1]] = val;
-    if (!order.includes(m[1])) order.push(m[1]);
-  }
-
-  // Derive convenience fields
-  const modelPath = fields.MODEL || "";
-  const modelFile = modelPath.split("/").pop() || modelPath;
-  const quant = extractQuant(modelFile || fields.HF_FILE || "");
-  const profileId = (filename || "").replace(/\.conf$/, "");
-
-  return {
-    profile_id: profileId,
-    fields,
-    order,
-    derived: {
-      model_file: modelFile,
-      quant,
-    },
-  };
-}
-
-function extractQuant(name) {
-  if (!name) return null;
-  // Common llama.cpp quant patterns: Q5_K_XL, Q4_K_M, Q6_K, IQ4_XS, etc.
-  const m = name.match(/(UD-)?(IQ?\d+_[A-Z]+(?:_[A-Z]+)?|Q\d+_[A-Z]+(?:_[A-Z]+)?|F16|F32|BF16)/i);
-  return m ? m[2].toUpperCase() : null;
-}
-
-/* ---------- Profile aggregation across reports ---------- */
-function buildProfileBundle(confs /* [{profile_id, fields, order, derived}] */, baseConf = null) {
-  // Group by HF_REPO so the diff view can find related profiles.
-  const groups = new Map();
-  for (const c of confs) {
-    const repo = c.fields.HF_REPO || `__solo__:${c.profile_id}`;
-    if (!groups.has(repo)) groups.set(repo, []);
-    groups.get(repo).push(c);
-  }
-  const families = [...groups.entries()].map(([repo, members]) => ({
-    repo,
-    members,
-    isFamily: !repo.startsWith("__solo__:") && members.length > 1,
-  }));
-  return { confs, baseConf, byId: new Map(confs.map(c => [c.profile_id, c])), families };
-}
-
-function metadataFromConf(conf, baseConf = null) {
-  if (!conf) return {};
-  const f = { ...(baseConf?.fields || {}), ...(conf.fields || {}) };
-  const modelPath = f.MODEL || "";
-  const modelFile = modelPath.split("/").pop() || modelPath || f.HF_FILE || "";
-  const words = value => String(value || "").split(/\s+/).filter(Boolean);
-  return {
-    profile: conf.profile_id,
-    alias: f.ALIAS || conf.profile_id,
-    model_file: modelFile,
-    context_length: f.CONTEXT_LENGTH ? parseInt(f.CONTEXT_LENGTH, 10) : null,
-    parallel_slots: f.PARALLEL_SLOTS ? parseInt(f.PARALLEL_SLOTS, 10) : null,
-    cache_type_k: f.CACHE_TYPE_K || null,
-    cache_type_v: f.CACHE_TYPE_V || null,
-    has_mmproj: Boolean(f.MMPROJ),
-    quant: extractQuant(modelFile || f.HF_FILE || ""),
-    proven_providers: words(f.PROVEN_LLAMA_PROVIDERS),
-    blocked_providers: words(f.BLOCKED_LLAMA_PROVIDERS),
-    provider_notes: f.PROVIDER_COMPATIBILITY_NOTES || null,
-  };
-}
-
-/* Diff two confs and return a list of {key, a, b, differs} */
-function diffConfs(a, b) {
-  const keys = new Set([...Object.keys(a.fields), ...Object.keys(b.fields)]);
-  const rows = [];
-  for (const k of keys) {
-    const av = a.fields[k];
-    const bv = b.fields[k];
-    rows.push({ key: k, a: av, b: bv, differs: av !== bv });
-  }
-  // Stable order: differing keys first, then alphabetical
-  rows.sort((x, y) => (y.differs - x.differs) || x.key.localeCompare(y.key));
-  return rows;
-}
-
-/* ============================================================
-   Hub-level loaders — fetch a registry, then individual reports
-   ============================================================ */
-async function loadRegistry(base = "reports/") {
-  try {
-    const r = await fetch(`${base}reports.json`);
-    if (!r.ok) return { reports: [] };
-    return await r.json();
-  } catch { return { reports: [] }; }
-}
-
-async function loadReportSummary(id, base = "reports/") {
-  // Load meta + results; profiles loaded lazily when needed
-  const metaR = await fetch(`${base}${id}/meta.json`);
-  const meta = metaR.ok ? await metaR.json() : { id, title: id };
-  const jsonlR = await fetch(`${base}${id}/results.jsonl`);
-  const jsonl = jsonlR.ok ? await jsonlR.text() : "";
-  const rows = jsonl ? parseJsonl(jsonl) : [];
-  const dataset = rows.length ? buildDataset(rows) : null;
-  return { id, meta, jsonl, dataset, source: "bundled", base };
-}
-
-async function loadProfilesForReport(report) {
-  if (!report.dataset) return { confs: [], baseConf: null, bundle: buildProfileBundle([]) };
-  const ids = report.dataset.profiles.map(p => p.profile);
-  const confs = [];
-  let baseConf = null;
-  try {
-    const baseR = await fetch(`${report.base}${report.id}/profiles/_base.conf`);
-    if (baseR.ok) {
-      const text = await baseR.text();
-      baseConf = parseConf(text, `_base.conf`);
-    }
-  } catch {}
-  for (const id of ids) {
-    try {
-      const r = await fetch(`${report.base}${report.id}/profiles/${id}.conf`);
-      if (r.ok) {
-        const text = await r.text();
-        confs.push(parseConf(text, `${id}.conf`));
-      }
-    } catch {}
-  }
-  return { confs, baseConf, bundle: buildProfileBundle(confs, baseConf) };
-}
-
-/* ============================================================
-   localStorage "My runs" support
-   ============================================================ */
-const LS_KEY = "meese-bench:my-runs";
-
-function listMyRuns() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
-  catch { return []; }
-}
-
-function saveMyRun(run) {
-  const all = listMyRuns().filter(r => r.id !== run.id);
-  all.unshift(run);
-  localStorage.setItem(LS_KEY, JSON.stringify(all));
-}
-
-function deleteMyRun(id) {
-  const all = listMyRuns().filter(r => r.id !== id);
-  localStorage.setItem(LS_KEY, JSON.stringify(all));
-}
-
-function loadMyRunDataset(id) {
-  const run = listMyRuns().find(r => r.id === id);
-  if (!run) return null;
-  const rows = parseJsonl(run.jsonl);
-  if (!rows.length) return null;
-  const dataset = buildDataset(rows);
-  const parsed = (run.confs || []).map(c => parseConf(c.text, c.filename));
-  const baseConf = parsed.find(c => c.profile_id === "_base") || null;
-  const confs = parsed.filter(c => c.profile_id !== "_base");
-  return {
-    id: run.id,
-    meta: run.meta || { id: run.id, title: run.title || run.id },
-    dataset,
-    source: "local",
-    confs,
-    baseConf,
-    bundle: buildProfileBundle(confs, baseConf),
-  };
-}
-
-/* Cross-run leaderboard: best tok/s seen per model alias and backend */
-function buildLeaderboard(reports /* [{dataset, meta}] */) {
-  const best = new Map(); // alias/backend -> { alias, backend, tps, profile, runId, runTitle }
-  for (const r of reports) {
-    if (!r.dataset) continue;
-    const backend = r.meta?.server?.engine || "llama.cpp";
-    for (const p of r.dataset.profiles) {
-      const alias = p.alias || p.profile;
-      const key = `${alias}::${backend}`;
-      const entry = { alias, backend, profile: p.profile, tps: p.tps, quality: p.quality, runId: r.id, runTitle: r.meta?.title || r.id };
-      const cur = best.get(key);
-      if (!cur || entry.tps > cur.tps) best.set(key, entry);
-    }
-  }
-  return [...best.values()].sort((a, b) => b.tps - a.tps);
-}
-
-/* Public hub API */
-Object.assign(window.BenchData, {
-  parseConf, extractQuant, buildProfileBundle, diffConfs,
-  metadataFromConf,
-  loadRegistry, loadReportSummary, loadProfilesForReport,
-  listMyRuns, saveMyRun, deleteMyRun, loadMyRunDataset,
-  buildLeaderboard,
-});
+window.BenchData = {
+  // loaders
+  loadIndex, loadProfilesSnapshot, loadRun, loadBench, loadCellHistory,
+  loadLeaderboards, rankCellsByUser,
+  // bench helpers
+  deriveBenches, deriveCells, findBench, gpuShort,
+  // dataset helpers
+  classifyCleanliness, generateRecommendations,
+  // configs
+  extractQuant,
+  // formatters
+  fmtAccuracy, fmtCi, fmtMs, fmtTps, fmtSeconds, fmtQuality, fmtDuration, fmtTimestamp, fmtDateOnly,
+};

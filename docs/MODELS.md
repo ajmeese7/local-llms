@@ -38,7 +38,7 @@ Expected runtime requirements:
 - `--quantization modelopt`
 - Blackwell GPU with at least 20 GB VRAM
 
-This remains a strong RTX 5090 experiment, but it belongs on a separate `vLLM` server rather than inside the `/etc/llama-server` model overlay workflow.
+This remains a strong RTX 5090 experiment, but it belongs on a separate `vLLM` server rather than inside this `llama-server`-based service.
 
 Quick start with Docker:
 
@@ -59,6 +59,18 @@ docker run --gpus all \
 ```
 
 That exposes a second OpenAI-compatible endpoint on `http://127.0.0.1:8001/v1`.
+
+## Downloading model files
+
+Every profile YAML carries `hf_repo` and `hf_file` (and `mmproj_hf_file` if the model needs a vision projector). The launcher won't start without those files on disk; pre-fetch them with:
+
+```sh
+uv run llms model status <profile>     # check whether the .gguf is there
+uv run llms model fetch <profile>      # download missing files (prompts)
+uv run llms model fetch <profile> --yes
+```
+
+`endpoint activate` and `eval run` both run the same check and offer the same prompt before doing anything else — no more discovering at journalctl time that the file isn't there.
 
 ## Practical Notes
 

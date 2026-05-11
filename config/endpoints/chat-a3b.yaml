@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-a3b
+description: Qwen3.6-35B-A3B (Q5_K_P, multimodal) on RTX 5090.
+profile: qwen36-35B-A3B
+provider: llama.cpp

@@ -1,0 +1,580 @@
+[
+  {
+    "id": "design_saas_landing",
+    "category": "design",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 32000,
+    "prompt": "You are designing the landing page for \"Helix\" \u2014 a developer-tool startup that ships distributed-tracing infrastructure for streaming-data pipelines. Audience: senior data engineers and SRE leads.\n\nOutput ONE complete, self-contained HTML5 document. No external CSS or JS files. Inline everything. No image URLs \u2014 use CSS gradients, SVG, or canvas for any visual interest.\n\nRequired sections, in order:\n  1. Sticky top nav (logo wordmark + 4 links + a \"Book demo\" CTA).\n  2. Hero with a one-line headline, a two-line sub-headline, primary + secondary CTA, and a live-looking animated terminal panel on the right showing fake trace events scrolling. The terminal must actually animate (CSS or JS).\n  3. Three-up \"why teams switch\" feature grid with custom inline-SVG icons.\n  4. A one-sentence customer logo strip (SVG-only logos invented by you, 5 of them).\n  5. A 30-second product tour broken into 4 vertically-stacked steps with screenshots drawn in pure CSS/SVG (no real images).\n  6. Pricing teaser linking to /pricing (just an anchor, no real route).\n  7. Footer with 4 link columns + a small status-page badge (\"All systems normal\").\n\nVisual language: dark (#0a0c12 base), one cool accent (cyan or indigo), generous whitespace, system font stack, and one tasteful micro-interaction per section. Total page should feel production-ready, not scaffolded.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "Helix"
+      ],
+      [
+        "Book demo",
+        "book demo"
+      ],
+      [
+        "<svg"
+      ],
+      [
+        "@keyframes",
+        "animation:",
+        "transition:"
+      ],
+      [
+        "All systems normal"
+      ]
+    ]
+  },
+  {
+    "id": "design_analytics_dashboard",
+    "category": "design",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 24000,
+    "prompt": "Build a single-file HTML analytics dashboard for an internal \"OpsPulse\" tool that tracks request latency, error rate, and queue depth across 12 microservices.\n\nLight theme. Emerald primary accent. System font stack.\n\nLayout:\n  - Left rail with 6 nav items and a collapsed-state toggle.\n  - Top bar with environment switcher (prod / staging / dev) and a date range picker.\n  - 4-tile KPI strip across the top (p50, p99, error rate, in-flight requests), each with a small inline sparkline.\n  - One large chart area (line chart, 24h window) drawn in pure SVG with axis labels, gridlines, and hover-on-line tooltips. Use hardcoded sample data.\n  - One service health table below: 12 rows, columns for service name, status pill, p99 latency, error rate, deploy time. Sortable column headers (JS).\n\nNo external dependencies. All hover and toggle states must be wired and visible.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "OpsPulse"
+      ],
+      [
+        "p50"
+      ],
+      [
+        "p99"
+      ],
+      [
+        "<svg"
+      ],
+      [
+        "<table",
+        "<tr",
+        "<td"
+      ]
+    ]
+  },
+  {
+    "id": "design_designer_portfolio",
+    "category": "design",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 16000,
+    "prompt": "Single-file HTML portfolio for \"Ines Marchetti\" \u2014 a freelance product designer based in Lisbon. Tone: confident, minimal, slightly editorial.\n\nHero must be kinetic typography \u2014 animated word swap or CSS-driven text reveal \u2014 not a static headline. No images: every visual is CSS, SVG, or canvas.\n\nSections:\n  1. Hero with kinetic headline + tiny intro paragraph + scroll cue.\n  2. Selected work grid (4 cards). Each card has an invented project name, year, role, and a CSS-only thumbnail (gradient + shape composition).\n  3. About section with a left column of prose and a right column listing 6 clients.\n  4. A single testimonial block, large pull-quote style.\n  5. Contact section with email mailto and 3 social SVG icons.\n  6. Footer with copyright and a one-line colophon.\n\nDark background, off-white text, one warm accent (amber or coral). Page must feel intentional and quiet, not crowded. End with </html>.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "Ines Marchetti"
+      ],
+      [
+        "Lisbon"
+      ],
+      [
+        "@keyframes",
+        "animation:"
+      ],
+      [
+        "mailto:"
+      ]
+    ]
+  },
+  {
+    "id": "design_pricing_page",
+    "category": "design",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 24000,
+    "prompt": "Single-file HTML pricing page for \"Conduit\" \u2014 a B2B integration platform.\n\nThree pricing tiers: Starter ($0), Team ($29/mo per user), Scale (Contact us). Annual / monthly toggle that updates the displayed prices live (JS), with the annual view showing a \"save 20%\" badge on the Team tier.\n\nEach tier card lists:\n  - Price (animated when toggled).\n  - One-line positioning sentence.\n  - 6-item feature checklist (custom inline SVG checkmarks).\n  - A primary CTA, with \"Most popular\" tag on the Team tier (rotating conic-gradient border or equivalent flair \u2014 actually animated, not a static stripe).\n\nBelow the cards: a 6-row feature comparison table with collapsible category groups.\n\nBelow that: a 5-question FAQ accordion (one open by default, the rest closed, keyboard-accessible toggle).\n\nFooter with the standard nav + status pill. Dark theme, indigo accent. End with </html>.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "Conduit"
+      ],
+      [
+        "Starter"
+      ],
+      [
+        "Team"
+      ],
+      [
+        "Scale"
+      ],
+      [
+        "Most popular"
+      ],
+      [
+        "addEventListener",
+        "onclick",
+        "click"
+      ]
+    ]
+  },
+  {
+    "id": "design_mobile_app_marketing",
+    "category": "design",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 24000,
+    "prompt": "Single-file HTML marketing page for \"Tide\" \u2014 a mobile journaling app focused on end-of-day reflection. No real images: build the phone mockup in pure CSS (rounded rectangle device, notch, status bar, in-app screen content). The in-app screen must show a believable \"today's reflection\" UI with at least 3 interactive-looking elements.\n\nSections:\n  1. Hero: left column has copy + App Store / Play Store SVG-mock badges; right column has the CSS phone mock. The mock must subtly animate (gentle float or a breathing 4-7-8 cadence indicator inside the app screen).\n  2. Three feature cards, each with an SVG icon.\n  3. A \"your reflection week\" panel showing a 7-day grid of mood pills.\n  4. A pricing strip \u2014 single row, free + premium ($4.99/mo).\n  5. Footer with privacy, terms, support links.\n\nCalm aesthetic, off-black background, soft teal accent, generous spacing. End with </html>.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "Tide"
+      ],
+      [
+        "<svg"
+      ],
+      [
+        "@keyframes",
+        "animation:"
+      ],
+      [
+        "$4.99"
+      ]
+    ]
+  },
+  {
+    "id": "canvas_particle_attractor",
+    "category": "canvas",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 8000,
+    "prompt": "Single-file HTML page. Full-window <canvas>. JS only, no libraries.\n\nSimulate ~3000 particles in a fluid-looking swarm. Each particle has position and velocity. Particles are gently attracted to the mouse pointer (or to the center if the mouse hasn't moved). Apply mild damping so the system doesn't blow up.\n\nUse additive blending (`globalCompositeOperation = \"lighter\"`) and a low alpha trail (don't fully clear the canvas each frame) for a glowing motion-trail look. Background near-black. Particles a single cool color with slight per-particle hue jitter.\n\nUse requestAnimationFrame, handle window resize, and devicePixelRatio scaling. The animation must run cleanly with no console errors.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "<canvas"
+      ],
+      [
+        "requestAnimationFrame"
+      ],
+      [
+        "devicePixelRatio"
+      ],
+      [
+        "lighter"
+      ],
+      [
+        "mousemove",
+        "pointermove"
+      ]
+    ]
+  },
+  {
+    "id": "canvas_generative_flowfield",
+    "category": "canvas",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 10000,
+    "prompt": "Single-file HTML. Full-window <canvas>, no libraries (inline a tiny simplex/perlin noise function \u2014 Stefan Gustavson-style is fine, write it inline).\n\nSimulate ~200 long-lived agents. Each agent reads a 2D noise field for its heading and walks one pixel per frame, drawing a faint ink-line trail. Agents that leave the canvas respawn at a random edge. The noise field should slowly evolve over time (3rd dim = t).\n\nAesthetic: warm off-white paper background, soft black ink with low alpha. The image should accumulate and look like a generative ink drawing after a few seconds.\n\nHandle resize and DPR. No console errors.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "<canvas"
+      ],
+      [
+        "requestAnimationFrame"
+      ],
+      [
+        "noise",
+        "simplex",
+        "perlin"
+      ],
+      [
+        "resize"
+      ]
+    ]
+  },
+  {
+    "id": "canvas_three_scene",
+    "category": "canvas",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 12000,
+    "prompt": "Single-file HTML, full-window canvas. Use three.js loaded from a single CDN <script> tag (esm.sh or unpkg) \u2014 the only allowed external resource.\n\nScene: 7 floating low-poly crystal shards (icosahedrons or similar) drifting around a center point with gentle rotation and bobbing. Material is MeshPhysicalMaterial with high transmission, low roughness, ior ~1.5, and a faint colored tint per shard. Add an EffectComposer with a UnrealBloomPass for bloom on the highlights.\n\nLighting: one directional key, one cool fill, plus an environment map built from a single PMREMGenerator + RoomEnvironment for nice reflections.\n\nCamera: slow orbit. Background: very dark, slight gradient. Handle resize. No errors.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "three",
+        "THREE"
+      ],
+      [
+        "MeshPhysicalMaterial"
+      ],
+      [
+        "UnrealBloomPass",
+        "EffectComposer"
+      ],
+      [
+        "PMREMGenerator",
+        "RoomEnvironment"
+      ],
+      [
+        "resize"
+      ]
+    ]
+  },
+  {
+    "id": "canvas_webgl_shader",
+    "category": "canvas",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 12000,
+    "prompt": "Single-file HTML. Full-window <canvas>. Pure WebGL2 \u2014 write the vertex and fragment shaders inline as string literals. No three.js, no libraries.\n\nRender a fullscreen quad. In the fragment shader, raymarch a signed-distance scene: the smooth-min union of a slowly morphing sphere and a torus, plus a ground plane with a subtle checker. Use a basic Lambert + spec lighting model with one moving directional light. Animate the morph and light direction off `iTime`.\n\nProvide proper shader compile/link error handling \u2014 if compilation fails, write the info log to the console and to an on-page <pre> tag so failures are visible. Handle DPR and resize. The page must show a moving 3D-looking image, not a black canvas.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "webgl2",
+        "webgl"
+      ],
+      [
+        "createShader"
+      ],
+      [
+        "compileShader"
+      ],
+      [
+        "getShaderInfoLog",
+        "getProgramInfoLog"
+      ],
+      [
+        "iTime",
+        "uniform"
+      ]
+    ]
+  },
+  {
+    "id": "canvas_physics_sandbox",
+    "category": "canvas",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 12000,
+    "prompt": "Single-file HTML, full-window <canvas>, no libraries.\n\nImplement Verlet integration to simulate a 24x16 grid of point masses connected by distance constraints (a hanging cloth). Pin the top row. Apply gravity. Iterate the constraint solver ~6 times per frame for stability.\n\nMouse interaction: dragging tugs nearby points. Right-click (or Shift+click) cuts the nearest constraint, letting the cloth tear.\n\nRender as a thin line mesh with a subtle gradient fill per quad. Background dark. Handle resize and DPR. Must run stably for at least 60 seconds with no NaN explosions and no console errors.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "<canvas"
+      ],
+      [
+        "Verlet",
+        "verlet"
+      ],
+      [
+        "constraint",
+        "Constraint"
+      ],
+      [
+        "mousedown",
+        "pointerdown"
+      ],
+      [
+        "requestAnimationFrame"
+      ]
+    ]
+  },
+  {
+    "id": "canvas_audio_reactive",
+    "category": "canvas",
+    "temperature": 0.75,
+    "top_p": 0.95,
+    "max_tokens": 10000,
+    "prompt": "Single-file HTML, full-window <canvas>, no libraries.\n\nUse the WebAudio API + getUserMedia to capture microphone input and run it through an AnalyserNode (FFT size 1024). Render a radial frequency-bar visualizer: 64 bars in a circle, each bar's length driven by a frequency bin, colored by frequency (hue gradient). Add a smooth bass-pumped scale on the whole ring.\n\nCRITICAL: the AudioContext must only be created/resumed inside a user-gesture handler (click anywhere). Show a clearly visible \"Click to start\" overlay until the user gestures, then fade it out. If mic permission is denied, fall back to a synthesized 1Hz sine + slow noise so the page still animates and isn't black.\n\nHandle resize, DPR, no console errors on the happy path.",
+    "checks": [
+      [
+        "<!DOCTYPE html>",
+        "<!doctype html>"
+      ],
+      [
+        "</html>"
+      ],
+      [
+        "AudioContext"
+      ],
+      [
+        "AnalyserNode",
+        "createAnalyser"
+      ],
+      [
+        "getUserMedia"
+      ],
+      [
+        "Click to start"
+      ],
+      [
+        "addEventListener"
+      ]
+    ]
+  },
+  {
+    "id": "agentic_multi_step_planning",
+    "category": "agentic",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 6000,
+    "prompt": "Plan the deploy of a small Python webhook-receiver service. The plan is for a developer to execute by hand on a fresh Ubuntu 24.04 box.\n\nConstraints:\n  - Service: FastAPI app with a single POST /events endpoint that validates an HMAC signature header and persists each event to SQLite.\n  - Tests: pytest, must run before container build.\n  - Container: Dockerfile (python:3.12-slim base), exposed on :8080.\n  - Process: systemd unit running the container under a non-root user.\n  - Verification: a final curl call from another shell that posts a signed payload.\n\nOutput a numbered plan of shell + tool calls, max 18 steps. Each step is one specific command or one specific file path being created (not \"set up the project\"). DO NOT write the application source code itself \u2014 only the deploy and verification steps. Available tools: `shell(cmd=...)`, `write_file(path, contents)`, `http_request(method, url, headers, body)`.",
+    "checks": [
+      [
+        "pytest"
+      ],
+      [
+        "Dockerfile",
+        "docker build"
+      ],
+      [
+        "systemd",
+        "systemctl",
+        ".service"
+      ],
+      [
+        "curl"
+      ],
+      [
+        "8080"
+      ],
+      [
+        "HMAC",
+        "hmac",
+        "signature"
+      ]
+    ],
+    "thinking": true
+  },
+  {
+    "id": "agentic_self_critique",
+    "category": "agentic",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 6000,
+    "prompt": "Implement, then critique, then improve a Python function:\n\n    def max_in_windows(nums: list[int], k: int) -> list[int]:\n        \"\"\"Return the maximum of every contiguous window of size k.\"\"\"\n\nOutput exactly three sections, in this order, with these literal headings:\n\nINITIAL: a working but naive implementation with a one-paragraph note on its time complexity.\n\nCRITIQUE: a numbered list of three concrete weaknesses (correctness, performance, or edge cases) \u2014 be specific, not generic.\n\nIMPROVED: a corrected implementation that is O(n) using a monotonic deque, plus a two-sentence rationale and one example showing input and output.\n\nNo other prose. No code fences around section headings, only around code.",
+    "checks": [
+      [
+        "INITIAL"
+      ],
+      [
+        "CRITIQUE"
+      ],
+      [
+        "IMPROVED"
+      ],
+      [
+        "deque",
+        "collections.deque"
+      ],
+      [
+        "O(n)",
+        "O(N)",
+        "linear"
+      ],
+      [
+        "max_in_windows"
+      ]
+    ],
+    "thinking": true
+  },
+  {
+    "id": "agentic_code_debug",
+    "category": "agentic",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 4000,
+    "prompt": "The following Python function is supposed to count inversions in a list (pairs (i, j) with i < j and nums[i] > nums[j]). It has multiple bugs.\n\n    def count_inversions(nums):\n        count = 0\n        for i in range(0, len(nums)):\n            for j in range(0, i):\n                if nums[i] > nums[j]:\n                    count =+ 1\n        return count + 1\n\nIdentify every bug as a numbered list with a one-sentence reason for each. Then output a corrected implementation. Then output one minimal pytest test (`def test_...`) that would have caught at least two of the original bugs at once.\n\nBe precise: do not flag style issues as bugs.",
+    "checks": [
+      [
+        "count =+",
+        "=+"
+      ],
+      [
+        "count + 1",
+        "off-by-one",
+        "off by one",
+        "extra"
+      ],
+      [
+        "nums[i] > nums[j]",
+        "nums[j] > nums[i]",
+        "comparison",
+        "wrong direction",
+        "reversed"
+      ],
+      [
+        "+= 1",
+        "count += 1"
+      ],
+      [
+        "def test_"
+      ],
+      [
+        "assert"
+      ]
+    ],
+    "thinking": true
+  },
+  {
+    "id": "agentic_structured_extraction",
+    "category": "agentic",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 8000,
+    "prompt": "You are given a meeting note. Extract structured JSON.\n\n------ MEETING NOTE ------\nDate written: 2026-04-21 (a Monday). Author: Priya.\n\nGot the team sync done. Karen is taking lead on Aurora and Lumen now that Dan is rotating onto on-call. Priya stays on Meridian. Karen's email is karen@northwind.io, phone +1 415 555 0144, role Staff Engineer. Dan is dan@northwind.io, role Senior Engineer; he didn't share a phone. Priya is priya@northwind.io, +1 510 555 0102, Engineering Manager.\n\nAurora's next checkpoint is next Tuesday at 14:30 Pacific. Lumen demo is the Friday after that, same time. Meridian's design review slid to the Monday after the Lumen demo, 10:00 Pacific.\n------ END NOTE ------\n\nOutput a single JSON object, no commentary, with this schema:\n\n{\n  \"people\": [\n    {\"name\": \"...\", \"email\": \"...\", \"phone\": \"...\"|null, \"role\": \"...\"}\n  ],\n  \"projects\": [\n    {\"name\": \"...\", \"lead\": \"...\", \"next_event_utc\": \"YYYY-MM-DDTHH:MM:00Z\"}\n  ]\n}\n\nResolve all relative dates against the document date 2026-04-21. Convert all event times from Pacific (PDT, UTC-7) to UTC. Sort `people` by name. Sort `projects` by next_event_utc.",
+    "checks": [
+      [
+        "Aurora"
+      ],
+      [
+        "Lumen"
+      ],
+      [
+        "Meridian"
+      ],
+      [
+        "karen@northwind.io"
+      ],
+      [
+        "2026-04-28T21:30:00Z"
+      ],
+      [
+        "2026-05-01T21:30:00Z"
+      ],
+      [
+        "2026-05-04T17:00:00Z"
+      ]
+    ],
+    "thinking": true
+  },
+  {
+    "id": "agentic_structured_extraction_nothink",
+    "category": "agentic",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 2000,
+    "prompt": "/no_think\n\nYou are given a meeting note. Extract structured JSON.\n\n------ MEETING NOTE ------\nDate written: 2026-04-21 (a Monday). Author: Priya.\n\nGot the team sync done. Karen is taking lead on Aurora and Lumen now that Dan is rotating onto on-call. Priya stays on Meridian. Karen's email is karen@northwind.io, phone +1 415 555 0144, role Staff Engineer. Dan is dan@northwind.io, role Senior Engineer; he didn't share a phone. Priya is priya@northwind.io, +1 510 555 0102, Engineering Manager.\n\nAurora's next checkpoint is next Tuesday at 14:30 Pacific. Lumen demo is the Friday after that, same time. Meridian's design review slid to the Monday after the Lumen demo, 10:00 Pacific.\n------ END NOTE ------\n\nOutput a single JSON object, no commentary, with this schema:\n\n{\n  \"people\": [\n    {\"name\": \"...\", \"email\": \"...\", \"phone\": \"...\"|null, \"role\": \"...\"}\n  ],\n  \"projects\": [\n    {\"name\": \"...\", \"lead\": \"...\", \"next_event_utc\": \"YYYY-MM-DDTHH:MM:00Z\"}\n  ]\n}\n\nResolve all relative dates against the document date 2026-04-21. Convert all event times from Pacific (PDT, UTC-7) to UTC. Sort `people` by name. Sort `projects` by next_event_utc.",
+    "checks": [
+      [
+        "Aurora"
+      ],
+      [
+        "Lumen"
+      ],
+      [
+        "Meridian"
+      ],
+      [
+        "karen@northwind.io"
+      ],
+      [
+        "2026-04-28T21:30:00Z"
+      ],
+      [
+        "2026-05-01T21:30:00Z"
+      ],
+      [
+        "2026-05-04T17:00:00Z"
+      ]
+    ],
+    "thinking": false
+  },
+  {
+    "id": "agentic_tool_use_json",
+    "category": "agentic",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 4000,
+    "prompt": "You have these tools:\n\n  search_flights(origin: str, dest: str, date: str (YYYY-MM-DD), max_price_usd: int)\n  book_hotel(city: str, checkin: str, checkout: str, guests: int, max_price_usd_per_night: int)\n  get_weather(city: str, units: \"metric\"|\"imperial\")\n\nUser request: \"I'm going from Chicago to Reykjav\u00edk for a long weekend, leaving Friday 2026-09-18, returning Monday 2026-09-21. Two of us. I'd like to keep flights under $900 total per person and a hotel under $220 per night. I want the forecast in Celsius.\"\n\nOutput ONLY a JSON array of tool calls in the order they should be executed. Each element is an object with keys \"tool\" and \"args\". No prose, no code fences, no commentary.",
+    "checks": [
+      [
+        "search_flights"
+      ],
+      [
+        "book_hotel"
+      ],
+      [
+        "get_weather"
+      ],
+      [
+        "Chicago"
+      ],
+      [
+        "Reykjav\u00edk",
+        "Reykjavik"
+      ],
+      [
+        "2026-09-18"
+      ],
+      [
+        "2026-09-21"
+      ],
+      [
+        "metric"
+      ],
+      [
+        "900"
+      ],
+      [
+        "220"
+      ]
+    ],
+    "thinking": true
+  }
+]

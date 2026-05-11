@@ -12,6 +12,15 @@
   color: transparent;
   text-shadow: -1px -1px 0 var(--me-magenta-60), 1px 1px 0 var(--me-cyan-60);
   white-space: nowrap;
+  transition: text-shadow 180ms ease;
+}
+/* Override the global `a:hover` blur — keep the chromatic offsets, just brighten them. */
+.nav-logo:hover,
+.nav-logo:focus {
+  text-shadow:
+    -1px -1px 0 var(--me-magenta),
+    1px 1px 0 var(--me-cyan),
+    0 0 1px rgba(255,255,255,0.2);
 }
 
 /* Tab underline */
@@ -134,20 +143,49 @@ table.me-table .pn { color: var(--me-fg); }
 }
 
 /* Prompt drilldown table */
-.prun-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; }
+.prun-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; table-layout: fixed; }
+.prun-table td, .prun-table th { word-break: break-word; overflow-wrap: anywhere; }
+.prun-table .pn { word-break: break-all; }
 .prun-table th, .prun-table td { font-size: 11px; padding: 8px 14px; }
 .prun-table th { text-align: left; font-weight: 500; color: var(--me-fg-3); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; border-bottom: 1px solid var(--me-border); white-space: nowrap; }
 .prun-table td { border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--me-fg-2); }
 .prun-table .numeric { text-align: right; color: var(--me-fg); }
 .prun-table .pn { color: var(--me-fg); }
 .prun-table .toggle-row { cursor: pointer; }
-.prun-table .toggle-row td:first-child::before { content: "▸"; color: var(--me-fg-3); }
-.prun-table .toggle-row.open td:first-child::before { content: "▾"; color: var(--me-magenta); }
-.prun-table .excerpt-row td { background: rgba(0,0,0,0.4); padding: 0; border-bottom: 1px solid var(--me-border); }
+.prun-table .toggle-row td:first-child::before {
+  content: "▸"; color: var(--me-fg-3); display: inline-block;
+  transition: transform 200ms ease, color 200ms ease;
+}
+.prun-table .toggle-row.open td:first-child::before {
+  transform: rotate(90deg); color: var(--me-magenta);
+}
+/* The excerpt row is always rendered so we can animate its open/close
+   transition. The td has no styling; the inner .excerpt-collapse owns
+   the height transition and bg, .excerpt-collapse-inner owns clipping. */
+.prun-table .excerpt-row td { padding: 0; border-bottom: none; background: transparent; }
+.excerpt-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+.excerpt-collapse.open { grid-template-rows: 1fr; }
+.excerpt-collapse-inner {
+  overflow: hidden;
+  background: rgba(0,0,0,0.4);
+  /* Collapsed state has zero min-height; open state inherits content. */
+  min-height: 0;
+}
+.excerpt-collapse.open > .excerpt-collapse-inner {
+  border-bottom: 1px solid var(--me-border);
+}
 .excerpt-inner {
   padding: 14px 18px;
   font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6;
-  color: var(--me-fg-2); white-space: pre-wrap; max-height: 300px; overflow: auto;
+  color: var(--me-fg-2);
+  /* pre-wrap + word-break keeps long unbreakable strings from forcing a
+     horizontal scrollbar across the whole table. Vertical scroll only. */
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+  max-height: 600px; overflow-y: auto; overflow-x: hidden;
 }
 .excerpt-inner .think { color: var(--me-warning); opacity: 0.7; }
 .excerpt-inner.hide-thinking .think { display: none; }
@@ -155,6 +193,183 @@ table.me-table .pn { color: var(--me-fg); }
 .excerpt-foot button { background: transparent; border: 1px solid var(--me-border); color: var(--me-fg-2); font-family: inherit; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; cursor: pointer; }
 .excerpt-foot button:hover { color: var(--me-cyan); border-color: var(--me-cyan); }
 .raw-path { font-family: 'JetBrains Mono', monospace; color: var(--me-cyan); word-break: break-all; }
+
+/* ==================== Expanded prompt panel ==================== */
+.excerpt-panel { padding: 0; }
+.excerpt-panel .excerpt-inner { margin: 0; }
+
+/* Override Prism's default background + scroll behavior to fit the bench's
+   dark theme and constrain to .excerpt-inner's box. Use pre.excerpt-inner
+   for higher specificity than Prism's pre[class*="language-"] selector. */
+pre.excerpt-inner[class*="language-"] {
+  background: transparent;
+  padding: 14px 18px;
+  margin: 0;
+  max-height: 600px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.excerpt-inner[class*="language-"] code { background: transparent; padding: 0; white-space: inherit; }
+.excerpt-inner .token.tag,
+.excerpt-inner .token.keyword,
+.excerpt-inner .token.selector { color: var(--me-magenta); }
+.excerpt-inner .token.attr-name,
+.excerpt-inner .token.property,
+.excerpt-inner .token.function { color: var(--me-cyan); }
+.excerpt-inner .token.string,
+.excerpt-inner .token.attr-value { color: var(--me-success); }
+.excerpt-inner .token.number,
+.excerpt-inner .token.boolean { color: var(--me-warning); }
+.excerpt-inner .token.comment,
+.excerpt-inner .token.prolog,
+.excerpt-inner .token.doctype { color: var(--me-fg-3); font-style: italic; }
+.excerpt-inner .token.punctuation { color: var(--me-fg-2); }
+
+/* HTML preview iframe (#2). The wrapper is overflow-hidden because the
+   parent <td> uses fixed table-layout — wide iframe content shouldn't
+   push the column boundaries. */
+.excerpt-preview { padding: 14px 18px; max-width: 100%; overflow: hidden; }
+.excerpt-preview iframe {
+  display: block;
+  width: 100%; height: 540px;
+  background: #fff;
+  border: 1px solid var(--me-border);
+}
+
+/* Diag banner + checks panel must not bleed past the cell boundary. */
+.diag-banner, .checks-panel { max-width: 100%; overflow-wrap: anywhere; }
+.diag-detail { word-break: break-word; }
+
+/* Diagnostic banner for ERR/EMPTY/LOW rows (#4). */
+.diag-banner {
+  margin: 14px 18px 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--me-border);
+  border-left-width: 3px;
+  background: rgba(255,255,255,0.02);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.diag-banner.danger { border-left-color: var(--me-danger); }
+.diag-banner.warn   { border-left-color: var(--me-warning); }
+.diag-banner.info   { border-left-color: var(--me-cyan); }
+.diag-headline { color: var(--me-fg); font-size: 12px; margin-bottom: 4px; }
+.diag-kind {
+  display: inline-block; margin-right: 8px;
+  font-size: 9px; letter-spacing: 0.14em;
+  padding: 1px 6px; border: 1px solid currentColor;
+}
+.diag-banner.danger .diag-kind { color: var(--me-danger); }
+.diag-banner.warn   .diag-kind { color: var(--me-warning); }
+.diag-banner.info   .diag-kind { color: var(--me-cyan); }
+.diag-detail { color: var(--me-fg-2); margin-bottom: 6px; }
+.diag-meta { color: var(--me-fg-3); font-size: 10px; letter-spacing: 0.04em; }
+.diag-error { margin-top: 8px; }
+.diag-error summary {
+  cursor: pointer; color: var(--me-fg-3); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.diag-error summary:hover { color: var(--me-fg-2); }
+.diag-error pre {
+  margin: 6px 0 0; padding: 8px 10px;
+  background: rgba(0,0,0,0.5); border: 1px solid var(--me-border);
+  color: var(--me-fg-2); font-size: 10.5px;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 200px; overflow: auto;
+}
+
+/* Missed-checks panel for LOW rows (#4). */
+.checks-panel {
+  margin: 0 18px 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--me-border);
+  background: rgba(255,255,255,0.015);
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+}
+.checks-head {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--me-fg-3); margin-bottom: 6px;
+}
+.checks-panel ul { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 18px; }
+.checks-panel li { display: flex; gap: 6px; line-height: 1.6; break-inside: avoid; }
+.checks-panel .check-mark { width: 14px; flex-shrink: 0; }
+.checks-panel li.hit  .check-mark { color: var(--me-success); }
+.checks-panel li.miss .check-mark { color: var(--me-danger); }
+.checks-panel li.miss code { color: var(--me-fg-2); text-decoration: line-through; opacity: 0.7; }
+.checks-panel li.hit  code { color: var(--me-fg); }
+.checks-panel code {
+  background: transparent; padding: 0; font-family: inherit; font-size: inherit;
+  word-break: break-word;
+}
+
+/* Manual rating editor (#3). */
+.rating-editor {
+  margin: 8px 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--me-border);
+  background: rgba(255,255,255,0.015);
+}
+.rating-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+}
+.rating-label {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--me-fg-3); margin-right: 4px;
+}
+.rating-spacer { flex: 1; }
+.star-rating { display: inline-flex; align-items: center; gap: 2px; }
+.star-rating .star {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--me-fg-3); font-size: 18px; line-height: 1;
+  padding: 2px 4px; transition: color 0.12s ease;
+}
+.star-rating .star:hover { color: var(--me-warning); }
+.star-rating .star.filled { color: var(--me-warning); }
+.star-rating .star-num {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--me-fg-3); margin-left: 4px;
+}
+.tag-input {
+  background: transparent; border: 1px solid var(--me-border);
+  color: var(--me-fg-2); font-family: inherit; font-size: 11px;
+  padding: 3px 8px; min-width: 90px;
+}
+.tag-input:focus { outline: none; border-color: var(--me-cyan); color: var(--me-fg); }
+.rating-tag {
+  background: transparent; border: 1px solid var(--me-border);
+  color: var(--me-fg-2); font-family: inherit; font-size: 10px;
+  letter-spacing: 0.06em; padding: 2px 8px; cursor: pointer;
+}
+.rating-tag:hover { border-color: var(--me-danger); color: var(--me-danger); }
+.rating-tag .tag-x { margin-left: 4px; opacity: 0.6; }
+.rating-note {
+  margin-top: 6px; width: 100%;
+  background: transparent; border: 1px solid var(--me-border);
+  color: var(--me-fg-2); font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  padding: 6px 8px; resize: vertical;
+}
+.rating-note:focus { outline: none; border-color: var(--me-cyan); color: var(--me-fg); }
+
+/* Per-cell rating summary (#3). */
+.rating-summary {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 0 0 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--me-warning);
+  background: rgba(255, 200, 87, 0.04);
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+}
+.rating-summary-label {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--me-warning);
+}
+.rating-summary-mean { color: var(--me-fg); font-size: 13px; }
+.rating-summary-count { color: var(--me-fg-3); font-size: 10px; }
 @media (max-width: 719px) {
   .prun-table thead { display: none; }
   .prun-table, .prun-table tbody, .prun-table tr, .prun-table td { display: block; width: 100%; }

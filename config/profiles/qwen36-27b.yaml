@@ -1,0 +1,12 @@
+kind: profile
+name: qwen36-27b
+alias: Qwen3.6-27B
+model_path: ~/models/Qwen3.6-27B-UD-Q5_K_XL.gguf
+hf_repo: unsloth/Qwen3.6-27B-GGUF
+hf_file: Qwen3.6-27B-UD-Q5_K_XL.gguf
+jinja: true
+context_length: 262144
+provider_compat:
+  proven:
+    - llama.cpp
+    - ik_llama.cpp

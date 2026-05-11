@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
+# Build llama.cpp / ik_llama.cpp from source with CUDA. Used by setup.sh
+# and standalone for rebuild-on-demand. Provider metadata mirrors what
+# the python registry knows; if you add a new provider here, also add
+# config/providers/<name>.yaml.
 
 set -euo pipefail
-
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROVIDER_HELPERS="$ROOT_DIR/config/provider-common.sh"
-
-# shellcheck source=/dev/null
-source "$PROVIDER_HELPERS"
 
 die() {
     printf 'error: %s\n' "$*" >&2
@@ -34,6 +32,43 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+provider_normalize() {
+    case "${1:-llama.cpp}" in
+        llama|llama.cpp|ggerganov)         printf 'llama.cpp\n' ;;
+        ik|ik_llama|ik_llama.cpp|ikawrakow) printf 'ik_llama.cpp\n' ;;
+        *) return 1 ;;
+    esac
+}
+
+provider_repo() {
+    case "$1" in
+        llama.cpp)    printf 'https://github.com/ggerganov/llama.cpp.git\n' ;;
+        ik_llama.cpp) printf 'https://github.com/ikawrakow/ik_llama.cpp.git\n' ;;
+    esac
+}
+
+provider_dir() {
+    case "$1" in
+        llama.cpp)    printf '%s/.local/share/llama.cpp\n' "$HOME" ;;
+        ik_llama.cpp) printf '%s/.local/share/ik_llama.cpp\n' "$HOME" ;;
+    esac
+}
+
+provider_server_bin() {
+    printf '%s/build/bin/llama-server\n' "$(provider_dir "$1")"
+}
+
+provider_bench_bin() {
+    printf '%s/build/bin/llama-bench\n' "$(provider_dir "$1")"
+}
+
+provider_cmake_args() {
+    case "$1" in
+        llama.cpp)    printf '%s\n' -DGGML_CUDA=ON ;;
+        ik_llama.cpp) printf '%s\n' -DGGML_NATIVE=ON -DGGML_CUDA=ON ;;
+    esac
+}
+
 install_provider() {
     local provider="$1"
     shift
@@ -49,46 +84,46 @@ install_provider() {
         esac
     done
 
-    provider="$(llama_provider_normalize "$provider")" || die "unsupported provider: $provider"
+    provider="$(provider_normalize "$provider")" || die "unsupported provider: $provider"
     require_cmd git
     require_cmd cmake
     require_cmd nvcc
     require_cmd gcc-12
     require_cmd g++-12
 
-    local provider_dir repo nvcc_path
+    local provider_path repo nvcc_path
     local -a cmake_args=()
-    provider_dir="$(llama_provider_dir "$provider")"
-    repo="$(llama_provider_repo "$provider")"
+    provider_path="$(provider_dir "$provider")"
+    repo="$(provider_repo "$provider")"
 
-    mkdir -p "$(dirname "$provider_dir")"
-    if [ -d "$provider_dir/.git" ]; then
-        printf '[INFO] Updating %s in %s\n' "$provider" "$provider_dir"
-        git -C "$provider_dir" pull
-    elif [ -d "$provider_dir" ]; then
-        die "$provider_dir exists but is not a git checkout"
+    mkdir -p "$(dirname "$provider_path")"
+    if [ -d "$provider_path/.git" ]; then
+        printf '[INFO] Updating %s in %s\n' "$provider" "$provider_path"
+        git -C "$provider_path" pull
+    elif [ -d "$provider_path" ]; then
+        die "$provider_path exists but is not a git checkout"
     else
-        printf '[INFO] Cloning %s into %s\n' "$provider" "$provider_dir"
-        git clone "$repo" "$provider_dir"
+        printf '[INFO] Cloning %s into %s\n' "$provider" "$provider_path"
+        git clone "$repo" "$provider_path"
     fi
 
     if [ "$rebuild" -eq 1 ]; then
-        rm -rf "$provider_dir/build"
+        rm -rf "$provider_path/build"
     fi
 
     nvcc_path="$(command -v nvcc)"
-    mapfile -t cmake_args < <(llama_provider_cmake_args "$provider")
-    cmake -S "$provider_dir" -B "$provider_dir/build" "${cmake_args[@]}" \
+    mapfile -t cmake_args < <(provider_cmake_args "$provider")
+    cmake -S "$provider_path" -B "$provider_path/build" "${cmake_args[@]}" \
         -DCMAKE_C_COMPILER=gcc-12 \
         -DCMAKE_CXX_COMPILER=g++-12 \
         -DCMAKE_CUDA_COMPILER="$nvcc_path" \
         -DCMAKE_CUDA_HOST_COMPILER=gcc-12
-    cmake --build "$provider_dir/build" --config Release --target llama-server llama-bench -j"$jobs"
+    cmake --build "$provider_path/build" --config Release --target llama-server llama-bench -j"$jobs"
 
-    [ -x "$(llama_provider_server_bin "$provider")" ] || die "missing llama-server after build"
-    [ -x "$(llama_provider_bench_bin "$provider")" ] || die "missing llama-bench after build"
-    printf '[OK] %s server: %s\n' "$provider" "$(llama_provider_server_bin "$provider")"
-    printf '[OK] %s bench: %s\n' "$provider" "$(llama_provider_bench_bin "$provider")"
+    [ -x "$(provider_server_bin "$provider")" ] || die "missing llama-server after build"
+    [ -x "$(provider_bench_bin "$provider")" ] || die "missing llama-bench after build"
+    printf '[OK] %s server: %s\n' "$provider" "$(provider_server_bin "$provider")"
+    printf '[OK] %s bench: %s\n' "$provider" "$(provider_bench_bin "$provider")"
 }
 
 main() {
@@ -102,10 +137,10 @@ main() {
             ;;
         path)
             [ "$#" -eq 1 ] || die "path requires PROVIDER"
-            provider="$(llama_provider_normalize "$1")" || die "unsupported provider: $1"
-            printf 'dir=%s\n' "$(llama_provider_dir "$provider")"
-            printf 'server=%s\n' "$(llama_provider_server_bin "$provider")"
-            printf 'bench=%s\n' "$(llama_provider_bench_bin "$provider")"
+            provider="$(provider_normalize "$1")" || die "unsupported provider: $1"
+            printf 'dir=%s\n' "$(provider_dir "$provider")"
+            printf 'server=%s\n' "$(provider_server_bin "$provider")"
+            printf 'bench=%s\n' "$(provider_bench_bin "$provider")"
             ;;
         install)
             [ "$#" -ge 1 ] || die "install requires PROVIDER"

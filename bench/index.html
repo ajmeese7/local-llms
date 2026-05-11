@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Meese · Bench — Local LLM Benchmark Hub</title>
+<title>Meese · Bench</title>
 <link rel="stylesheet" href="assets/colors_and_type.css" />
 <link rel="stylesheet" href="benchmark.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
 <script src="https://cdn.tailwindcss.com/3.4.16"></script>
 <script>
   tailwind.config = {
@@ -63,9 +64,9 @@
     .me-miniflag.clean { @apply text-me-success border-me-success/40; }
     .me-miniflag.leak { @apply text-me-warning border-me-warning/40; }
     .me-miniflag.danger { @apply text-me-danger border-me-danger/40; }
-    .qbar { @apply inline-flex items-center gap-1.5; }
-    .qbar .qnum { @apply text-me-fg; }
-    .qbar .qtrack { @apply w-[60px] h-[5px] bg-white/5 relative; }
+    .qbar { @apply inline-flex items-center gap-1.5 whitespace-nowrap; }
+    .qbar .qnum { @apply text-me-fg whitespace-nowrap; }
+    .qbar .qtrack { @apply w-[60px] h-[5px] bg-white/5 relative shrink-0; }
     .qbar .qfill { @apply absolute inset-y-0 left-0 bg-me-warning; }
     .qbar.low .qfill { @apply bg-me-danger; }
     .qbar.full .qfill { @apply bg-me-success; }
@@ -83,11 +84,28 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
+<!-- Prism.js for excerpt syntax highlighting. The base bundle covers
+     HTML/CSS/JS/clike; load python/json/bash separately for adapters
+     that emit those. No SRI hashes — Prism's stable CDN URLs are
+     versioned, and the alternative is hand-pinning eight hashes. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+
+<!--
+  Load order matters. These are classic scripts (NOT ES modules), so each
+  file's top-level `function Foo()` and `window.X = …` are the only way to
+  share symbols across files. data.jsx must come first (BenchData), then
+  components.jsx (Label/SectionHead/MiniFlag globals), then files that
+  consume them. Do not add type="module" — it would break every cross-file
+  reference here. If you outgrow this, port the hub to a real bundler.
+-->
 <script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="ratings.jsx"></script>
 <script type="text/babel" src="components.jsx"></script>
 <script type="text/babel" src="sections.jsx"></script>
-<script type="text/babel" src="configs.jsx"></script>
-<script type="text/babel" src="guide.jsx"></script>
+<script type="text/babel" src="methodology.jsx"></script>
 <script type="text/babel" src="home.jsx"></script>
 <script type="text/babel" src="app.jsx"></script>
 </body>

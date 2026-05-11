@@ -1,0 +1,19 @@
+kind: provider
+name: ik_llama.cpp
+aliases:
+  - ik
+  - ik_llama
+  - ikawrakow
+repo_url: https://github.com/ikawrakow/ik_llama.cpp.git
+install_dir: ~/.local/share/ik_llama.cpp
+server_bin: build/bin/llama-server
+bench_bin: build/bin/llama-bench
+cmake_args:
+  - -DGGML_NATIVE=ON
+  - -DGGML_CUDA=ON
+capabilities:
+  jinja: true
+  mmproj: true
+  kv_unified: false
+  spec_default: false
+  ngram_mod: false

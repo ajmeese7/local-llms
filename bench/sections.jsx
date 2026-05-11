@@ -1,296 +1,549 @@
 /* ============================================================
-   sections.jsx — Summary / Profiles / Prompts / Methodology
+   sections.jsx — Overview / Prompts / Config sections.
+   Methodology lives in methodology.jsx as a top-level page.
+
+   Inputs: the bench-shaped { bench, meta, cells } produced by
+   data.jsx#loadBench. Each cell has `run` (manifest+summary+
+   results) and `rollup` (headline metrics + cleanliness counts).
    ============================================================ */
 
-const { useState: _useState, useMemo: _useMemo } = React;
+const { useState: _useState, useMemo: _useMemo, useCallback: _useCallback } = React;
 
-/* ====================== SUMMARY ====================== */
-function formatHardware(meta) {
-  const hw = meta?.hardware || {};
-  return [hw.gpu, hw.vram_gb ? `${hw.vram_gb} GB` : null].filter(Boolean).join(" · ") || "Hardware unknown";
-}
-
-function formatServer(meta) {
-  const srv = meta?.server || {};
-  return [srv.engine, srv.binary].filter(Boolean).join(" / ") || srv.api || "Server unknown";
-}
-
-function formatContext(value) {
-  const n = parseInt(value, 10);
-  if (isNaN(n)) return "—";
-  return n >= 1000 ? `${Math.round(n / 1024)}k` : String(n);
-}
-
-function sectionIsFiniteNumber(value) {
-  if (value === null || value === undefined || value === "") return false;
-  const n = Number(value);
-  return Number.isFinite(n);
-}
-
-function sectionMetricNumber(value, fallback = 0) {
-  if (value === null || value === undefined || value === "") return fallback;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function sectionFmtMetric(value, digits = 1, suffix = "") {
-  return sectionIsFiniteNumber(value) ? `${Number(value).toFixed(digits)}${suffix}` : "—";
-}
-
-function profileConfigMeta(profiles, profile) {
-  const conf = profiles?.bundle?.byId?.get(profile);
-  return window.BenchData.metadataFromConf(conf, profiles?.bundle?.baseConf);
-}
-
-function SummarySection({ data, meta, copy, recommendations }) {
+/* ====================== OVERVIEW ====================== */
+function OverviewSection({ bench, leaderboards, onOpenPrompts, onOpenPartial }) {
+  const meta = bench.meta;
+  const cells = bench.cells;
   return (
-    <section id="summary" data-screen-label="01 Summary">
-      <div className="hero-bg relative overflow-hidden border border-me-border p-5 md:p-8 lg:p-9">
-        <div className="me-eyebrow grid grid-cols-2 sm:flex sm:flex-wrap gap-y-2 gap-x-5 mb-3">
-          <span className="inline-flex items-center gap-1.5"><i className="fa-solid fa-microchip text-me-cyan"></i> {formatHardware(meta)}</span>
-          <span className="inline-flex items-center gap-1.5"><i className="fa-solid fa-server text-me-cyan"></i> {formatServer(meta)}</span>
-          <span className="inline-flex items-center gap-1.5"><i className="fa-solid fa-bolt text-me-cyan"></i> {meta?.server?.api || "OpenAI-compatible API"}</span>
-          <span className="inline-flex items-center gap-1.5"><i className="fa-solid fa-list-check text-me-cyan"></i> {data.prompts.length} prompts × {data.profiles.length} profiles</span>
-          <span className="inline-flex items-center gap-1.5 col-span-2 sm:col-auto"><i className="fa-regular fa-folder text-me-cyan"></i> {data.runDir}</span>
+    <section data-screen-label="01 Overview">
+      <BenchHero meta={meta} />
+
+      {meta.hardware && <GpuStateRibbon hardware={meta.hardware} />}
+
+      <SectionHead
+        num="01"
+        title="Capabilities"
+        sub={`// ${cells.length} cell${cells.length === 1 ? "" : "s"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"}${meta.partial_run_count ? ` +${meta.partial_run_count} partial` : ""} accumulated`}
+      />
+      {cells.length === 0 ? (
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          No capability cells yet. Run an adapter against this model and it'll appear here.
         </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {cells.map(cell => (
+            <CapabilityCell
+              key={cell.comparability_key}
+              cell={cell}
+              onOpenPrompts={() => onOpenPrompts(cell.adapter.name)}
+              onOpenPartial={(runId) => onOpenPartial(cell.adapter.name, runId)} />
+          ))}
+        </div>
+      )}
 
-        <h1 className="hero-title my-2"><Txt id="hero.title">{copy["hero.title"]}</Txt></h1>
+      <SectionHead num="02" title="Output Cleanliness" sub="// did the model leak its reasoning into the response?" />
+      <CleanlinessLegend />
+      <CleanlinessOverview cells={cells} />
 
-        <Txt id="hero.subtitle" as="p" className="font-mono text-[13px] md:text-[15px] text-me-fg-2 [letter-spacing:-0.5px] mb-6 whitespace-pre-line">
-          {copy["hero.subtitle"]}
-        </Txt>
+      {leaderboards && <RecommendationsBlock leaderboards={leaderboards} bench={bench} />}
+    </section>
+  );
+}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 lg:gap-8 items-start">
-          <Txt id="hero.body" as="div" className="text-[14px] md:text-[15px] leading-relaxed text-me-fg-2 max-w-[62ch] whitespace-pre-line">
-            {copy["hero.body"]}
-          </Txt>
+function BenchHero({ meta }) {
+  const hw = meta.hardware;
+  const server = meta.server;
+  const stats = [];
+  if (meta.latest_timestamp) stats.push({ id: "time", icon: "fa-regular fa-clock", value: window.BenchData.fmtTimestamp(meta.latest_timestamp) });
+  if (hw?.gpu_name) {
+    const vram = hw.vram_mb ? ` · ${(hw.vram_mb / 1024).toFixed(0)} GB` : "";
+    stats.push({ id: "gpu", icon: "fa-microchip", value: `${hw.gpu_name}${vram}` });
+  }
+  if (server?.engine) stats.push({
+    id: "engine", icon: "fa-server",
+    value: `${server.engine}${server.version ? ` @ ${server.version}` : ""}`,
+  });
+  stats.push({
+    id: "cells",
+    icon: "fa-list-check",
+    value: `${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} · ${meta.run_count} run${meta.run_count === 1 ? "" : "s"}${meta.partial_run_count ? ` +${meta.partial_run_count} partial` : ""}`,
+  });
+  if (meta.suite_seconds != null) stats.push({
+    id: "suite", icon: "fa-stopwatch",
+    value: `≈ ${window.BenchData.fmtDuration(meta.suite_seconds)} total`,
+  });
 
-          <div className="flex flex-col gap-2.5">
-            <BadgeRow label="Balanced" value={data.balanced.profile} accent="magenta" />
-            {data.fastest !== data.balanced && <BadgeRow label="Fastest" value={data.fastest.profile} accent="cyan" />}
-            <BadgeRow label="Top Quality" value={`${data.topQuality.profile} · ${sectionFmtMetric(data.topQuality.quality, 1, "%")}`} accent="warning" />
+  return (
+    <div className="hero-bg relative overflow-hidden border border-me-border p-5 md:p-8 lg:p-9">
+      <div className="me-eyebrow flex flex-wrap gap-x-5 gap-y-2 mb-3">
+        {stats.map(s => (
+          <span key={s.id} className="inline-flex items-center gap-1.5">
+            <i className={`fa-solid ${s.icon} text-me-cyan`}></i> {s.value}
+          </span>
+        ))}
+      </div>
+      <h1 className="hero-title my-2">{meta.title}</h1>
+      <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 mb-1 max-w-[80ch]">
+        {`// ${meta.model_alias}${meta.hardware_profile && meta.hardware_profile !== "unknown" ? ` · ${meta.hardware_profile}` : ""} · ${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} attached`}
+      </p>
+    </div>
+  );
+}
+
+function GpuStateRibbon({ hardware }) {
+  const items = [];
+  if (hardware.boost_clock_mhz != null) items.push(["Boost", `${hardware.boost_clock_mhz} MHz`]);
+  if (hardware.app_clock_graphics_mhz != null) items.push(["App clock", `${hardware.app_clock_graphics_mhz} MHz`]);
+  if (hardware.mem_clock_max_mhz != null) items.push(["Mem max", `${hardware.mem_clock_max_mhz} MHz`]);
+  if (hardware.power_limit_w != null) items.push(["Power limit", `${Number(hardware.power_limit_w).toFixed(0)} W`]);
+  if (hardware.persistence_mode) items.push(["Persistence", hardware.persistence_mode]);
+  if (!items.length) return null;
+  return (
+    <div className="mt-4 me-card p-3 md:p-4">
+      <div className="me-eyebrow mb-2">
+        <i className="fa-solid fa-bolt text-me-warning mr-1.5"></i> GPU state at run time
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+        {items.map(([k, v]) => (
+          <div key={k} className="p-2 bg-white/[0.02] border border-me-border">
+            <div className="me-label">{k}</div>
+            <div className="font-mono text-[12px] text-me-fg mt-0.5">{v}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 font-mono text-[10px] text-me-fg-3">
+        // shifts here mean OC profile changed
+      </div>
+    </div>
+  );
+}
+
+function CapabilityCell({ cell, onOpenPrompts, onOpenPartial }) {
+  const adapter = cell.adapter || {};
+  const r = cell.rollup;
+  const qualityClass = qualityColor(r?.quality);
+  const tpsClass = tpsColor(r?.tps);
+  const qualityLabel = r?.qualityKind === "partial" ? "Partial" : "Accuracy";
+  const ts = window.BenchData.fmtDateOnly(cell.latest?.timestamp);
+  return (
+    <div className="me-card p-4 md:p-5 transition-all hover:border-me-border-strong">
+      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+        <div>
+          <div className="me-eyebrow">
+            <i className="fa-solid fa-cube text-me-cyan mr-1.5"></i>
+            {adapter.name}@{adapter.version || "v?"}{adapter.track ? ` · ${adapter.track}` : ""}
+          </div>
+          <h3 className="font-display text-[15px] md:text-[17px] tracking-[0.1em] uppercase m-0 mt-1 text-me-fg break-all">
+            {adapter.name || "—"}
+          </h3>
+        </div>
+        <div className="font-mono text-[10px] text-me-fg-3">{ts}</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mt-3">
+        <div className="p-2.5 bg-white/[0.02] border border-me-border" data-tip={r?.qualityCi ? window.BenchData.fmtCi(r.qualityCi) : qualityLabel}>
+          <div className="me-label">{qualityLabel}</div>
+          <div className={`font-mono text-[20px] md:text-[22px] mt-0.5 ${qualityClass}`}>
+            {window.BenchData.fmtQuality(r?.quality)}
+          </div>
+        </div>
+        <div className="p-2.5 bg-white/[0.02] border border-me-border" data-tip="median tok/s, end-to-end">
+          <div className="me-label">tok/s</div>
+          <div className={`font-mono text-[20px] md:text-[22px] mt-0.5 ${tpsClass}`}>
+            {window.BenchData.fmtTps(r?.tps)}
           </div>
         </div>
       </div>
 
-      <SectionHead num="01" title="Recommendations" sub="// pick a profile by job, not by name" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {recommendations.map(r => <RecCard key={r.id} rec={r} />)}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 font-mono text-[11px]">
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Items</div>
+          <div className="text-me-fg mt-0.5">{r?.itemCount ?? "—"}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Median lat</div>
+          <div className="text-me-fg mt-0.5">{window.BenchData.fmtSeconds(r?.latency)}</div>
+        </div>
+        <div
+          className="p-2 bg-white/[0.02] border border-me-border"
+          data-tip={r?.computeSeconds != null
+            ? `compute ${window.BenchData.fmtDuration(r.computeSeconds)} · overhead ${window.BenchData.fmtDuration(Math.max(0, (r.wallSeconds || 0) - r.computeSeconds))}`
+            : "wall-clock for this run"}>
+          <div className="me-label">Took</div>
+          <div className="text-me-fg mt-0.5">{window.BenchData.fmtDuration(r?.wallSeconds)}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Errors</div>
+          <div className={`mt-0.5 ${r?.errorCount ? "text-me-danger" : "text-me-fg"}`}>{r?.errorCount ?? 0}</div>
+        </div>
       </div>
 
-      <SectionHead num="02" title="Visual Comparison" sub="// throughput vs latency vs quality" />
-      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4">
-        <BarChart profiles={data.profiles} />
-        <Scatter profiles={data.profiles} />
+      {r && (
+        <div className="mt-3">
+          <CleanlinessBar clean={r.cleanCount} leak={r.leakCount} empty={r.emptyCount} />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mt-4">
+        <div className="font-mono text-[10px] text-me-fg-3">
+          key {cell.comparability_prefix} ·{" "}
+          {cell.partial_only
+            ? <span title="No full-suite run yet — only subset re-runs against this configuration.">partial coverage ({cell.partial_run_count})</span>
+            : `${cell.run_count} run${cell.run_count === 1 ? "" : "s"}`}
+        </div>
+        <button
+          onClick={onOpenPrompts}
+          className="font-mono text-[10px] tracking-[0.16em] uppercase px-2.5 py-1 border border-me-border text-me-fg-2 hover:text-me-fg hover:border-me-cyan transition-colors">
+          Prompts <i className="fa-solid fa-arrow-right ml-1"></i>
+        </button>
       </div>
 
-      <SectionHead num="03" title="Output Cleanliness" sub={copy["summary.cleanliness.note"]} />
-      <CleanlinessGrid profiles={data.profiles} prompts={data.prompts} />
-      <div className="flex flex-wrap gap-3.5 mt-4 font-mono text-[10px] text-me-fg-3">
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 inline-block bg-me-success/40 border border-me-success"></span> clean visible answer</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 inline-block bg-me-warning/40 border border-me-warning"></span> visible thinking preamble</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 inline-block bg-me-danger/40  border border-me-danger"></span> empty content · reasoning_content fallback</span>
-      </div>
-    </section>
-  );
-}
-
-function BadgeRow({ label, value, accent }) {
-  const accentCls = {
-    magenta: "border-l-me-magenta", cyan: "border-l-me-cyan", warning: "border-l-me-warning",
-  }[accent];
-  const textCls = {
-    magenta: "text-me-magenta [text-shadow:0_0_6px_var(--me-magenta-60)]",
-    cyan:    "text-me-cyan [text-shadow:0_0_6px_var(--me-cyan-60)]",
-    warning: "text-me-warning",
-  }[accent];
-  return (
-    <div className={`flex items-center gap-3 px-3.5 py-3 border border-me-border border-l-[3px] ${accentCls} bg-me-bg-alt/60 font-mono text-[12px]`}>
-      <div className="me-label w-[78px] md:w-[92px] flex-shrink-0">{label}</div>
-      <div className={`${textCls} font-medium break-all`}>{value}</div>
+      {cell.run_count > 1 && <CellHistoryDisclosure cell={cell} />}
+      {cell.partial_run_count > 0 && (
+        <CellPartialRunsDisclosure cell={cell} onOpenPartial={onOpenPartial} />
+      )}
     </div>
   );
 }
 
-function RecCard({ rec }) {
-  const accent = rec.highlight
-    ? "border-me-magenta-60 [box-shadow:0_0_24px_rgba(214,0,255,0.18),inset_0_0_0_1px_rgba(214,0,255,0.18)]"
-    : rec.cyan ? "border-me-border hover:border-me-cyan-60"
-               : "border-me-border hover:border-me-border-strong";
-  const tagColor = rec.highlight ? "text-me-magenta" : rec.cyan ? "text-me-cyan" : "text-me-fg-3";
+function CellPartialRunsDisclosure({ cell, onOpenPartial }) {
+  const [open, setOpen] = _useState(false);
+  const partials = cell.partial_runs || [];
+  if (!partials.length) return null;
+  const n = partials.length;
   return (
-    <div className={`bg-me-bg-alt border ${accent} p-4 md:p-5 transition-all hover:-translate-y-0.5`}>
-      <div className={`font-mono text-[10px] tracking-[0.2em] uppercase ${tagColor}`}>{rec.tag}</div>
-      <div className="font-mono text-[15px] md:text-[17px] my-2 mb-3.5 text-me-fg break-all">{rec.profile}</div>
-      <div className="grid grid-cols-2 gap-2 mb-3.5">
-        <div className="p-2.5 bg-white/[0.02] border border-me-border" data-tip="end-to-end /chat/completions">
-          <Label>Speed</Label>
-          <div className="font-mono text-me-success text-[16px] md:text-[18px] mt-0.5">{rec.metric_speed}</div>
+    <div className="mt-2 border-t border-me-border pt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Subset re-runs aren't comparable to full-suite runs, so they're listed separately."
+        className="font-mono text-[10px] text-me-fg-3 hover:text-me-fg cursor-pointer bg-transparent border-0 p-0">
+        {open ? "▾" : "▸"} partial re-run{n === 1 ? "" : "s"} ({n})
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {partials.map(p => {
+            const acc = p.accuracy?.point != null
+              ? (Number(p.accuracy.point) * 100).toFixed(1) + "%"
+              : (p.partial?.point != null ? (Number(p.partial.point) * 100).toFixed(1) + "%" : "—");
+            const items = p.item_count != null ? `${p.item_count} item${p.item_count === 1 ? "" : "s"}` : "—";
+            const clickable = typeof onOpenPartial === "function";
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={!clickable}
+                onClick={() => clickable && onOpenPartial(p.id)}
+                className={`grid grid-cols-[auto_1fr_auto_auto] gap-3 font-mono text-[10px] text-me-fg-3 items-baseline w-full text-left bg-transparent border-0 p-1 -mx-1 ${clickable ? "hover:bg-white/[0.03] hover:text-me-fg cursor-pointer" : ""}`}>
+                <span className="text-me-fg-2 whitespace-nowrap">{window.BenchData.fmtTimestamp(p.timestamp)}</span>
+                <span className="truncate text-me-fg-2" title={p.subset || ""}>
+                  <span className="text-me-fg-3">subset:</span> {p.subset || "—"} · {items}
+                </span>
+                <span className="text-me-fg-2 whitespace-nowrap">{acc}</span>
+                {clickable && (
+                  <span className="text-me-cyan whitespace-nowrap">open →</span>
+                )}
+              </button>
+            );
+          })}
         </div>
-        <div className="p-2.5 bg-white/[0.02] border border-me-border" data-tip="rubric hit-rate over prompts">
-          <Label>Quality</Label>
-          <div className="font-mono text-me-warning text-[16px] md:text-[18px] mt-0.5">{rec.metric_quality}</div>
+      )}
+    </div>
+  );
+}
+
+function CellHistoryDisclosure({ cell }) {
+  const [open, setOpen] = _useState(false);
+  const [history, setHistory] = _useState(null);
+  React.useEffect(() => {
+    if (!open || history) return;
+    let cancelled = false;
+    (async () => {
+      const runs = await window.BenchData.loadCellHistory(cell);
+      if (!cancelled) setHistory(runs);
+    })();
+    return () => { cancelled = true; };
+  }, [open, history, cell]);
+
+  return (
+    <div className="mt-3 border-t border-me-border pt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="font-mono text-[10px] text-me-fg-3 hover:text-me-fg cursor-pointer bg-transparent border-0 p-0">
+        {open ? "▾" : "▸"} history ({cell.run_count - 1} earlier run{cell.run_count - 1 === 1 ? "" : "s"})
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {history === null && <div className="font-mono text-[10px] text-me-fg-3">loading…</div>}
+          {history && history.map(run => {
+            const summary = run.summary || {};
+            const ci = summary.accuracy || summary.partial;
+            const acc = ci?.point != null ? (Number(ci.point) * 100).toFixed(1) + "%" : "—";
+            const tps = summary.median_tokens_per_sec != null ? Number(summary.median_tokens_per_sec).toFixed(1) : "—";
+            return (
+              <div key={run.id} className="grid grid-cols-[1fr_auto_auto] gap-3 font-mono text-[10px] text-me-fg-3">
+                <span className="truncate" title={run.id}>{window.BenchData.fmtTimestamp(run.manifest?.timestamp)}</span>
+                <span className="text-me-fg-2">{acc}</span>
+                <span className="text-me-fg-2">{tps} tok/s</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CleanlinessLegend() {
+  return (
+    <div className="me-card p-3 md:p-4 mb-3">
+      <div className="font-mono text-[11px] md:text-[12px] text-me-fg-2 leading-relaxed">
+        <span className="text-me-fg-3">// </span>
+        Reasoning models can dump their <code className="text-me-warning">&lt;think&gt;</code>{" "}
+        scratchpad into the user-visible answer. We classify each response:
+      </div>
+      <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+        <div className="flex items-baseline gap-2">
+          <span className="me-miniflag clean">clean</span>
+          <span className="text-me-fg-2">no thinking visible — answer only</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="me-miniflag leak">leak</span>
+          <span className="text-me-fg-2">visible <code>&lt;think&gt;</code> block or "thinking process:" preamble</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="me-miniflag danger">empty</span>
+          <span className="text-me-fg-2">no usable answer (empty think block, or all content stuck in <code>reasoning_content</code>)</span>
         </div>
       </div>
-      <Txt id={`${rec.id}.tradeoff`} as="div" className="text-[12px] md:text-[13px] leading-relaxed text-me-fg-2">
-        {rec.tradeoff}
-      </Txt>
-      <div className="flex flex-wrap gap-1.5 mt-3">
-        {rec.flags.map((f, i) => <Flag key={i} kind={f[0]}>{f[1]}</Flag>)}
+      <div className="mt-2 font-mono text-[10px] text-me-fg-3">
+        // 100% clean = every prompt in this cell came back without thinking leakage. higher is better.
       </div>
     </div>
   );
 }
 
-/* ====================== PROFILES ====================== */
-function ProfilesSection({ data, meta, profiles }) {
-  const [sortKey, setSortKey] = _useState("quality");
-  const [sortDir, setSortDir] = _useState(-1);
-  const [highlight, setHighlight] = _useState("balanced");
-
-  function sortValue(profile, key) {
-    const pm = profileConfigMeta(profiles, profile.profile);
-    if (key === "context") return pm.context_length || 0;
-    if (key === "parallel") return pm.parallel_slots || 0;
-    if (key === "kv") return `${pm.cache_type_k || ""}/${pm.cache_type_v || ""}`;
-    if (key === "providers") return [...(pm.proven_providers || []), ...(pm.blocked_providers || [])].join(" ");
-    return profile[key];
-  }
-
-  const rows = _useMemo(() => {
-    const sorted = [...data.profiles].sort((a, b) => {
-      const av = sortValue(a, sortKey), bv = sortValue(b, sortKey);
-      if (typeof av === "string") return av.localeCompare(bv) * sortDir;
-      return ((av || 0) - (bv || 0)) * sortDir;
-    });
-    return sorted;
-  }, [data.profiles, profiles, sortKey, sortDir]);
-
-  function clickSort(k) {
-    if (sortKey === k) setSortDir(d => -d);
-    else { setSortKey(k); setSortDir(typeof sortValue(data.profiles[0], k) === "number" ? -1 : 1); }
-  }
-
-  function cleanSummary(p) {
-    const cls = p.emptyCount ? "danger" : (p.cleanCount >= p.leakCount ? "clean" : "leak");
-    return <MiniFlag kind={cls}>{p.cleanCount}c · {p.leakCount}l{p.emptyCount ? ` · ${p.emptyCount}e` : ""}</MiniFlag>;
-  }
-
-  function providerSummary(pm) {
-    const proven = pm.proven_providers || [];
-    const blocked = pm.blocked_providers || [];
-    if (!proven.length && !blocked.length) return "—";
-    const active = meta?.server?.engine || "";
-    return (
-      <div className="flex flex-wrap gap-1" title={pm.provider_notes || ""}>
-        {proven.map(provider => (
-          <MiniFlag key={`proven-${provider}`} kind={provider === active ? "clean" : ""}>{provider}</MiniFlag>
-        ))}
-        {blocked.map(provider => (
-          <MiniFlag key={`blocked-${provider}`} kind="danger">no {provider}</MiniFlag>
-        ))}
-      </div>
-    );
-  }
-
-  const headers = [
-    ["profile", "Profile", false], ["alias", "Model", false],
-    ["context", "Ctx", true], ["parallel", "Par", true], ["kv", "KV", false],
-    ["providers", "Providers", false],
-    ["latency", "Avg Lat", true], ["tps", "tok/s", true],
-    ["quality", "Quality", true], ["runCount", "Runs", true],
-    ["cleanCount", "Output", true],
-  ];
-
-  return (
-    <section id="profiles" data-screen-label="02 Profiles">
-      <SectionHead num="04" title="Profile Manifest" sub={`// click any header to sort · ${data.profiles.length} profiles · ${data.totalRuns}/${data.totalRuns} runs`} />
-
-      <div className="me-card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 p-3 border-b border-me-border">
-          <Label className="mr-1">Highlight</Label>
-          <Chip on={highlight === "balanced"} cyan onClick={() => setHighlight("balanced")}>Balanced winner</Chip>
-          <Chip on={highlight === "fastest"} onClick={() => setHighlight("fastest")}>Fastest</Chip>
-          <Chip on={highlight === "none"} onClick={() => setHighlight("none")}>None</Chip>
-        </div>
-        <table className="me-table">
-          <thead>
-            <tr>
-              {headers.map(([k, label, num]) => (
-                <th key={k}
-                    className={`${num ? "numeric" : ""} ${sortKey === k ? "sorted" : ""} ${sortKey === k && sortDir === 1 ? "asc" : ""}`}
-                    onClick={() => clickSort(k)}>
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(p => {
-              const pm = profileConfigMeta(profiles, p.profile);
-              let rowCls = "";
-              if (highlight === "balanced" && p.role === "balanced") rowCls = "highlight";
-              else if (highlight === "fastest" && p.role === "fastest") rowCls = "fastest-row";
-              return (
-                <tr key={p.profile} className={rowCls}>
-                  <td data-label="Profile"><span className="pn">{p.profile}</span></td>
-                  <td data-label="Model">
-                    <div>{p.alias}</div>
-                    {pm.model_file && <div className="text-me-fg-3 text-[10px] mt-1 break-all">{pm.model_file}</div>}
-                  </td>
-                  <td data-label="Ctx" className="numeric">{formatContext(pm.context_length)}</td>
-                  <td data-label="Par" className="numeric">{pm.parallel_slots || "—"}</td>
-                  <td data-label="KV">{pm.cache_type_k && pm.cache_type_v ? `${pm.cache_type_k}/${pm.cache_type_v}` : "—"}</td>
-                  <td data-label="Providers">{providerSummary(pm)}</td>
-                  <td data-label="Latency" className="numeric"
-                      style={{color: sectionMetricNumber(p.latency, Infinity) < 12 ? "var(--me-success)" : sectionMetricNumber(p.latency, Infinity) < 25 ? "var(--me-warning)" : "var(--me-danger)"}}>
-                    {sectionFmtMetric(p.latency, 2, " s")}
-                  </td>
-                  <td data-label="tok/s" className="numeric"
-                      style={{color: sectionMetricNumber(p.tps) > 100 ? "var(--me-cyan)" : "var(--me-fg)"}}>
-                    {sectionFmtMetric(p.tps, 2)}
-                  </td>
-                  <td data-label="Quality" className="numeric"
-                      style={{color: sectionMetricNumber(p.quality) >= 95 ? "var(--me-success)" : sectionMetricNumber(p.quality) >= 90 ? "var(--me-warning)" : "var(--me-danger)"}}>
-                    {sectionFmtMetric(p.quality, 1, "%")}
-                  </td>
-                  <td data-label="Runs" className="numeric">{p.runCount}/{p.runCount}</td>
-                  <td data-label="Output">{cleanSummary(p)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-6 p-4 me-card font-mono text-[11px] text-me-fg-3 leading-relaxed">
-        <div><Label>Run dir</Label><div className="text-me-fg break-all">{data.runDir}</div></div>
-        <div><Label>Hardware</Label><div className="text-me-fg">{formatHardware(meta)}</div></div>
-        <div><Label>Server</Label><div className="text-me-fg">{formatServer(meta)}</div></div>
-        <div><Label>Prompts</Label><div className="text-me-fg">{data.prompts.length}</div></div>
-        <div><Label>Total runs</Label><div className="text-me-fg">{data.totalRuns} · {data.okRuns}/{data.totalRuns} OK</div></div>
-        <div><Label>Profiles</Label><div className="text-me-fg">{data.profiles.length}</div></div>
-      </div>
-    </section>
+function CleanlinessOverview({ cells }) {
+  const usable = cells.filter(c => c.rollup);
+  if (!usable.length) return (
+    <div className="me-card p-4 font-mono text-[11px] text-me-fg-3">No data yet.</div>
   );
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      {usable.map(cell => {
+        const r = cell.rollup;
+        return (
+          <div key={cell.comparability_key} className="me-card p-3.5">
+            <div className="flex items-baseline justify-between mb-2">
+              <h4 className="font-mono text-[12px] m-0 text-me-fg break-all">{cell.adapter.name}</h4>
+              <span className="font-mono text-[10px] text-me-fg-3">{r.totalRows} rows</span>
+            </div>
+            <CleanlinessBar clean={r.cleanCount} leak={r.leakCount} empty={r.emptyCount} />
+            <div className="font-mono text-[11px] text-me-fg-3 mt-2">
+              clean {r.cleanCount} · leak {r.leakCount} · empty {r.emptyCount}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RecommendationsBlock({ leaderboards: _lb, bench: _b }) {
+  // Recommendations only show value when there are 2+ benches on the same hw.
+  // For a single-bench host this returns nothing — by design.
+  return null;
+}
+
+function qualityColor(q) {
+  const n = Number(q);
+  if (!Number.isFinite(n)) return "text-me-fg-3";
+  if (n >= 95) return "text-me-success";
+  if (n >= 80) return "text-me-warning";
+  return "text-me-danger";
+}
+function tpsColor(t) {
+  const n = Number(t);
+  if (!Number.isFinite(n)) return "text-me-fg-3";
+  if (n > 100) return "text-me-cyan";
+  if (n > 30) return "text-me-fg";
+  return "text-me-warning";
 }
 
 /* ====================== PROMPTS ====================== */
-function PromptsSection({ data }) {
-  const [filter, setFilter] = _useState("all");
-  const [hideThinking, setHideThinking] = _useState(false);
-  const [open, setOpen] = _useState({});  // key = prompt:profile
+function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
+  const cell = bench.cells.find(c => c.adapter.name === adapterName);
+  const cells = bench.cells.filter(c => c.run && c.run.results.length);
+  // If a specific runId is requested and it's not the cell's preloaded latest,
+  // fetch that run on demand. Used by partial / subset re-runs whose results
+  // (and ratings, keyed by their own comparability_key) live separately.
+  const [partialRun, setPartialRun] = _useState(null);
+  const [partialErr, setPartialErr] = _useState(null);
+  React.useEffect(() => {
+    setPartialRun(null);
+    setPartialErr(null);
+    if (!runId || !cell) return;
+    if (cell.run && runId === cell.run.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const run = await window.BenchData.loadRun(runId);
+        if (!cancelled) {
+          if (run) setPartialRun(run);
+          else setPartialErr(`Run ${runId} not found.`);
+        }
+      } catch (e) {
+        if (!cancelled) setPartialErr(String(e?.message || e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [runId, cell]);
 
-  const cats = _useMemo(() => {
-    const set = new Set(data.prompts.map(p => p.category));
-    return ["all", ...set];
-  }, [data.prompts]);
+  if (!cell) {
+    return (
+      <section data-screen-label="02 Prompts">
+        <SectionHead num="03" title="Prompts" sub="// pick a capability above" />
+        <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          No data for capability "{adapterName}".
+        </div>
+      </section>
+    );
+  }
 
-  const filtered = filter === "all" ? data.prompts : data.prompts.filter(p => p.category === filter);
+  const wantsPartial = runId && cell.run && runId !== cell.run.id;
+  const viewCell = wantsPartial
+    ? (partialRun ? _viewCellForRun(cell, partialRun) : null)
+    : cell;
+  const activeRunId = viewCell?.run?.id || (wantsPartial ? runId : cell.run?.id);
+  const subtitle = wantsPartial
+    ? `// subset re-run · ${_partialSubsetLabel(cell, runId)}`
+    : `// per-item runs from the latest ${adapterName} cell`;
 
   return (
-    <section id="prompts" data-screen-label="03 Prompts">
-      <SectionHead num="05" title="Prompt Drilldown" sub="// each prompt × each profile · click a row to expand the excerpt" />
+    <section data-screen-label="02 Prompts">
+      <SectionHead num="03" title={`Prompts · ${adapterName}`} sub={subtitle} />
+      <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
+      <RunPicker cell={cell} activeRunId={activeRunId} onSwitchRun={onSwitchRun} />
+      {wantsPartial && !viewCell && !partialErr && (
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          <i className="fa-solid fa-spinner fa-spin mr-2"></i>Loading partial re-run…
+        </div>
+      )}
+      {partialErr && (
+        <div className="me-card p-6 font-mono text-[12px] text-me-danger">{partialErr}</div>
+      )}
+      {viewCell && viewCell.run && <PromptsTable cell={viewCell} />}
+      {viewCell && !viewCell.run && (
+        <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+          No results recorded for this run.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function _partialSubsetLabel(cell, runId) {
+  const p = (cell.partial_runs || []).find(r => r.id === runId);
+  if (!p) return runId;
+  const items = p.item_count != null ? ` · ${p.item_count} item${p.item_count === 1 ? "" : "s"}` : "";
+  return `subset: ${p.subset || "—"}${items}`;
+}
+
+function _viewCellForRun(cell, run) {
+  // Synthetic cell wrapping a non-latest run. The shape mirrors what
+  // PromptsTable/PromptRow/RatingEditor read: a `run` payload and a
+  // `comparability_key` to scope ratings under. The run's own key takes
+  // precedence so ratings recorded on a subset re-run stay tied to *that*
+  // run, not the cell's full-run key.
+  const ck = run.manifest?.comparability_key || cell.comparability_key;
+  return {
+    ...cell,
+    run,
+    comparability_key: ck,
+    comparability_prefix: ck ? ck.slice(0, 8) : cell.comparability_prefix,
+  };
+}
+
+function RunPicker({ cell, activeRunId, onSwitchRun }) {
+  const partials = cell.partial_runs || [];
+  if (!partials.length) return null;
+  const fullId = cell.run?.id || cell.latest?.id;
+  const hasFull = !cell.partial_only && fullId;
+  const fullActive = hasFull && (activeRunId === fullId || !activeRunId);
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <Label>Run</Label>
+      {hasFull && (
+        <Chip on={fullActive} cyan onClick={() => onSwitchRun(null)}>
+          Full run
+        </Chip>
+      )}
+      {partials.map(p => (
+        <Chip
+          key={p.id}
+          on={activeRunId === p.id}
+          cyan
+          onClick={() => onSwitchRun(p.id)}
+          title={p.subset || ""}>
+          partial · {p.item_count ?? "?"} item{p.item_count === 1 ? "" : "s"}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+function CapabilityPicker({ cells, active, onSwitch }) {
+  if (cells.length <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <Label>Capability</Label>
+      {cells.map(c => (
+        <Chip key={c.adapter.name} on={c.adapter.name === active} cyan onClick={() => onSwitch(c.adapter.name)}>
+          {c.adapter.name}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+const PROMPTS_PAGE_SIZE = 50;
+
+function PromptsTable({ cell }) {
+  const [filter, setFilter] = _useState("all");
+  const [hideThinking, setHideThinking] = _useState(false);
+  const [previewHtml, setPreviewHtml] = _useState(true);
+  const [open, setOpen] = _useState({});
+  const [page, setPage] = _useState(0);
+  // Bumped when a rating is written so child rows re-read localStorage
+  // and the per-cell rating summary refreshes.
+  const [ratingsVersion, setRatingsVersion] = _useState(0);
+  const bumpRatings = _useCallback(() => setRatingsVersion(v => v + 1), []);
+
+  const rows = cell.run.results;
+  const cats = _useMemo(() => {
+    const set = new Set();
+    for (const r of rows) if (r.category) set.add(r.category);
+    return ["all", ...set];
+  }, [rows]);
+  const filtered = filter === "all" ? rows : rows.filter(r => r.category === filter);
+
+  // Reset to first page when the filter changes (or the underlying cell switches).
+  React.useEffect(() => { setPage(0); }, [filter, cell.comparability_key]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PROMPTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const start = safePage * PROMPTS_PAGE_SIZE;
+  const end = Math.min(start + PROMPTS_PAGE_SIZE, filtered.length);
+  const pageRows = filtered.slice(start, end);
+
+  const ratingAgg = _useMemo(
+    () => window.BenchRatings.aggregate(cell.comparability_key, rows.map(r => r.item_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cell.comparability_key, rows, ratingsVersion],
+  );
+
+  return (
+    <>
+      <RatingSummary aggregate={ratingAgg} totalItems={rows.length} />
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <Label>Category</Label>
@@ -298,128 +551,432 @@ function PromptsSection({ data }) {
           <Chip key={c} on={filter === c} onClick={() => setFilter(c)}>{c}</Chip>
         ))}
         <span className="flex-1"></span>
+        <Chip on={previewHtml} onClick={() => setPreviewHtml(v => !v)}>
+          {previewHtml ? "Preview HTML on" : "Preview HTML off"}
+        </Chip>
         <Chip on={hideThinking} onClick={() => setHideThinking(v => !v)}>
           {hideThinking ? "Show thinking text" : "Hide thinking text"}
         </Chip>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {filtered.map(p => (
-          <PromptCard
-            key={p.id} prompt={p}
-            open={open} setOpen={setOpen}
-            hideThinking={hideThinking}
-          />
-        ))}
+      <PromptsPager
+        page={safePage}
+        totalPages={totalPages}
+        start={start}
+        end={end}
+        total={filtered.length}
+        onPage={setPage} />
+
+      <div className="me-card overflow-hidden">
+        <table className="prun-table">
+          {/* Fixed column widths so the table layout doesn't reflow when an
+              expanded row's <td colSpan="7"> contains wide content (long
+              HTML lines, prose diagnostics). Without this, opening a row
+              widens the whole table and the column headers misalign. */}
+          <colgroup>
+            <col style={{ width: 30 }} />
+            <col />{/* Item id — takes remaining space */}
+            <col style={{ width: 110 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 150 }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Item</th>
+              <th>Category</th>
+              <th className="numeric">Latency</th>
+              <th className="numeric">tok/s</th>
+              <th className="numeric">Score</th>
+              <th>Output</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map(r => (
+              <PromptRow
+                key={r.item_id}
+                row={r}
+                cell={cell}
+                isOpen={!!open[r.item_id]}
+                onToggle={() => setOpen(o => ({ ...o, [r.item_id]: !o[r.item_id] }))}
+                hideThinking={hideThinking}
+                previewHtml={previewHtml}
+                onRatingChange={bumpRatings} />
+            ))}
+          </tbody>
+        </table>
       </div>
-    </section>
+
+      <PromptsPager
+        page={safePage}
+        totalPages={totalPages}
+        start={start}
+        end={end}
+        total={filtered.length}
+        onPage={setPage}
+        bottom />
+    </>
   );
 }
 
-function PromptCard({ prompt, open, setOpen, hideThinking }) {
-  const runs = _useMemo(() => [...prompt.runs].sort((a, b) => sectionMetricNumber(a.time_total_sec, Infinity) - sectionMetricNumber(b.time_total_sec, Infinity)), [prompt.runs]);
+/* ---------- Per-row prompt panel ---------- */
+function PromptRow({ row, cell, isOpen, onToggle, hideThinking, previewHtml, onRatingChange }) {
+  const r = row;
+  const clean = window.BenchData.classifyCleanliness(r);
+  const lat = Number(r.latency_ms);
+  const tps = Number(r.tokens_per_sec);
+  const partial = Number(r.score?.partial);
+  const correct = !!r.score?.correct;
+  const kind = window.classifyRow(r);  // "ok" | "low" | "empty" | "err"
+
+  // Lazy-mount the expanded panel: don't render its children (especially
+  // the iframe) until the row has been opened at least once. After that,
+  // keep it mounted so the close animation has content to collapse from.
+  const [wasOpened, setWasOpened] = _useState(isOpen);
+  React.useEffect(() => { if (isOpen && !wasOpened) setWasOpened(true); }, [isOpen, wasOpened]);
+
   return (
-    <div className="me-card">
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-3 md:gap-4 p-3.5 md:p-4 border-b border-me-border items-start md:items-center">
-        <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-me-cyan">
-          {prompt.category}
-          <span className="block text-me-fg text-[12px] md:text-[13px] tracking-[0.04em] normal-case mt-1">{prompt.id}</span>
-        </div>
-        <div className="text-[12px] md:text-[13px] text-me-fg-2 leading-relaxed">
-          <Txt id={`prompt.${prompt.id}.desc`}>{prompt.id.replace(/_/g, " ")}</Txt>
-        </div>
-        <div className="font-mono text-[10px] md:text-[11px] text-me-fg-3 md:text-right">
-          {runs.length} profiles · sorted by latency ↑
-        </div>
-      </div>
-      <table className="prun-table">
-        <thead>
-          <tr>
-            <th style={{width: 30}}></th>
-            <th>Profile</th>
-            <th className="numeric">Latency</th>
-            <th className="numeric">tok/s</th>
-            <th className="numeric">Quality</th>
-            <th>Output</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map(r => {
-            const key = `${prompt.id}:${r.profile}`;
-            const isOpen = !!open[key];
-            const clean = window.BenchData.classifyCleanliness(r);
-            return (
-              <React.Fragment key={key}>
-                <tr className={`toggle-row ${isOpen ? "open" : ""}`}
-                    onClick={() => setOpen(o => ({...o, [key]: !o[key]}))}>
-                  <td></td>
-                  <td><span className="pn">{r.profile}</span></td>
-                  <td className="numeric">{sectionFmtMetric(r.time_total_sec, 2, " s")}</td>
-                  <td className="numeric">{sectionFmtMetric(r.tokens_per_sec, 1)}</td>
-                  <td className="numeric"><QBar q={r.quality_score} qmax={r.quality_max} /></td>
-                  <td>
-                    <MiniFlag kind={clean === "clean" ? "clean" : clean === "empty" ? "danger" : "leak"}>
-                      {clean === "clean" ? "clean" : clean === "empty" ? "empty" : "thinking"}
-                    </MiniFlag>
-                  </td>
-                </tr>
-                {isOpen && (
-                  <tr className="excerpt-row">
-                    <td colSpan="6">
-                      <div className={`excerpt-inner ${hideThinking ? "hide-thinking" : ""}`}
-                           dangerouslySetInnerHTML={{__html: highlightThinking(r.excerpt || "(no excerpt)")}} />
-                      <div className="excerpt-foot">
-                        <span className="raw-path">{r.response_file}</span>
-                        <CopyBtn text={r.response_file} />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+    <React.Fragment>
+      <tr className={`toggle-row ${isOpen ? "open" : ""}`} onClick={onToggle}>
+        <td></td>
+        <td><span className="pn break-all">{r.item_id}</span></td>
+        <td className="text-me-fg-3 font-mono text-[11px]">{r.category || "—"}</td>
+        <td className="numeric">{Number.isFinite(lat) ? `${(lat / 1000).toFixed(2)} s` : "—"}</td>
+        <td className="numeric">{Number.isFinite(tps) ? tps.toFixed(1) : "—"}</td>
+        <td className="numeric">
+          <QBar
+            q={Number.isFinite(partial) ? Math.round(partial * 100) : (correct ? 100 : 0)}
+            qmax={100} />
+        </td>
+        <td>
+          <MiniFlag kind={clean === "clean" ? "clean" : clean === "empty" ? "danger" : "leak"}>
+            {clean === "clean" ? "clean" : clean === "empty" ? "empty" : "thinking"}
+          </MiniFlag>
+          {kind === "low" && <MiniFlag kind="leak">low</MiniFlag>}
+          {kind === "err" && <MiniFlag kind="danger">err</MiniFlag>}
+        </td>
+      </tr>
+      {/* The excerpt row is always rendered; the open/close animation
+          lives on the inner grid wrapper (excerpt-collapse). React
+          unmount would skip the close transition. */}
+      <tr className="excerpt-row">
+        <td colSpan="7">
+          <div className={`excerpt-collapse ${isOpen ? "open" : ""}`} aria-hidden={!isOpen}>
+            <div className="excerpt-collapse-inner">
+              {wasOpened && (
+                <ExpandedPanel
+                  row={r}
+                  cell={cell}
+                  hideThinking={hideThinking}
+                  previewHtml={previewHtml}
+                  onRatingChange={onRatingChange} />
+              )}
+            </div>
+          </div>
+        </td>
+      </tr>
+    </React.Fragment>
+  );
+}
+
+function ExpandedPanel({ row, cell, hideThinking, previewHtml, onRatingChange }) {
+  const r = row;
+  const diag = window.diagnoseRow(r);
+  const misses = r.score?.breakdown?.misses;
+  const hits = r.score?.breakdown?.hits;
+  const showMisses = Array.isArray(misses) && misses.length > 0 && Array.isArray(hits);
+  const isHtml = window.looksLikeHtmlDoc(r.raw);
+  return (
+    <div className="excerpt-panel">
+      {diag && <DiagnosticBanner diag={diag} row={r} cell={cell} />}
+      {showMisses && <MissedChecksPanel hits={hits} misses={misses} />}
+      <OutputArea row={r} previewHtml={previewHtml} hideThinking={hideThinking} />
+      <RatingEditor cell={cell} row={r} onChange={onRatingChange} />
+      <ExpandedFoot row={r} isHtml={isHtml} />
     </div>
   );
 }
 
-function CopyBtn({ text }) {
-  const [copied, setCopied] = _useState(false);
+function DiagnosticBanner({ diag, row, cell }) {
+  const tone = diag.kind === "err" ? "danger" : diag.kind === "empty" ? "warn" : "info";
+  const status = Number(row.http_status);
+  const lat = Number(row.latency_ms);
+  const outTok = Number(row.output_tokens);
+  const promTok = Number(row.prompt_tokens);
+  const maxTok = Number(row.max_tokens);
+  const meta = [];
+  if (Number.isFinite(status) && status > 0) meta.push(`http=${status}`);
+  if (Number.isFinite(lat)) meta.push(`${(lat/1000).toFixed(1)}s`);
+  if (Number.isFinite(promTok)) meta.push(`prompt=${promTok.toLocaleString()} tok`);
+  if (Number.isFinite(outTok) && Number.isFinite(maxTok)) {
+    const hitCap = outTok >= maxTok - 4;  // within 4 of the cap = effectively hit it
+    meta.push(`output=${outTok.toLocaleString()} / ${maxTok.toLocaleString()} tok${hitCap ? " (cap)" : ""}`);
+  } else if (Number.isFinite(outTok)) {
+    meta.push(`output=${outTok.toLocaleString()} tok`);
+  }
+  if (cell?.adapter?.name) meta.push(`adapter=${cell.adapter.name}`);
   return (
-    <button onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1200); }}>
-      <i className={copied ? "fa-solid fa-check" : "fa-regular fa-copy"}></i> {copied ? "copied" : "copy path"}
-    </button>
+    <div className={`diag-banner ${tone}`}>
+      <div className="diag-headline">
+        <span className="diag-kind">{diag.kind.toUpperCase()}</span>
+        {diag.headline}
+      </div>
+      <div className="diag-detail">{diag.detail}</div>
+      {meta.length > 0 && <div className="diag-meta">{meta.join(" · ")}</div>}
+      {row.error && (
+        <details className="diag-error">
+          <summary>Full error</summary>
+          <pre>{String(row.error)}</pre>
+        </details>
+      )}
+    </div>
   );
 }
 
-/* ====================== METHODOLOGY ====================== */
-function MethodologySection({ copy }) {
-  const cards = [
-    { id: "methodology.timings",      icon: "fa-stopwatch", title: "Timings",          body: copy["methodology.timings"], note: copy["methodology.ttft"] },
-    { id: "methodology.rubric",       icon: "fa-list-check", title: "Quality rubric",   body: copy["methodology.rubric"] },
-    { id: "methodology.cleanliness",  icon: "fa-broom", title: "Reasoning leakage", body: copy["methodology.cleanliness"] },
+function MissedChecksPanel({ hits, misses }) {
+  const all = [
+    ...hits.map(h => ({ kind: "hit", text: typeof h === "string" ? h : JSON.stringify(h) })),
+    ...misses.map(m => ({ kind: "miss", text: Array.isArray(m) ? m.join(" / ") : String(m) })),
   ];
   return (
-    <section id="methodology" data-screen-label="08 Methodology">
-      <SectionHead num="08" title="Methodology & Caveats" sub="// how the numbers were produced — and what they don't mean" />
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {cards.map(c => (
-          <div key={c.id} className="me-card p-4 md:p-5">
-            <h3 className="font-display text-[13px] md:text-[14px] tracking-[0.18em] uppercase mt-0 mb-3 text-me-fg">
-              <i className={`fa-solid ${c.icon} text-me-cyan mr-2`}></i> {c.title}
-            </h3>
-            <Txt id={c.id} as="p" className="text-[13px] leading-relaxed text-me-fg-2 mb-2.5">{c.body}</Txt>
-            {c.note && (
-              <div className="border-l-[3px] border-me-warning bg-me-warning/5 p-2.5 text-[12px] text-me-fg-2">
-                <strong>TTFT caveat.</strong> <Txt id="methodology.ttft.note">{c.note}</Txt>
-              </div>
-            )}
-          </div>
+    <div className="checks-panel">
+      <div className="checks-head">Rubric checks</div>
+      <ul>
+        {all.map((c, i) => (
+          <li key={i} className={c.kind}>
+            <span className="check-mark">{c.kind === "hit" ? "✓" : "✗"}</span>
+            <code>{c.text}</code>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function OutputArea({ row, previewHtml, hideThinking }) {
+  const raw = row.raw || "";
+  // Iframe gets the stripped HTML so prose preambles don't end up in the
+  // <head>. The source-code panel below shows the FULL response so the
+  // user can see whatever the model actually emitted (preamble, fence
+  // language hint, closing remarks). Prism still highlights code blocks
+  // inside that full text via highlightExcerpt's fence-aware rendering.
+  const isHtml = window.looksLikeHtmlDoc(raw);
+  if (previewHtml && isHtml) {
+    const stripped = window.stripCodeFences(raw);
+    return (
+      <div className="excerpt-preview">
+        <iframe
+          title={`preview-${row.item_id}`}
+          srcDoc={stripped}
+          // Sandbox: allow-scripts (no allow-same-origin) keeps scripts
+          // unable to escape into the parent. allow-modals lets pages
+          // call alert/confirm if they want to.
+          sandbox="allow-scripts allow-modals"
+          // Permissions Policy: enable mic + camera + autoplay so the
+          // audio-reactive prompt's getUserMedia call actually works.
+          // Also enable pointer-lock for canvas demos that grab pointer.
+          allow="microphone; camera; autoplay; pointer-lock; fullscreen"
+          referrerPolicy="no-referrer"
+          loading="lazy" />
+      </div>
+    );
+  }
+  const lang = window.detectExcerptLanguage(row.item_id, raw);
+  const html = window.highlightExcerpt(raw || "(no output)", lang);
+  return (
+    <pre className={`excerpt-inner ${hideThinking ? "hide-thinking" : ""} ${lang ? `language-${lang}` : ""}`}
+         dangerouslySetInnerHTML={{ __html: html }} />
+  );
+}
+
+function RatingEditor({ cell, row, onChange }) {
+  const ck = cell.comparability_key;
+  const itemId = row.item_id;
+  const [data, setData] = _useState(() => window.BenchRatings.read(ck, itemId) || { stars: null, note: "", tags: [] });
+  const [tagDraft, setTagDraft] = _useState("");
+
+  // If the underlying row changes (different item opened), re-read.
+  React.useEffect(() => {
+    setData(window.BenchRatings.read(ck, itemId) || { stars: null, note: "", tags: [] });
+  }, [ck, itemId]);
+
+  const persist = _useCallback((next) => {
+    setData(next);
+    window.BenchRatings.write(ck, itemId, next);
+    if (onChange) onChange();
+  }, [ck, itemId, onChange]);
+
+  const setStars = (n) => persist({ ...data, stars: n });
+  const setNote = (note) => persist({ ...data, note });
+  const addTag = () => {
+    const t = tagDraft.trim();
+    if (!t || data.tags.includes(t)) { setTagDraft(""); return; }
+    persist({ ...data, tags: [...data.tags, t] });
+    setTagDraft("");
+  };
+  const removeTag = (t) => persist({ ...data, tags: data.tags.filter(x => x !== t) });
+
+  return (
+    <div className="rating-editor" onClick={(e) => e.stopPropagation()}>
+      <div className="rating-row">
+        <span className="rating-label">Your rating</span>
+        <StarRating value={data.stars} onChange={setStars} />
+        <span className="rating-spacer"></span>
+        <input
+          className="tag-input"
+          type="text"
+          placeholder="add tag"
+          value={tagDraft}
+          onChange={(e) => setTagDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} />
+        {data.tags.map(t => (
+          <button key={t} className="rating-tag" onClick={() => removeTag(t)} title="Click to remove">
+            {t} <span className="tag-x">×</span>
+          </button>
         ))}
       </div>
+      <textarea
+        className="rating-note"
+        placeholder="// optional notes"
+        value={data.note || ""}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2} />
+    </div>
+  );
+}
+
+function ExpandedFoot({ row, isHtml }) {
+  const [copied, setCopied] = _useState(false);
+  const copyPrompt = () => {
+    if (!row.prompt) return;
+    navigator.clipboard?.writeText(row.prompt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  // Open the rendered HTML in a new tab. Strips fences so prose preambles
+  // ("Here is the solution: ```html …```") don't end up in the document.
+  const openInTab = () => {
+    if (!row.raw) return;
+    const html = window.stripCodeFences(row.raw);
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+  // Pop the rendered HTML out into a sized, resizable browser window so the
+  // user can stress-test responsiveness, use mic/camera (popup window has
+  // its own top-level permissions context, unlike the sandboxed iframe),
+  // and drag the window edges. Note: most browsers ignore window.open
+  // sizing for tabs but honor it for explicit popup features.
+  const popOut = () => {
+    if (!row.raw) return;
+    const html = window.stripCodeFences(row.raw);
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const w = Math.min(1280, Math.round(screen.availWidth  * 0.8));
+    const h = Math.min(900,  Math.round(screen.availHeight * 0.85));
+    const features = `popup,width=${w},height=${h},resizable=yes,scrollbars=yes`;
+    window.open(url, `bench-preview-${row.item_id}`, features);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+  return (
+    <div className="excerpt-foot">
+      <span className="raw-path">run: {row.run_id}</span>
+      {row.parse_failed && <span className="text-me-warning ml-3">parse_failed</span>}
+      <span className="flex-1"></span>
+      {row.prompt && (
+        <button onClick={copyPrompt} title="Copy the rendered prompt to clipboard">
+          {copied ? "✓ copied" : "copy prompt"}
+        </button>
+      )}
+      {isHtml && (
+        <button onClick={popOut} title="Open in a resizable popup window (best for testing responsiveness, mic, camera)">
+          pop out ⧉
+        </button>
+      )}
+      {isHtml && (
+        <button onClick={openInTab} title="Open the raw HTML in a new tab">
+          open in tab ↗
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RatingSummary({ aggregate, totalItems }) {
+  if (!aggregate || aggregate.count === 0) return null;
+  return (
+    <div className="rating-summary">
+      <span className="rating-summary-label">Your rating:</span>
+      <span className="rating-summary-mean">{aggregate.mean.toFixed(1)}/5</span>
+      <span className="rating-summary-count">
+        across {aggregate.count}/{totalItems} items rated
+      </span>
+    </div>
+  );
+}
+
+function PromptsPager({ page, totalPages, start, end, total, onPage, bottom }) {
+  if (total <= PROMPTS_PAGE_SIZE) return null;
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
+  const btn = "px-2.5 py-1 border border-me-border font-mono text-[10px] tracking-[0.16em] uppercase text-me-fg-2 hover:text-me-fg hover:border-me-border-strong disabled:opacity-30 disabled:hover:text-me-fg-2 disabled:hover:border-me-border bg-transparent transition-colors";
+  return (
+    <div className={`flex flex-wrap items-center gap-2 ${bottom ? "mt-3" : "mb-3"} font-mono text-[11px] text-me-fg-3`}>
+      <span>showing <span className="text-me-fg">{start + 1}</span>–<span className="text-me-fg">{end}</span> of <span className="text-me-fg">{total}</span></span>
+      <span className="flex-1"></span>
+      <button className={btn} onClick={() => onPage(0)} disabled={!canPrev}>« first</button>
+      <button className={btn} onClick={() => onPage(page - 1)} disabled={!canPrev}>‹ prev</button>
+      <span className="px-1">page <span className="text-me-fg">{page + 1}</span> / {totalPages}</span>
+      <button className={btn} onClick={() => onPage(page + 1)} disabled={!canNext}>next ›</button>
+      <button className={btn} onClick={() => onPage(totalPages - 1)} disabled={!canNext}>last »</button>
+    </div>
+  );
+}
+
+/* ====================== CONFIG ====================== */
+function ConfigSection({ bench, profilesSnap }) {
+  const meta = bench.meta;
+  const snap = (profilesSnap?.profiles || []).find(p => p.name === meta.model_profile);
+  return (
+    <section data-screen-label="03 Config">
+      <SectionHead num="04" title="Model Config" sub={`// llama-server overlay for ${meta.model_profile}`} />
+      {snap
+        ? <SnapshotCard profile={snap} />
+        : <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
+            No snapshot found for <code>{meta.model_profile}</code>. Run <code>llms eval report</code> to refresh.
+          </div>}
     </section>
   );
 }
 
-Object.assign(window, { SummarySection, ProfilesSection, PromptsSection, MethodologySection });
+function SnapshotCard({ profile }) {
+  return (
+    <div className="me-card p-4 md:p-5">
+      <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
+        <h3 className="font-display text-[14px] md:text-[16px] tracking-[0.12em] uppercase m-0 text-me-fg break-all">{profile.name}</h3>
+        {window.BenchData.extractQuant(profile.model_filename || "") && (
+          <span className="font-mono text-[10px] tracking-[0.1em] uppercase px-2 py-0.5 border border-me-cyan/40 text-me-cyan">
+            {window.BenchData.extractQuant(profile.model_filename || "")}
+          </span>
+        )}
+      </div>
+      <div className="font-mono text-[11px] text-me-fg-2 break-all mb-3">{profile.model_filename || profile.model_path || "—"}</div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="p-2.5 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Context</div>
+          <div className="font-mono text-[13px] text-me-cyan mt-0.5">{profile.context_length ?? "inherited"}</div>
+        </div>
+        <div className="p-2.5 bg-white/[0.02] border border-me-border">
+          <div className="me-label">KV cache</div>
+          <div className="font-mono text-[13px] text-me-cyan mt-0.5">{(profile.cache_type_k || "default") + "/" + (profile.cache_type_v || "default")}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { OverviewSection, PromptsSection, ConfigSection });

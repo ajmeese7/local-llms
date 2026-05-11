@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-aeon
+description: Qwen3.6-27B-AEON-Ultimate-Uncensored on RTX 5090.
+profile: qwen36-27B-AEON
+provider: llama.cpp

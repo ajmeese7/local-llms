@@ -1,470 +1,435 @@
 /* ============================================================
-   home.jsx — Hub home page.
-   Hero (latest run) + recent runs grid + leaderboard + import.
+   home.jsx — Hub home.
+
+   Flat bench grid by default (one card per (hardware, model)).
+   When >=2 distinct hardware profiles are present, a hardware
+   filter chip row appears above the grid. Sidebar surfaces
+   per-metric leaderboards across all benches.
    ============================================================ */
 
-const { useState: _hUseS, useEffect: _hUseE, useMemo: _hUseM, useCallback: _hUseC, useRef: _hUseR } = React;
+const { useState: _hUseS, useMemo: _hUseM } = React;
 
-/* ---------- Date helpers ---------- */
-function fmtDate(s) {
-  if (!s) return "";
-  const d = new Date(s);
-  if (isNaN(d)) return s;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-function fmtRunId(id) {
-  // Strip date suffix for display where the meta has a real title already.
-  return id;
-}
+function HomePage({ index, profilesSnap, leaderboards, onOpen }) {
+  const benches = index?.benches || [];
+  const reports = index?.reports || [];
 
-/* ---------- Sparkline component ---------- */
-function Sparkline({ values, max, color = "var(--me-cyan)" }) {
-  if (!values || !values.length) return null;
-  const W = 80, H = 18;
-  const m = max || Math.max(...values);
-  const step = W / Math.max(values.length - 1, 1);
-  const pts = values.map((v, i) => `${i * step},${H - (v / m) * H}`).join(" ");
-  return (
-    <svg width={W} height={H} className="overflow-visible">
-      <polyline fill="none" stroke={color} strokeWidth="1.5" points={pts} />
-      {values.map((v, i) => (
-        <circle key={i} cx={i * step} cy={H - (v / m) * H} r="1.5" fill={color} />
-      ))}
-    </svg>
-  );
-}
+  const hwProfiles = _hUseM(() => {
+    const set = new Set();
+    for (const b of benches) set.add(b.hardware_profile || "unknown");
+    return [...set].sort();
+  }, [benches]);
 
-/* ---------- Hero (latest run) ---------- */
-function HomeHero({ report, onOpen }) {
-  const d = report.dataset;
-  if (!d) return null;
-  const meta = report.meta;
-  return (
-    <div className="hero-bg relative overflow-hidden border border-me-border p-5 md:p-8 lg:p-9 mb-8">
-      <div className="me-eyebrow flex flex-wrap gap-x-5 gap-y-2 mb-3">
-        <span className="inline-flex items-center gap-1.5 text-me-magenta">
-          <i className="fa-solid fa-circle-dot"></i> Latest run
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <i className="fa-regular fa-calendar text-me-cyan"></i> {fmtDate(meta.date)}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <i className="fa-solid fa-microchip text-me-cyan"></i> {meta.hardware?.gpu || "—"}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <i className="fa-solid fa-server text-me-cyan"></i> {meta.server?.engine || "llama.cpp"}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <i className="fa-solid fa-list-check text-me-cyan"></i> {d.profiles.length} profiles · {d.totalRuns} runs
-        </span>
+  const [hwFilter, setHwFilter] = _hUseS("all");
+  const visible = hwFilter === "all"
+    ? benches
+    : benches.filter(b => (b.hardware_profile || "unknown") === hwFilter);
+
+  if (!index) {
+    return (
+      <div className="me-card p-8 text-center font-mono text-me-fg-3">
+        <i className="fa-solid fa-spinner fa-spin mr-2"></i> Loading registry…
       </div>
-      <h1 className="hero-title my-2">{meta.title || meta.id}</h1>
-      {meta.subtitle && (
-        <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 mb-6 max-w-[80ch]">
-          {meta.subtitle}
-        </p>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 lg:gap-8 items-start">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <HeroStat label="Balanced" value={d.balanced.profile} sub={`${d.balanced.tps.toFixed(1)} tok/s · ${d.balanced.quality.toFixed(1)}%`} accent="magenta" />
-          {d.fastest !== d.balanced && (
-            <HeroStat label="Fastest" value={d.fastest.profile} sub={`${d.fastest.tps.toFixed(1)} tok/s`} accent="cyan" />
-          )}
-          <HeroStat label="Top quality" value={d.topQuality.profile} sub={`${d.topQuality.quality.toFixed(1)}%`} accent="warning" />
-        </div>
-        <div className="flex flex-col gap-2.5 lg:items-end">
-          <button
-            onClick={() => onOpen(meta.id)}
-            className="font-display text-[13px] tracking-[0.16em] uppercase px-5 py-3 border border-me-magenta-60 text-me-fg bg-me-magenta/10 hover:bg-me-magenta/20 transition-all hover:[box-shadow:0_0_18px_rgba(214,0,255,0.4)]">
-            Open report &nbsp;<i className="fa-solid fa-arrow-right"></i>
-          </button>
-          <div className="font-mono text-[10px] text-me-fg-3 lg:text-right">
-            id: {meta.id}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HeroStat({ label, value, sub, accent }) {
-  const accentBorder = { magenta: "border-l-me-magenta", cyan: "border-l-me-cyan", warning: "border-l-me-warning" }[accent];
-  const accentText = { magenta: "text-me-magenta", cyan: "text-me-cyan", warning: "text-me-warning" }[accent];
-  return (
-    <div className={`bg-me-bg-alt/60 border border-me-border border-l-[3px] ${accentBorder} p-3`}>
-      <div className="me-label">{label}</div>
-      <div className={`font-mono text-[13px] mt-1 break-all ${accentText}`}>{value}</div>
-      <div className="font-mono text-[10px] text-me-fg-3 mt-0.5">{sub}</div>
-    </div>
-  );
-}
-
-/* ---------- Run card ---------- */
-function RunCard({ report, onOpen, onDelete }) {
-  const d = report.dataset;
-  const meta = report.meta;
-  const sparkValues = d ? [...d.profiles].sort((a, b) => b.tps - a.tps).map(p => p.tps).slice(0, 8) : [];
-  const isLocal = report.source === "local";
-
-  return (
-    <div className="me-card p-4 md:p-5 transition-all hover:-translate-y-0.5 hover:border-me-border-strong">
-      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
-        <div className="me-eyebrow flex items-center gap-2">
-          {isLocal
-            ? <span className="text-me-cyan"><i className="fa-solid fa-hard-drive mr-1"></i> Local</span>
-            : <span className="text-me-fg-3"><i className="fa-solid fa-folder-tree mr-1"></i> Bundled</span>}
-          <span className="text-me-fg-3">·</span>
-          <span>{fmtDate(meta.date)}</span>
-        </div>
-        {isLocal && (
-          <button onClick={() => onDelete(meta.id)}
-                  className="font-mono text-[10px] text-me-fg-3 hover:text-me-danger" title="Remove">
-            <i className="fa-regular fa-trash-can"></i>
-          </button>
-        )}
-      </div>
-
-      <h3 className="font-display text-[14px] md:text-[16px] tracking-[0.08em] uppercase m-0 mb-2 text-me-fg break-words">
-        {meta.title || meta.id}
-      </h3>
-
-      {meta.subtitle && (
-        <p className="text-[12px] text-me-fg-2 leading-relaxed mb-3 line-clamp-2">{meta.subtitle}</p>
-      )}
-
-      {d ? (
-        <>
-          <div className="grid grid-cols-3 gap-2 mb-3 font-mono text-[11px]">
-            <div className="p-2 bg-white/[0.02] border border-me-border">
-              <div className="me-label">Backend</div>
-              <div className="text-me-fg text-[13px] mt-0.5 truncate" title={meta.server?.engine || "llama.cpp"}>
-                {meta.server?.engine || "llama.cpp"}
-              </div>
-            </div>
-            <div className="p-2 bg-white/[0.02] border border-me-border">
-              <div className="me-label">Top tok/s</div>
-              <div className="text-me-success text-[14px] mt-0.5">{d.fastest.tps.toFixed(0)}</div>
-            </div>
-            <div className="p-2 bg-white/[0.02] border border-me-border">
-              <div className="me-label">Top quality</div>
-              <div className="text-me-warning text-[14px] mt-0.5">{d.topQuality.quality.toFixed(0)}%</div>
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="font-mono text-[10px] text-me-fg-3">tok/s spread</div>
-            <Sparkline values={sparkValues} />
-          </div>
-        </>
-      ) : (
-        <div className="font-mono text-[11px] text-me-danger mb-3">Failed to load run data.</div>
-      )}
-
-      <button
-        onClick={() => onOpen(meta.id)}
-        className="w-full font-display text-[11px] tracking-[0.16em] uppercase px-3 py-2 border border-me-border text-me-fg-2 hover:text-me-fg hover:border-me-cyan hover:[box-shadow:inset_0_0_0_1px_var(--me-cyan-60)] transition-all">
-        Open <i className="fa-solid fa-arrow-right ml-1"></i>
-      </button>
-    </div>
-  );
-}
-
-/* ---------- Leaderboard ---------- */
-function Leaderboard({ entries }) {
-  if (!entries.length) return null;
-  const maxTps = Math.max(...entries.map(e => e.tps));
-  return (
-    <div className="me-card p-4 md:p-5">
-      <div className="flex items-baseline justify-between mb-3">
-        <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0">
-          <i className="fa-solid fa-trophy text-me-warning mr-2"></i> Cross-run leaderboard
-        </h3>
-        <span className="font-mono text-[10px] text-me-fg-3">best tok/s per model/backend</span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {entries.slice(0, 10).map((e, i) => (
-          <div key={`${e.alias}-${e.backend}`} className="grid grid-cols-[20px_1fr_60px] gap-2 items-center text-[11px] font-mono">
-            <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}.</span>
-            <div className="min-w-0">
-              <div className="text-me-fg truncate" title={e.alias}>{e.alias}</div>
-              <div className="text-me-fg-3 text-[10px] truncate" title={`${e.backend} · ${e.runTitle}`}>
-                {e.backend} · {e.runTitle}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-me-cyan">{e.tps.toFixed(1)}</div>
-              <div className="h-0.5 bg-white/5 mt-0.5 relative overflow-hidden">
-                <div className="absolute inset-y-0 left-0 bg-me-cyan" style={{width: `${(e.tps / maxTps) * 100}%`}}></div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Hardware / Server / About sidebar ---------- */
-function SidebarInfoCard({ icon, title, lines }) {
-  return (
-    <div className="me-card p-4 md:p-5">
-      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
-        <i className={`fa-solid ${icon} text-me-cyan mr-2`}></i> {title}
-      </h3>
-      <div className="flex flex-col gap-1.5">
-        {lines.map((l, i) => (
-          <div key={i} className="grid grid-cols-[80px_1fr] gap-2 items-baseline">
-            <span className="me-label">{l[0]}</span>
-            <span className="font-mono text-[11px] text-me-fg break-all">{l[1]}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Drop-zone ---------- */
-function DropZone({ onImport }) {
-  const [drag, setDrag] = _hUseS(false);
-  const [stage, setStage] = _hUseS(null); // null | "form" | "saving"
-  const [files, setFiles] = _hUseS([]);
-  const [meta, setMeta] = _hUseS({ id: "", title: "", subtitle: "", date: "" });
-  const inputRef = _hUseR(null);
-
-  function pickFiles(list) {
-    const arr = [...list];
-    setFiles(arr);
-    const jsonl = arr.find(f => f.name.endsWith(".jsonl"));
-    if (jsonl) {
-      // Suggest id/title from filename
-      const base = jsonl.name.replace(/\.jsonl$/, "");
-      setMeta(m => ({ ...m, id: m.id || base, title: m.title || base, date: m.date || new Date().toISOString().slice(0, 10) }));
-    }
-    setStage("form");
+    );
   }
 
-  function onDrop(e) {
-    e.preventDefault();
-    setDrag(false);
-    if (e.dataTransfer.files?.length) pickFiles(e.dataTransfer.files);
-  }
-
-  async function save() {
-    setStage("saving");
-    const jsonlFile = files.find(f => f.name.endsWith(".jsonl"));
-    if (!jsonlFile) { setStage("form"); return; }
-    const jsonl = await jsonlFile.text();
-
-    const confFiles = files.filter(f => f.name.endsWith(".conf"));
-    const confs = await Promise.all(confFiles.map(async f => ({
-      filename: f.name,
-      text: await f.text(),
-    })));
-
-    const metaFile = files.find(f => f.name === "meta.json");
-    let metaJson = {};
-    if (metaFile) try { metaJson = JSON.parse(await metaFile.text()); } catch {}
-
-    const id = meta.id || `local-${Date.now()}`;
-    const run = {
-      id,
-      jsonl,
-      confs,
-      meta: {
-        id,
-        title: meta.title || metaJson.title || id,
-        subtitle: meta.subtitle || metaJson.subtitle || "",
-        date: meta.date || metaJson.date || new Date().toISOString(),
-        hardware: metaJson.hardware,
-        server: metaJson.server,
-        notes: metaJson.notes,
-      },
-      savedAt: Date.now(),
-    };
-    window.BenchData.saveMyRun(run);
-    setStage(null);
-    setFiles([]);
-    setMeta({ id: "", title: "", subtitle: "", date: "" });
-    onImport();
-  }
-
-  return (
-    <div className="me-card p-4 md:p-5">
-      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
-        <i className="fa-solid fa-cloud-arrow-up text-me-cyan mr-2"></i> Import a run
-      </h3>
-
-      {!stage && (
-        <div
-          onDragOver={e => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${drag ? "border-me-cyan bg-me-cyan/5" : "border-me-border hover:border-me-border-strong"}`}>
-          <i className="fa-solid fa-file-arrow-up text-me-cyan text-2xl mb-2"></i>
-          <div className="font-mono text-[12px] text-me-fg-2">Drop your <code className="text-me-fg">results.jsonl</code> here</div>
-          <div className="font-mono text-[10px] text-me-fg-3 mt-1.5">+ optional <code>.conf</code> profiles · <code>meta.json</code></div>
-          <input ref={inputRef} type="file" multiple accept=".jsonl,.conf,.json" className="hidden"
-                 onChange={e => e.target.files?.length && pickFiles(e.target.files)} />
-        </div>
-      )}
-
-      {stage === "form" && (
-        <div className="flex flex-col gap-3">
-          <div className="font-mono text-[11px] text-me-fg-2">
-            <i className="fa-solid fa-check text-me-success mr-1.5"></i>
-            {files.length} file{files.length === 1 ? "" : "s"} selected
-            <ul className="list-disc list-inside mt-1.5 text-me-fg-3">
-              {files.map(f => <li key={f.name} className="break-all">{f.name}</li>)}
-            </ul>
-          </div>
-          <Field label="ID" value={meta.id} onChange={v => setMeta(m => ({...m, id: v}))} placeholder="run identifier" mono />
-          <Field label="Title" value={meta.title} onChange={v => setMeta(m => ({...m, title: v}))} placeholder="Display name" />
-          <Field label="Date" value={meta.date} onChange={v => setMeta(m => ({...m, date: v}))} placeholder="YYYY-MM-DD" mono />
-          <Field label="Notes" value={meta.subtitle} onChange={v => setMeta(m => ({...m, subtitle: v}))} placeholder="One-line summary" textarea />
-          <div className="flex gap-2 mt-2">
-            <button onClick={save} disabled={!meta.id}
-                    className="flex-1 font-display text-[11px] tracking-[0.16em] uppercase px-3 py-2 border border-me-cyan text-me-bg bg-me-cyan hover:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-              Save run
-            </button>
-            <button onClick={() => { setStage(null); setFiles([]); }}
-                    className="font-display text-[11px] tracking-[0.16em] uppercase px-3 py-2 border border-me-border text-me-fg-2 hover:text-me-fg">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {stage === "saving" && (
-        <div className="text-center font-mono text-[12px] text-me-fg-3 p-4">
-          <i className="fa-solid fa-spinner fa-spin mr-1.5"></i> Saving…
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, value, onChange, placeholder, mono, textarea }) {
-  const inputCls = `w-full bg-me-bg-alt border border-me-border focus:border-me-cyan outline-none px-2.5 py-2 text-me-fg ${mono ? "font-mono text-[12px]" : "text-[13px]"}`;
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="me-label">{label}</span>
-      {textarea
-        ? <textarea className={inputCls} rows="2" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}></textarea>
-        : <input  className={inputCls} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />}
-    </label>
-  );
-}
-
-/* ---------- Top-level home page ---------- */
-function HomePage({ reports, onOpen, onRefresh }) {
-  const sorted = _hUseM(() => {
-    return [...reports].sort((a, b) => {
-      const da = new Date(a.meta?.date || 0).getTime();
-      const db = new Date(b.meta?.date || 0).getTime();
-      return db - da;
-    });
-  }, [reports]);
-
-  const [latest, ...rest] = sorted;
-  const leaderboard = _hUseM(() => window.BenchData.buildLeaderboard(reports), [reports]);
-
-  const hw = latest?.meta?.hardware || {};
-  const srv = latest?.meta?.server || {};
+  if (!benches.length) return <EmptyState reports={reports} />;
 
   return (
     <>
-      {latest ? (
-        <HomeHero report={latest} onOpen={onOpen} />
-      ) : (
-        <div className="hero-bg relative overflow-hidden border border-me-border p-8 mb-8">
-          <h1 className="hero-title my-2">Meese · Bench</h1>
-          <p className="font-mono text-[13px] text-me-fg-2 max-w-[60ch]">
-            // No bundled reports found. Drop a <code>results.jsonl</code> on the right to import your first run.
-          </p>
-        </div>
-      )}
+      <HomeHero benches={benches} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 lg:gap-8">
-        {/* Main column — runs grid */}
         <div>
           <div className="me-section-head">
-            <h2><span className="num">A</span>All Runs</h2>
-            <span className="sub">// {sorted.length} report{sorted.length === 1 ? "" : "s"} · click to open</span>
+            <h2><span className="num">A</span>All Benches</h2>
+            <span className="sub">
+              // {benches.length} bench{benches.length === 1 ? "" : "es"} · {reports.length} run{reports.length === 1 ? "" : "s"}
+            </span>
           </div>
-          {sorted.length === 0 && (
-            <div className="me-card p-6 text-center font-mono text-[12px] text-me-fg-3">
-              Nothing here yet.
+          {hwProfiles.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <Label>Hardware</Label>
+              <Chip on={hwFilter === "all"} cyan onClick={() => setHwFilter("all")}>All</Chip>
+              {hwProfiles.map(hw => (
+                <Chip key={hw} on={hwFilter === hw} onClick={() => setHwFilter(hw)}>
+                  {hw}
+                </Chip>
+              ))}
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {sorted.map(r => (
-              <RunCard
-                key={r.id}
-                report={r}
-                onOpen={onOpen}
-                onDelete={(id) => { window.BenchData.deleteMyRun(id); onRefresh(); }}
-              />
+            {visible.map(b => (
+              <BenchCard
+                key={b.id}
+                bench={b}
+                showHwPill={hwProfiles.length > 1}
+                onOpen={() => onOpen(b.id)} />
             ))}
-          </div>
-
-          <div className="me-section-head">
-            <h2><span className="num">B</span>Methodology</h2>
-            <span className="sub">// what these numbers mean — and what they don't</span>
-          </div>
-          <div className="me-card p-5 md:p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <MethodCol icon="fa-stopwatch" title="Timings" body="End-to-end latency through llama-server's /chat/completions endpoint with stream:false. The raw ttft_sec column is curl's time_starttransfer; for non-streaming requests this equals total time, so it isn't shown separately." />
-              <MethodCol icon="fa-list-check" title="Quality" body="Lightweight automated keyword/requirement rubric scored per prompt with a max that varies by prompt. Quality % is the average ratio across all prompts a profile ran." />
-              <MethodCol icon="fa-broom" title="Cleanliness" body="Each response is classified clean / leak / empty. Leak = visible <think> block or 'thinking process' preamble in the content field. Empty = answer placed in reasoning_content with no visible content." />
-            </div>
-            <div className="mt-5 text-[12px] text-me-fg-3 font-mono">
-              Open any individual run for the full methodology + per-prompt drilldown.
-            </div>
           </div>
         </div>
 
-        {/* Sidebar */}
         <div className="flex flex-col gap-4">
-          <DropZone onImport={onRefresh} />
-          {leaderboard.length > 0 && <Leaderboard entries={leaderboard} />}
-          {(hw.gpu || hw.cpu) && (
-            <SidebarInfoCard
-              icon="fa-microchip"
-              title="Hardware"
-              lines={[
-                hw.gpu && ["GPU", hw.gpu],
-                hw.vram_gb && ["VRAM", `${hw.vram_gb} GB`],
-                hw.cpu && ["CPU", hw.cpu],
-                hw.ram_gb && ["RAM", `${hw.ram_gb} GB`],
-              ].filter(Boolean)}
-            />
-          )}
-          {(srv.engine || srv.binary) && (
-            <SidebarInfoCard
-              icon="fa-server"
-              title="Server"
-              lines={[
-                srv.engine && ["Engine", srv.engine],
-                srv.binary && ["Binary", srv.binary],
-                srv.api && ["API", srv.api],
-                srv.stream != null && ["Stream", srv.stream ? "true" : "false"],
-              ].filter(Boolean)}
-            />
-          )}
+          {leaderboards && <LeaderboardsBlock leaderboards={leaderboards} onOpen={onOpen} />}
+          <RatingsImportExportCard />
+          {profilesSnap && <ProfilesSnapshotCard snapshot={profilesSnap} />}
+          <NextStepsCard />
         </div>
       </div>
     </>
   );
 }
 
-function MethodCol({ icon, title, body }) {
+function EmptyState({ reports }) {
   return (
-    <div>
-      <h4 className="font-display text-[13px] tracking-[0.16em] uppercase m-0 mb-2 text-me-fg">
-        <i className={`fa-solid ${icon} text-me-cyan mr-2`}></i> {title}
-      </h4>
-      <p className="text-[12px] leading-relaxed text-me-fg-2">{body}</p>
+    <div className="hero-bg relative overflow-hidden border border-me-border p-8 mb-8">
+      <h1 className="hero-title my-2">Meese · Bench</h1>
+      <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 mb-4 max-w-[64ch]">
+        // No benches yet. Run an adapter at least once and the hub will pick it up automatically.
+      </p>
+      <div className="me-card p-4 md:p-5 max-w-[64ch]">
+        <Label>Quick start</Label>
+        <pre className="font-mono text-[12px] md:text-[13px] text-me-cyan mt-2 whitespace-pre-wrap">
+{`# from the repo root
+just bench-run            # any adapter
+llms eval report          # rebuilds bench/reports/reports.json`}
+        </pre>
+        {reports.length > 0 && (
+          <div className="mt-3 font-mono text-[11px] text-me-warning">
+            {reports.length} run{reports.length === 1 ? "" : "s"} present but didn't group — re-run <code>llms eval report</code>.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HomeHero({ benches }) {
+  const totalCells = benches.reduce((acc, b) => acc + (b.cell_count || 0), 0);
+  const totalRuns = benches.reduce((acc, b) => acc + (b.run_count || 0), 0);
+  const latestStamp = benches[0]?.latest_timestamp;
+  return (
+    <div className="hero-bg relative overflow-hidden border border-me-border p-5 md:p-8 lg:p-9 mb-8">
+      <div className="me-eyebrow flex flex-wrap gap-x-5 gap-y-2 mb-3">
+        <span className="inline-flex items-center gap-1.5 text-me-magenta">
+          <i className="fa-solid fa-circle-dot"></i> Bench hub
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="fa-solid fa-cubes-stacked text-me-cyan"></i>
+          {benches.length} bench{benches.length === 1 ? "" : "es"}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="fa-solid fa-list-check text-me-cyan"></i>
+          {totalCells} capabilit{totalCells === 1 ? "y" : "ies"}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="fa-solid fa-rotate text-me-cyan"></i>
+          {totalRuns} run{totalRuns === 1 ? "" : "s"} accumulated
+        </span>
+        {latestStamp && (
+          <span className="inline-flex items-center gap-1.5">
+            <i className="fa-regular fa-clock text-me-cyan"></i>
+            last: {window.BenchData.fmtTimestamp(latestStamp)}
+          </span>
+        )}
+      </div>
+      <h1 className="hero-title my-2">Meese · Bench</h1>
+      <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 max-w-[80ch]">
+        // one card per (hardware, model). each card carries every capability you've thrown at it.
+      </p>
+    </div>
+  );
+}
+
+function BenchCard({ bench, showHwPill, onOpen }) {
+  const hw = bench.hardware;
+  const cellPreview = (bench.cells || []).slice(0, 6);
+  const overflow = (bench.cells || []).length - cellPreview.length;
+
+  return (
+    <div
+      className="me-card p-4 md:p-5 transition-all hover:-translate-y-0.5 hover:border-me-border-strong cursor-pointer"
+      onClick={onOpen}
+      role="button">
+      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+        <div className="me-eyebrow flex items-center gap-2">
+          <i className="fa-solid fa-cube text-me-cyan"></i>
+          <span>{bench.model_alias}</span>
+        </div>
+        <div className="font-mono text-[10px] text-me-fg-3">
+          {window.BenchData.fmtDateOnly(bench.latest_timestamp)}
+        </div>
+      </div>
+
+      <h3 className="font-display text-[14px] md:text-[16px] tracking-[0.08em] uppercase m-0 mb-3 text-me-fg break-words">
+        {bench.title}
+      </h3>
+
+      {showHwPill && (
+        <div className="mb-3">
+          <span className="font-mono text-[10px] tracking-[0.1em] uppercase px-2 py-0.5 border border-me-cyan/40 text-me-cyan">
+            {hw?.gpu_name ? window.BenchData.gpuShort(hw.gpu_name) : (bench.hardware_profile || "unknown")}
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[11px]">
+        <div className="p-2 bg-white/[0.02] border border-me-border min-w-0">
+          <div className="me-label">Capabilities</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{bench.cell_count}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border min-w-0">
+          <div className="me-label">Runs</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{bench.run_count}</div>
+          {bench.partial_run_count > 0 && (
+            <div className="font-mono text-[9px] tracking-[0.08em] uppercase text-me-fg-3 mt-1"
+                 title="Subset re-runs aren't comparable to full runs, so they're counted separately.">
+              + {bench.partial_run_count} partial
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {cellPreview.map(c => (
+          <span key={c.comparability_key}
+                className="font-mono text-[10px] tracking-[0.06em] uppercase px-2 py-0.5 border border-me-border text-me-fg-2">
+            {c.adapter.name}
+          </span>
+        ))}
+        {overflow > 0 && <span className="font-mono text-[10px] text-me-fg-3 px-1.5 py-0.5">+{overflow}</span>}
+      </div>
+
+      {bench.suite_seconds != null && (
+        <div className="flex items-center gap-1.5 mb-3 font-mono text-[10px] text-me-fg-3">
+          <i className="fa-solid fa-stopwatch text-me-fg-3"></i>
+          ≈ {window.BenchData.fmtDuration(bench.suite_seconds)} per full suite
+        </div>
+      )}
+
+      <div className="w-full font-display text-[11px] tracking-[0.16em] uppercase px-3 py-2 border border-me-border text-me-fg-2 hover:text-me-fg hover:border-me-cyan hover:[box-shadow:inset_0_0_0_1px_var(--me-cyan-60)] transition-all text-center">
+        Open <i className="fa-solid fa-arrow-right ml-1"></i>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Leaderboards ---------- */
+function LeaderboardsBlock({ leaderboards, onOpen }) {
+  const [mode, setMode] = _hUseS("auto"); // "auto" | "user"
+  // Subscribe to ratings changes so toggling to "user" reflects the latest
+  // localStorage state without a manual refresh.
+  const [, bump] = _hUseS(0);
+  React.useEffect(() => window.BenchRatings.subscribe(() => bump(v => v + 1)), []);
+
+  const adapterNames = leaderboards._adapterNames || Object.keys(leaderboards.perAdapter || {});
+  const loaded = leaderboards._loadedBenches || [];
+
+  // Whether *either* mode has enough data for a quality leaderboard. Used to
+  // decide if the auto/you toggle is meaningful at all — independent of which
+  // mode is currently active, so a user who flips to "You" without ratings
+  // can still see the toggle and flip back.
+  const autoHasQualityBlocks = adapterNames.some(
+    a => ((leaderboards.perAdapter || {})[a] || []).length >= 2,
+  );
+  const userHasQualityBlocks = adapterNames.some(
+    a => (window.BenchData.rankCellsByUser(loaded, a) || []).length >= 2,
+  );
+  const showToggle = autoHasQualityBlocks || userHasQualityBlocks;
+
+  const blocks = [];
+  // Top tok/s — always auto, no user-rating equivalent.
+  if (leaderboards.tps && leaderboards.tps.length > 1) {
+    blocks.push({
+      id: "tps",
+      icon: "fa-bolt",
+      title: "Top tok/s",
+      sub: "any capability",
+      rows: leaderboards.tps.slice(0, 5),
+      fmt: r => window.BenchData.fmtTps(r.value),
+    });
+  }
+  // Per-adapter quality leaderboards — switch between auto and user mode.
+  for (const adapter of adapterNames) {
+    const rows = mode === "user"
+      ? window.BenchData.rankCellsByUser(loaded, adapter)
+      : (leaderboards.perAdapter || {})[adapter] || [];
+    if (!rows || rows.length < 2) continue;
+    blocks.push({
+      id: `q-${adapter}-${mode}`,
+      icon: "fa-list-check",
+      title: `Top ${adapter}`,
+      sub: mode === "user" ? "your rating" : "quality",
+      rows: rows.slice(0, 5),
+      fmt: mode === "user"
+        ? r => `${r.userMean.toFixed(1)}/5`
+        : r => `${Number(r.value).toFixed(1)}%`,
+      sublineFor: mode === "user"
+        ? r => `${r.adapter?.name || "—"} · ${r.userCount}/${r.userTotal} rated`
+        : r => `${r.adapter?.name || "—"} · ${r.hardwareProfile}`,
+    });
+  }
+  // Render nothing only when there's truly nothing to show in either mode.
+  if (!blocks.length && !showToggle) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      {showToggle && (
+        <div className="flex items-center gap-2">
+          <Label>Quality source</Label>
+          <Chip on={mode === "auto"} cyan={mode === "auto"} onClick={() => setMode("auto")}>Auto</Chip>
+          <Chip on={mode === "user"} cyan={mode === "user"} onClick={() => setMode("user")}>You</Chip>
+        </div>
+      )}
+      {mode === "user" && !userHasQualityBlocks && (
+        <div className="me-card p-4 md:p-5 font-mono text-[11px] text-me-fg-3">
+          No user ratings yet. Open a bench, drill into Prompts, and rate at least
+          two cells per adapter to populate this leaderboard. Or switch back to
+          <button
+            type="button"
+            onClick={() => setMode("auto")}
+            className="ml-1 underline decoration-dotted hover:text-me-fg bg-transparent border-0 p-0 cursor-pointer">
+            Auto
+          </button>.
+        </div>
+      )}
+      {blocks.map(b => (
+        <div key={b.id} className="me-card p-4 md:p-5">
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 text-me-fg">
+              <i className={`fa-solid ${b.icon} text-me-warning mr-2`}></i> {b.title}
+            </h3>
+            <span className="font-mono text-[10px] text-me-fg-3">{b.sub}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {b.rows.map((r, i) => (
+              <button
+                key={`${r.benchId}-${r.adapter?.name || ""}-${r.comparabilityPrefix || i}`}
+                onClick={() => onOpen(r.benchId)}
+                className="grid grid-cols-[18px_1fr_70px] gap-2 items-center text-[11px] font-mono text-left bg-transparent border-0 px-1 py-0.5 cursor-pointer hover:text-me-fg">
+                <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}</span>
+                <div className="min-w-0">
+                  <div className="text-me-fg truncate" title={r.benchTitle}>{r.modelAlias}</div>
+                  <div className="text-me-fg-3 text-[10px] truncate">
+                    {b.sublineFor ? b.sublineFor(r) : `${r.adapter?.name || "—"} · ${r.hardwareProfile}`}
+                  </div>
+                </div>
+                <div className="text-right text-me-cyan">{b.fmt(r)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RatingsImportExportCard() {
+  const fileRef = React.useRef(null);
+  const [msg, setMsg] = _hUseS(null);
+  const flash = (m, ms = 2500) => { setMsg(m); setTimeout(() => setMsg(null), ms); };
+
+  const onExport = () => {
+    const blob = new Blob([window.BenchRatings.exportAll()], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    // Filename matches the repo's expected path so the user can drop it
+    // straight into bench/reports/ on commit.
+    a.download = "ratings.json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    flash("exported as ratings.json");
+  };
+  const onImportClick = () => fileRef.current?.click();
+  const onImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const n = window.BenchRatings.importAll(text, "overwrite");
+    flash(n > 0 ? `imported ${n}` : "no ratings imported");
+    e.target.value = "";  // allow re-picking same file
+  };
+  const onReloadFromRepo = async () => {
+    const n = await window.BenchRatings.loadFromRepo("overwrite");
+    flash(
+      n > 0
+        ? `pulled ${n} ratings from bench/reports/ratings.json`
+        : "no ratings.json in bench/reports/",
+      4000,
+    );
+  };
+
+  return (
+    <div className="me-card p-4 md:p-5">
+      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
+        <i className="fa-solid fa-star text-me-warning mr-2"></i> Your ratings
+      </h3>
+      <p className="font-mono text-[11px] text-me-fg-3 mb-3">
+        Ratings are stored in your browser. Export saves <code>ratings.json</code>; drop it in <code>bench/reports/</code> and commit to sync across machines.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onExport}
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Export
+        </button>
+        <button
+          onClick={onImportClick}
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Import file
+        </button>
+        <button
+          onClick={onReloadFromRepo}
+          title="Overwrite local ratings with bench/reports/ratings.json"
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Reload from repo
+        </button>
+        <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
+      </div>
+      {msg && <div className="mt-2 font-mono text-[11px] text-me-cyan">{msg}</div>}
+    </div>
+  );
+}
+
+function ProfilesSnapshotCard({ snapshot }) {
+  const profiles = snapshot.profiles || [];
+  const providers = snapshot.providers || [];
+  if (!profiles.length && !providers.length) return null;
+  return (
+    <div className="me-card p-4 md:p-5">
+      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
+        <i className="fa-solid fa-folder-tree text-me-cyan mr-2"></i> Config snapshot
+      </h3>
+      <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[11px]">
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Profiles</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{profiles.length}</div>
+        </div>
+        <div className="p-2 bg-white/[0.02] border border-me-border">
+          <div className="me-label">Providers</div>
+          <div className="text-me-fg text-[14px] mt-0.5">{providers.length}</div>
+        </div>
+      </div>
+      <div className="font-mono text-[10px] text-me-fg-3 break-all">
+        {profiles.slice(0, 8).map(p => p.name).join(" · ")}
+        {profiles.length > 8 && ` · +${profiles.length - 8}`}
+      </div>
+    </div>
+  );
+}
+
+function NextStepsCard() {
+  return (
+    <div className="me-card p-4 md:p-5">
+      <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 mb-3 text-me-fg">
+        <i className="fa-solid fa-circle-info text-me-cyan mr-2"></i> Add a capability
+      </h3>
+      <div className="text-[12px] text-me-fg-2 leading-relaxed">
+        Run another adapter against an existing model and a new cell appears on its bench card. Re-run an adapter and the cell keeps its history.
+      </div>
+      <pre className="font-mono text-[11px] text-me-cyan mt-3 whitespace-pre-wrap">
+{`just bench-run mmlu profile=qwen36-27b
+just bench-run gsm8k profile=qwen36-27b`}
+      </pre>
     </div>
   );
 }

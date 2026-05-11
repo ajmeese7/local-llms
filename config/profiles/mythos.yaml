@@ -1,0 +1,13 @@
+kind: profile
+name: mythos
+alias: MYTHOS-26B-A4B
+model_path: ~/models/mythos-26b-a4b-prism-pro-dq.gguf
+hf_repo: Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF
+hf_file: mythos-26b-a4b-prism-pro-dq.gguf
+jinja: true
+provider_compat:
+  proven:
+    - llama.cpp
+  blocked:
+    - ik_llama.cpp
+  notes: "ik_llama.cpp returned HTTP 500 for every prompt in the 2026-04-29 RTX 5090 suite."

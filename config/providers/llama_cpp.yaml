@@ -1,0 +1,17 @@
+kind: provider
+name: llama.cpp
+aliases:
+  - llama
+  - ggerganov
+repo_url: https://github.com/ggerganov/llama.cpp.git
+install_dir: ~/.local/share/llama.cpp
+server_bin: build/bin/llama-server
+bench_bin: build/bin/llama-bench
+cmake_args:
+  - -DGGML_CUDA=ON
+capabilities:
+  jinja: true
+  mmproj: true
+  kv_unified: true
+  spec_default: true
+  ngram_mod: true

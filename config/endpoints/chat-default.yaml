@@ -1,0 +1,5 @@
+kind: endpoint
+name: chat-default
+description: Default RTX 5090 chat endpoint serving Qwen3.6-27B.
+profile: qwen36-27b
+provider: llama.cpp
