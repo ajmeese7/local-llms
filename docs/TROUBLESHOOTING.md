@@ -87,6 +87,29 @@ Common causes:
 - `llama-server` was never built
 - Shell syntax error in the config file
 
+## Config edits not taking effect (e.g. `<think>` leaking into eval outputs)
+
+The systemd unit is `Restart=always`, but that only re-execs on crash. A healthy `llama-server` process keeps its original argv forever, so editing `config/profiles/*.yaml`, `config/endpoints/*.yaml`, etc., does NOT update the running server. Symptoms:
+
+- Added `jinja: true` to a profile but the model still emits `<think>` blocks (server is missing `--jinja`, so `chat_template_kwargs.enable_thinking: false` is ignored).
+- Changed `context_length`, `cache_type_k`, speculative settings, KV-unified, etc. and saw no behavior change.
+- `endpoint activate` printed "now run `systemctl restart llama-server`" and you didn't.
+
+Diagnose:
+
+```bash
+ps -o pid,lstart,cmd -p "$(pgrep -f llama-server)"
+uv run llms launcher render
+```
+
+If the running argv and the rendered argv disagree, the service is stale. Fix:
+
+```bash
+sudo systemctl restart llama-server
+```
+
+Then re-check `ps` — the new argv should match `llms launcher render`. Re-run the eval; thinking content should be gone.
+
 ## Build fails
 
 ```bash
