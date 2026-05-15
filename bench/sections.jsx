@@ -10,7 +10,7 @@
 const { useState: _useState, useMemo: _useMemo, useCallback: _useCallback } = React;
 
 /* ====================== OVERVIEW ====================== */
-function OverviewSection({ bench, leaderboards, onOpenPrompts, onOpenPartial }) {
+function OverviewSection({ bench, leaderboards, onOpenPrompts, onOpenRun }) {
   const meta = bench.meta;
   const cells = bench.cells;
   return (
@@ -35,7 +35,7 @@ function OverviewSection({ bench, leaderboards, onOpenPrompts, onOpenPartial }) 
               key={cell.comparability_key}
               cell={cell}
               onOpenPrompts={() => onOpenPrompts(cell.adapter.name)}
-              onOpenPartial={(runId) => onOpenPartial(cell.adapter.name, runId)} />
+              onOpenRun={(runId) => onOpenRun(cell.adapter.name, runId)} />
           ))}
         </div>
       )}
@@ -117,7 +117,7 @@ function GpuStateRibbon({ hardware }) {
   );
 }
 
-function CapabilityCell({ cell, onOpenPrompts, onOpenPartial }) {
+function CapabilityCell({ cell, onOpenPrompts, onOpenRun }) {
   const adapter = cell.adapter || {};
   const r = cell.rollup;
   const qualityClass = qualityColor(r?.quality);
@@ -197,15 +197,17 @@ function CapabilityCell({ cell, onOpenPrompts, onOpenPartial }) {
         </button>
       </div>
 
-      {cell.run_count > 1 && <CellHistoryDisclosure cell={cell} />}
+      {cell.run_count > 1 && (
+        <CellHistoryDisclosure cell={cell} onOpenRun={onOpenRun} />
+      )}
       {cell.partial_run_count > 0 && (
-        <CellPartialRunsDisclosure cell={cell} onOpenPartial={onOpenPartial} />
+        <CellPartialRunsDisclosure cell={cell} onOpenRun={onOpenRun} />
       )}
     </div>
   );
 }
 
-function CellPartialRunsDisclosure({ cell, onOpenPartial }) {
+function CellPartialRunsDisclosure({ cell, onOpenRun }) {
   const [open, setOpen] = _useState(false);
   const partials = cell.partial_runs || [];
   if (!partials.length) return null;
@@ -225,13 +227,13 @@ function CellPartialRunsDisclosure({ cell, onOpenPartial }) {
               ? (Number(p.accuracy.point) * 100).toFixed(1) + "%"
               : (p.partial?.point != null ? (Number(p.partial.point) * 100).toFixed(1) + "%" : "—");
             const items = p.item_count != null ? `${p.item_count} item${p.item_count === 1 ? "" : "s"}` : "—";
-            const clickable = typeof onOpenPartial === "function";
+            const clickable = typeof onOpenRun === "function";
             return (
               <button
                 key={p.id}
                 type="button"
                 disabled={!clickable}
-                onClick={() => clickable && onOpenPartial(p.id)}
+                onClick={() => clickable && onOpenRun(p.id)}
                 className={`grid grid-cols-[auto_1fr_auto_auto] gap-3 font-mono text-[10px] text-me-fg-3 items-baseline w-full text-left bg-transparent border-0 p-1 -mx-1 ${clickable ? "hover:bg-white/[0.03] hover:text-me-fg cursor-pointer" : ""}`}>
                 <span className="text-me-fg-2 whitespace-nowrap">{window.BenchData.fmtTimestamp(p.timestamp)}</span>
                 <span className="truncate text-me-fg-2" title={p.subset || ""}>
@@ -250,7 +252,7 @@ function CellPartialRunsDisclosure({ cell, onOpenPartial }) {
   );
 }
 
-function CellHistoryDisclosure({ cell }) {
+function CellHistoryDisclosure({ cell, onOpenRun }) {
   const [open, setOpen] = _useState(false);
   const [history, setHistory] = _useState(null);
   React.useEffect(() => {
@@ -263,6 +265,7 @@ function CellHistoryDisclosure({ cell }) {
     return () => { cancelled = true; };
   }, [open, history, cell]);
 
+  const clickable = typeof onOpenRun === "function";
   return (
     <div className="mt-3 border-t border-me-border pt-2">
       <button
@@ -279,11 +282,20 @@ function CellHistoryDisclosure({ cell }) {
             const acc = ci?.point != null ? (Number(ci.point) * 100).toFixed(1) + "%" : "—";
             const tps = summary.median_tokens_per_sec != null ? Number(summary.median_tokens_per_sec).toFixed(1) : "—";
             return (
-              <div key={run.id} className="grid grid-cols-[1fr_auto_auto] gap-3 font-mono text-[10px] text-me-fg-3">
-                <span className="truncate" title={run.id}>{window.BenchData.fmtTimestamp(run.manifest?.timestamp)}</span>
-                <span className="text-me-fg-2">{acc}</span>
-                <span className="text-me-fg-2">{tps} tok/s</span>
-              </div>
+              <button
+                key={run.id}
+                type="button"
+                disabled={!clickable}
+                onClick={() => clickable && onOpenRun(run.id)}
+                title={clickable ? `Open prompts for ${run.id}` : run.id}
+                className={`grid grid-cols-[1fr_auto_auto_auto] gap-3 font-mono text-[10px] text-me-fg-3 items-baseline w-full text-left bg-transparent border-0 p-1 -mx-1 ${clickable ? "hover:bg-white/[0.03] hover:text-me-fg cursor-pointer" : ""}`}>
+                <span className="truncate">{window.BenchData.fmtTimestamp(run.manifest?.timestamp)}</span>
+                <span className="text-me-fg-2 whitespace-nowrap">{acc}</span>
+                <span className="text-me-fg-2 whitespace-nowrap">{tps} tok/s</span>
+                {clickable && (
+                  <span className="text-me-cyan whitespace-nowrap">open →</span>
+                )}
+              </button>
             );
           })}
         </div>
@@ -373,13 +385,14 @@ function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
   const cell = bench.cells.find(c => c.adapter.name === adapterName);
   const cells = bench.cells.filter(c => c.run && c.run.results.length);
   // If a specific runId is requested and it's not the cell's preloaded latest,
-  // fetch that run on demand. Used by partial / subset re-runs whose results
-  // (and ratings, keyed by their own comparability_key) live separately.
-  const [partialRun, setPartialRun] = _useState(null);
-  const [partialErr, setPartialErr] = _useState(null);
+  // fetch that run on demand. Covers both subset re-runs (their own
+  // comparability_key) and earlier full-suite runs from the same cell's
+  // history (same comparability_key, different timestamp).
+  const [altRun, setAltRun] = _useState(null);
+  const [altErr, setAltErr] = _useState(null);
   React.useEffect(() => {
-    setPartialRun(null);
-    setPartialErr(null);
+    setAltRun(null);
+    setAltErr(null);
     if (!runId || !cell) return;
     if (cell.run && runId === cell.run.id) return;
     let cancelled = false;
@@ -387,11 +400,11 @@ function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
       try {
         const run = await window.BenchData.loadRun(runId);
         if (!cancelled) {
-          if (run) setPartialRun(run);
-          else setPartialErr(`Run ${runId} not found.`);
+          if (run) setAltRun(run);
+          else setAltErr(`Run ${runId} not found.`);
         }
       } catch (e) {
-        if (!cancelled) setPartialErr(String(e?.message || e));
+        if (!cancelled) setAltErr(String(e?.message || e));
       }
     })();
     return () => { cancelled = true; };
@@ -409,13 +422,14 @@ function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
     );
   }
 
-  const wantsPartial = runId && cell.run && runId !== cell.run.id;
-  const viewCell = wantsPartial
-    ? (partialRun ? _viewCellForRun(cell, partialRun) : null)
+  const wantsAlt = runId && cell.run && runId !== cell.run.id;
+  const viewCell = wantsAlt
+    ? (altRun ? _viewCellForRun(cell, altRun) : null)
     : cell;
-  const activeRunId = viewCell?.run?.id || (wantsPartial ? runId : cell.run?.id);
-  const subtitle = wantsPartial
-    ? `// subset re-run · ${_partialSubsetLabel(cell, runId)}`
+  const activeRunId = viewCell?.run?.id || (wantsAlt ? runId : cell.run?.id);
+  const altKind = wantsAlt ? _altRunKind(cell, runId) : null;
+  const subtitle = wantsAlt
+    ? `// ${_altRunSubtitle(altKind, cell, runId, altRun)}`
     : `// per-item runs from the latest ${adapterName} cell`;
 
   return (
@@ -423,13 +437,13 @@ function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
       <SectionHead num="03" title={`Prompts · ${adapterName}`} sub={subtitle} />
       <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
       <RunPicker cell={cell} activeRunId={activeRunId} onSwitchRun={onSwitchRun} />
-      {wantsPartial && !viewCell && !partialErr && (
+      {wantsAlt && !viewCell && !altErr && (
         <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
-          <i className="fa-solid fa-spinner fa-spin mr-2"></i>Loading partial re-run…
+          <i className="fa-solid fa-spinner fa-spin mr-2"></i>Loading run…
         </div>
       )}
-      {partialErr && (
-        <div className="me-card p-6 font-mono text-[12px] text-me-danger">{partialErr}</div>
+      {altErr && (
+        <div className="me-card p-6 font-mono text-[12px] text-me-danger">{altErr}</div>
       )}
       {viewCell && viewCell.run && <PromptsTable cell={viewCell} />}
       {viewCell && !viewCell.run && (
@@ -441,19 +455,36 @@ function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
   );
 }
 
-function _partialSubsetLabel(cell, runId) {
-  const p = (cell.partial_runs || []).find(r => r.id === runId);
-  if (!p) return runId;
-  const items = p.item_count != null ? ` · ${p.item_count} item${p.item_count === 1 ? "" : "s"}` : "";
-  return `subset: ${p.subset || "—"}${items}`;
+function _altRunKind(cell, runId) {
+  if ((cell.partial_runs || []).some(p => p.id === runId)) return "partial";
+  if ((cell.history_ids || []).includes(runId)) return "history";
+  return "unknown";
+}
+
+function _altRunSubtitle(kind, cell, runId, altRun) {
+  if (kind === "partial") {
+    const p = (cell.partial_runs || []).find(r => r.id === runId);
+    if (!p) return `subset re-run · ${runId}`;
+    const items = p.item_count != null
+      ? ` · ${p.item_count} item${p.item_count === 1 ? "" : "s"}`
+      : "";
+    return `subset re-run · subset: ${p.subset || "—"}${items}`;
+  }
+  if (kind === "history") {
+    const ts = altRun?.manifest?.timestamp;
+    const when = ts ? window.BenchData.fmtTimestamp(ts) : runId;
+    return `earlier run · ${when}`;
+  }
+  return `run · ${runId}`;
 }
 
 function _viewCellForRun(cell, run) {
-  // Synthetic cell wrapping a non-latest run. The shape mirrors what
+  // Synthetic cell wrapping a non-latest run (earlier full run from this
+  // cell's history, or a subset re-run). Shape mirrors what
   // PromptsTable/PromptRow/RatingEditor read: a `run` payload and a
   // `comparability_key` to scope ratings under. The run's own key takes
-  // precedence so ratings recorded on a subset re-run stay tied to *that*
-  // run, not the cell's full-run key.
+  // precedence so subset re-runs (different key) keep their ratings
+  // separate; earlier full runs (same key) share ratings with the latest.
   const ck = run.manifest?.comparability_key || cell.comparability_key;
   return {
     ...cell,
@@ -465,16 +496,26 @@ function _viewCellForRun(cell, run) {
 
 function RunPicker({ cell, activeRunId, onSwitchRun }) {
   const partials = cell.partial_runs || [];
-  if (!partials.length) return null;
   const fullId = cell.run?.id || cell.latest?.id;
   const hasFull = !cell.partial_only && fullId;
   const fullActive = hasFull && (activeRunId === fullId || !activeRunId);
+  // Show the chip row when there's something to switch between: partials,
+  // or a historical full run that's not the latest (so the user always has
+  // a one-click way back to the latest).
+  const onHistorical = hasFull && activeRunId && activeRunId !== fullId
+    && !partials.some(p => p.id === activeRunId);
+  if (!partials.length && !onHistorical) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 mb-4">
       <Label>Run</Label>
       {hasFull && (
         <Chip on={fullActive} cyan onClick={() => onSwitchRun(null)}>
-          Full run
+          Latest full run
+        </Chip>
+      )}
+      {onHistorical && (
+        <Chip on cyan title={activeRunId}>
+          earlier full run
         </Chip>
       )}
       {partials.map(p => (

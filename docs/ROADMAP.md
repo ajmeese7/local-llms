@@ -44,16 +44,15 @@ The big one. Needs Docker, real test runners, log parsing.
 - `llms endpoint activate --restart`: opt-in `systemctl restart` behind a confirm prompt.
 - `llms endpoint stats --endpoint <name>`: filter the stats aggregator. Currently a global rollup, loses signal with multiple endpoints.
 - `llms eval list-adapters`: print the registry the CLI walks. Today the user reads source.
-- Repo SHA capture in `manifest.repo_sha` uses cwd. Pin to repo root inferred from `llms.__file__` so it does not drift if the user runs from a subdirectory.
 - Telemetry record's `endpoint` field stores the profile name (slicing `httpx.Client.base_url` was annoying). Plumb actual base URL through.
 
 ## Eval rigor
 
 ### Thinking-mode track
 
-The current eval pipeline force-disables Qwen3-style chain-of-thought (`chat_template_kwargs: {enable_thinking: false}` in `llms/eval/http_client.py`). That was the right call given the existing budgets (mmlu max_tokens=8, niah=64, gsm8k=512), but it also means the harness only measures the model's "fast answer" capability, not what most people will actually use it for. Real-world usage of these models is overwhelmingly with reasoning on; we should be able to score that mode too.
+The eval pipeline disables Qwen3-style chain-of-thought by default (`chat_template_kwargs: {enable_thinking: false}` in `llms/eval/http_client.py`). That keeps tight-budget adapters (mmlu max_tokens=8, niah=64, gsm8k=512) from getting starved by hidden reasoning, but it means the shipped suite measures the "fast answer" track only. Adding a parallel reasoning-on track lets users see both numbers and pick the right profile for their workload.
 
-Why this matters: a model can score 0.80 on MMLU with thinking off and 0.92 with thinking on. The gap is the headline capability number for downstream tasks (coding agents, RAG synthesis, multi-step assistants). Without a thinking-mode track we cannot tell users which profile is right for which workload, only which is right for trivia.
+Why a separate track and not just a flag: a model can score 0.80 on MMLU with thinking off and 0.92 with thinking on; those are different evaluations, not different seeds. They need different budgets, different parsing rules, and a distinct comparability key so they do not group together in the hub.
 
 Design sketch:
 
@@ -84,7 +83,7 @@ Tests:
 
 ## Operations gaps
 
-- Provider git commit capture: `manifest.provider.git_commit` is None in every shipped run. Fix is `llms provider install` (does not exist yet) writing `git rev-parse HEAD` to the install dir during build.
+- Provider git commit capture is best-effort today (walks up from the server binary to find a `.git` checkout). System-installed providers or prebuilt tarballs still record `null`. A real `llms provider install` would pin the commit at build time.
 - `llms config lint --with-files`: optionally check `model_path` and `mmproj_path` exist. Default off because configs are typically authored on a host that does not hold the models.
 - Port `scripts/provider.sh` to `llms provider install|build|list`. The shell script is the only remaining build path that does not have a python equivalent.
 

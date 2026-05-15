@@ -13,6 +13,7 @@ from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -558,6 +559,15 @@ EVAL_OUTPUT_OPT = typer.Option(
 )
 
 
+_ADAPTER_REGISTRY: dict[str, str] = {
+    "local_smoke": "5-prompt keyword rubric for live-endpoint smoke checks.",
+    "mmlu": "Massive Multitask Language Understanding (4-choice MCQs).",
+    "gsm8k": "Grade-school math word problems, exact-match on final number.",
+    "niah": "Needle-in-a-haystack retrieval across length x depth.",
+    "frontend_agentic": "17-prompt front-end + agentic tool-calling suite.",
+}
+
+
 def _load_adapter(name: str, *, max_items: int | None = None) -> BenchmarkAdapter:
     """Return an adapter instance for `name`. Imported lazily to keep
     `llms --help` responsive when the eval extras aren't installed.
@@ -587,8 +597,7 @@ def _load_adapter(name: str, *, max_items: int | None = None) -> BenchmarkAdapte
 
         return FrontendAgenticAdapter()
     raise typer.BadParameter(
-        f"unknown adapter '{name}' "
-        "(have: local_smoke, mmlu, gsm8k, niah, frontend_agentic)"
+        f"unknown adapter '{name}' (have: {', '.join(_ADAPTER_REGISTRY)})"
     )
 
 
@@ -657,7 +666,7 @@ def eval_run(
 ) -> None:
     """Drive an adapter against an endpoint and write the run to disk."""
     from llms.eval.endpoint_url import base_url_from_runtime
-    from llms.eval.runner import EndpointUnreachableError, run_eval
+    from llms.eval.runner import EndpointUnreachableError, RunOutcome, run_eval
 
     hw = _resolve_hardware_name(config_root, hardware, gpu_override)
     bundle = load_bundle(config_root)
@@ -702,12 +711,18 @@ def eval_run(
         console=console,
         transient=False,
     )
-    task_id = progress.add_task("eval", total=None, item_id="-", stats="")
+    task_id: TaskID | None = None
+
+    def _ensure_task(total: int) -> TaskID:
+        nonlocal task_id
+        if task_id is None:
+            task_id = progress.add_task("eval", total=total, item_id="-", stats="")
+        return task_id
 
     def _on_start(idx: int, total: int, item: object) -> None:
         del idx
         progress.update(
-            task_id,
+            _ensure_task(total),
             total=total,
             item_id=getattr(item, "id", "?"),
             stats="[dim]generating…[/]",
@@ -730,13 +745,15 @@ def eval_run(
             bits.append(f"{tok:,} tok")
         if isinstance(tps, float):
             bits.append(f"{tps:.0f} tok/s")
-        progress.update(task_id, advance=1, total=total, stats=" · ".join(bits))
+        progress.update(_ensure_task(total), advance=1, total=total, stats=" · ".join(bits))
 
     def _on_abort(reason: str) -> None:
         from rich.markup import escape
 
         err_console.print(f"[red]✗[/] {escape(reason)}")
 
+    outcome: RunOutcome | None = None
+    preflight_error: EndpointUnreachableError | None = None
     with progress:
         try:
             outcome = run_eval(
@@ -757,16 +774,21 @@ def eval_run(
                 on_abort=_on_abort,
             )
         except EndpointUnreachableError as exc:
-            from rich.markup import escape
+            preflight_error = exc
 
-            err_console.print(
-                f"[red]✗[/] preflight: endpoint [cyan]{escape(exc.base_url)}[/] not reachable"
-            )
-            err_console.print(f"    [dim]reason:[/] {escape(exc.inner)}")
-            err_console.print("    [dim]hint:[/]   is the server up?")
-            err_console.print("           [dim]systemctl status llama-server[/]")
-            err_console.print("           [dim]journalctl -u llama-server -n 30[/]")
-            raise typer.Exit(code=2) from exc
+    if preflight_error is not None:
+        from rich.markup import escape
+
+        err_console.print(
+            f"[red]✗[/] preflight: [cyan]{escape(preflight_error.base_url)}[/] "
+            f"not reachable ([yellow]{escape(preflight_error.inner)}[/])"
+        )
+        err_console.print()
+        err_console.print("  [dim]Is the server up?[/]")
+        err_console.print("    [dim]systemctl status llama-server[/]")
+        err_console.print("    [dim]journalctl -u llama-server -n 30[/]")
+        raise typer.Exit(code=2) from preflight_error
+    assert outcome is not None  # narrowing: only None when preflight_error is set
     summary = outcome.summary
     accuracy = f"{summary.accuracy.point:.3f}" if summary.accuracy is not None else "—"
     if outcome.aborted_reason is not None:
@@ -808,6 +830,20 @@ def eval_run(
         raise typer.Exit(code=2)
     if outcome.interrupted:
         raise typer.Exit(code=130)  # 128 + SIGINT
+
+
+@eval_app.command("list-adapters")
+def eval_list_adapters() -> None:
+    """Print the benchmark adapters this CLI knows how to run."""
+    table = Table(title="Available adapters")
+    table.add_column("Name", style="cyan")
+    table.add_column("Version")
+    table.add_column("Track")
+    table.add_column("Description")
+    for name, blurb in sorted(_ADAPTER_REGISTRY.items()):
+        adapter = _load_adapter(name)
+        table.add_row(name, adapter.version, adapter.track, blurb)
+    console.print(table)
 
 
 @eval_app.command("list")
@@ -957,7 +993,7 @@ def _provider_script_path() -> Path:
 @provider_app.command("install")
 def provider_install(
     name: str = typer.Argument(..., help="Provider name to build (e.g. ik_llama.cpp)."),
-    extra_args: list[str] | None = typer.Argument(
+    extra_args: list[str] | None = typer.Argument(  # noqa: B008 — typer DSL
         None,
         help="Forwarded as-is to scripts/provider.sh install <name>.",
     ),

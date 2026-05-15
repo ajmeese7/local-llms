@@ -2,6 +2,10 @@
 
 Run a local LLM as a persistent systemd service using [llama.cpp](https://github.com/ggerganov/llama.cpp), compiled from source with CUDA. Native Linux and WSL2. OpenAI-compatible API on top of an NVIDIA GPU. Includes a benchmark harness, a static report hub, and CLI tooling for endpoint lifecycle.
 
+> **Hardware scope.** Targets NVIDIA CUDA on Linux or WSL2 with `systemd`. Shipped configs assume an RTX 5090 (32 GB VRAM) or a 5060 Ti fallback; smaller cards work but you will need to lower `context_length` and pick smaller quants. AMD / Apple / CPU-only setups are out of scope. Published benchmark numbers reflect the operator's own hardware — the hub is a showcase, not a public leaderboard.
+
+License: [MIT](LICENSE).
+
 ## Quick start
 
 ```sh
@@ -92,5 +96,5 @@ Reading order by goal:
 The static SPA at `bench/` reads runs from `bench/reports/`. It is meant to be published; see [`bench/README.md`](bench/README.md).
 
 ```sh
-cd bench && python -m http.server 5173
+cd bench && python3 -m http.server 5173
 ```

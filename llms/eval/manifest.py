@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import socket
 import subprocess
 from dataclasses import asdict, dataclass, field
@@ -19,6 +20,38 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
+
+import llms as _llms_pkg
+
+
+def canonical_repo_root() -> Path | None:
+    """Repo root inferred from the installed `llms` package, not cwd.
+
+    Walks up from `llms.__file__` looking for `.git`. Returns None for editable
+    installs that have been moved out of a git checkout, or for wheel installs.
+    """
+    pkg_file = getattr(_llms_pkg, "__file__", None)
+    if not pkg_file:
+        return None
+    for candidate in Path(pkg_file).resolve().parents:
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def anonymize_path(value: str) -> str:
+    """Rewrite `$HOME/...` to `~/...` so published manifests do not leak
+    per-user absolute paths. Leaves non-home paths untouched."""
+    home = os.path.expanduser("~")
+    if home and value.startswith(home):
+        return "~" + value[len(home):]
+    return value
+
+
+def anonymize_hostname(value: str) -> str:
+    """Short stable digest. Preserves "same/different host" identity for
+    cross-run comparisons without exposing the friendly name."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,12 +281,18 @@ def file_sha256(path: Path, *, chunk_size: int = 1 << 20) -> str:
 
 
 def repo_sha(*, cwd: Path | None = None) -> str | None:
-    """`git rev-parse HEAD` if available; None if not a repo or git missing."""
+    """`git rev-parse HEAD` if available; None if not a repo or git missing.
+
+    Defaults to the canonical repo root (inferred from the installed `llms`
+    package) so the recorded SHA does not drift when the user runs from a
+    subdirectory.
+    """
+    target = cwd if cwd is not None else canonical_repo_root()
     try:
         # B603: explicit static argv, no shell interpolation.
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            cwd=str(cwd) if cwd else None,
+            cwd=str(target) if target else None,
             capture_output=True,
             text=True,
             timeout=2,
@@ -264,13 +303,34 @@ def repo_sha(*, cwd: Path | None = None) -> str | None:
     return result.stdout.strip() or None
 
 
+def provider_git_commit(binary_path: str | Path) -> str | None:
+    """Best-effort `git rev-parse HEAD` for the provider's source checkout.
+
+    Walks up from the server binary looking for a `.git` directory. Common
+    layouts: `<src>/build/bin/<binary>` (llama.cpp, ik_llama.cpp). Returns None
+    if the binary is not under a git checkout (system install, prebuilt
+    tarball, etc.).
+    """
+    try:
+        start = Path(binary_path).resolve()
+    except (OSError, RuntimeError):
+        return None
+    for candidate in start.parents:
+        if (candidate / ".git").exists():
+            return repo_sha(cwd=candidate)
+    return None
+
+
 def utc_now_iso() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def hostname() -> str:
+    """Anonymized host digest, not the friendly name. Same host produces the
+    same 8-char tag across runs so cross-run comparisons still group correctly,
+    but the published manifest does not expose the operator's machine name."""
     try:
-        return socket.gethostname()
+        return anonymize_hostname(socket.gethostname())
     except OSError:
         return "unknown"
 
@@ -296,12 +356,12 @@ def _manifest_from_dict(data: dict[str, object]) -> Manifest:
     extras = dict(extras_raw) if isinstance(extras_raw, dict) else {}
     hardware_raw = data.get("hardware") or {}
     hardware = (
-        HardwareInfo(**hardware_raw)  # type: ignore[arg-type]
+        HardwareInfo(**hardware_raw)
         if isinstance(hardware_raw, dict)
         else HardwareInfo()
     )
     server_raw = data.get("server")
-    server = ServerInfo(**server_raw) if isinstance(server_raw, dict) else None  # type: ignore[arg-type]
+    server = ServerInfo(**server_raw) if isinstance(server_raw, dict) else None
     return Manifest(
         run_id=str(data["run_id"]),
         endpoint_name=str(data["endpoint_name"]),

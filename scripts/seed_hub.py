@@ -10,7 +10,7 @@ Usage (from repo root):
 
 then serve `bench/` with any static file host, e.g.:
 
-    cd bench && python -m http.server 5173
+    cd bench && python3 -m http.server 5173
 
 The script wipes prior demo runs (any run id starting with `demo-`) before
 re-seeding so the directory does not accumulate junk.

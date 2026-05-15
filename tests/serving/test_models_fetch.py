@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from llms.cli import app
 from llms.serving.config.models import ProfileConfig
-from llms.serving.models import MissingArtifact, find_missing
+from llms.serving.models import find_missing
 
 runner = CliRunner()
 

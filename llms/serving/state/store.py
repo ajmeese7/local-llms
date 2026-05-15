@@ -113,14 +113,10 @@ class StateStore:
             current = conn.execute(
                 "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
             ).fetchone()
-            if current is None:
+            if current is None or current["version"] < SCHEMA_VERSION:
                 conn.execute(
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,),
-                )
-            elif current["version"] < SCHEMA_VERSION:
-                conn.execute(
-                    "INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,)
                 )
 
     # ── revisions ───────────────────────────────────────────────────────────

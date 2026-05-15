@@ -96,4 +96,4 @@ def fetch(artifact: MissingArtifact) -> Path:
     return target
 
 
-__all__ = ["MissingArtifact", "find_missing", "fetch"]
+__all__ = ["MissingArtifact", "fetch", "find_missing"]
