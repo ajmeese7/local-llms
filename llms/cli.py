@@ -558,6 +558,15 @@ EVAL_OUTPUT_OPT = typer.Option(
 )
 
 
+_ADAPTER_REGISTRY: dict[str, str] = {
+    "local_smoke": "5-prompt keyword rubric for live-endpoint smoke checks.",
+    "mmlu": "Massive Multitask Language Understanding (4-choice MCQs).",
+    "gsm8k": "Grade-school math word problems, exact-match on final number.",
+    "niah": "Needle-in-a-haystack retrieval across length x depth.",
+    "frontend_agentic": "17-prompt front-end + agentic tool-calling suite.",
+}
+
+
 def _load_adapter(name: str, *, max_items: int | None = None) -> BenchmarkAdapter:
     """Return an adapter instance for `name`. Imported lazily to keep
     `llms --help` responsive when the eval extras aren't installed.
@@ -587,8 +596,7 @@ def _load_adapter(name: str, *, max_items: int | None = None) -> BenchmarkAdapte
 
         return FrontendAgenticAdapter()
     raise typer.BadParameter(
-        f"unknown adapter '{name}' "
-        "(have: local_smoke, mmlu, gsm8k, niah, frontend_agentic)"
+        f"unknown adapter '{name}' (have: {', '.join(_ADAPTER_REGISTRY)})"
     )
 
 
@@ -810,6 +818,20 @@ def eval_run(
         raise typer.Exit(code=130)  # 128 + SIGINT
 
 
+@eval_app.command("list-adapters")
+def eval_list_adapters() -> None:
+    """Print the benchmark adapters this CLI knows how to run."""
+    table = Table(title="Available adapters")
+    table.add_column("Name", style="cyan")
+    table.add_column("Version")
+    table.add_column("Track")
+    table.add_column("Description")
+    for name, blurb in sorted(_ADAPTER_REGISTRY.items()):
+        adapter = _load_adapter(name)
+        table.add_row(name, adapter.version, adapter.track, blurb)
+    console.print(table)
+
+
 @eval_app.command("list")
 def eval_list(output_root: Path = EVAL_OUTPUT_OPT) -> None:
     """List runs under the output directory."""
@@ -957,7 +979,7 @@ def _provider_script_path() -> Path:
 @provider_app.command("install")
 def provider_install(
     name: str = typer.Argument(..., help="Provider name to build (e.g. ik_llama.cpp)."),
-    extra_args: list[str] | None = typer.Argument(
+    extra_args: list[str] | None = typer.Argument(  # noqa: B008 — typer DSL
         None,
         help="Forwarded as-is to scripts/provider.sh install <name>.",
     ),

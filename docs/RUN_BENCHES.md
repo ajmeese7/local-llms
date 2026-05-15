@@ -73,7 +73,7 @@ done
 ## After the runs land
 
 ```bash
-cd bench && python -m http.server 5173
+cd bench && python3 -m http.server 5173
 # open http://localhost:5173
 ```
 

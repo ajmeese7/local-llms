@@ -22,9 +22,11 @@ from llms.eval.manifest import (
     ModelFingerprint,
     ProviderFingerprint,
     ServerInfo,
+    anonymize_path,
     compute_comparability_key,
     file_sha256,
     hostname,
+    provider_git_commit,
     repo_sha,
     utc_now_iso,
 )
@@ -86,7 +88,7 @@ def _model_fingerprint(rt: RuntimeConfig, *, hash_model: bool) -> ModelFingerpri
     return ModelFingerprint(
         profile=rt.profile.name,
         alias=rt.profile.alias,
-        model_path=rt.profile.model_path,
+        model_path=anonymize_path(rt.profile.model_path),
         model_sha256=sha,
         hf_repo=rt.profile.hf_repo,
         hf_file=rt.profile.hf_file,
@@ -94,10 +96,11 @@ def _model_fingerprint(rt: RuntimeConfig, *, hash_model: bool) -> ModelFingerpri
 
 
 def _provider_fingerprint(rt: RuntimeConfig) -> ProviderFingerprint:
+    binary = str(rt.provider.server_binary_path)
     return ProviderFingerprint(
         name=rt.provider.name,
-        server_binary=str(rt.provider.server_binary_path),
-        git_commit=None,  # `llms provider install` will record this; not yet implemented
+        server_binary=anonymize_path(binary),
+        git_commit=provider_git_commit(binary),
         cmake_args=tuple(rt.provider.cmake_args),
     )
 
@@ -124,12 +127,12 @@ def _hardware_info(rt: RuntimeConfig) -> HardwareInfo:
 
 
 def _server_info(rt: RuntimeConfig) -> ServerInfo:
-    """The provider config tells us the engine. Version / git commit are
-    populated lazily once `llms provider install` records them."""
+    """The provider config tells us the engine; `git_commit` is read from the
+    provider source checkout adjacent to the server binary (best effort)."""
     return ServerInfo(
         engine=rt.provider.name,
         version=None,
-        git_commit=None,
+        git_commit=provider_git_commit(str(rt.provider.server_binary_path)),
     )
 
 

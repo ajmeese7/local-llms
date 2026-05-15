@@ -54,7 +54,7 @@ pip install -e .
 Validate the harness:
 
 ```bash
-python -m swebench.harness.run_evaluation \
+python3 -m swebench.harness.run_evaluation \
   --predictions_path gold \
   --max_workers 1 \
   --instance_ids sympy__sympy-20590 \
@@ -91,7 +91,7 @@ The key contract is simple: produce a valid `predictions_path` artifact, then pa
 ### 4. Evaluate predictions on SWE-bench Lite
 
 ```bash
-python -m swebench.harness.run_evaluation \
+python3 -m swebench.harness.run_evaluation \
   --dataset_name princeton-nlp/SWE-bench_Lite \
   --predictions_path <path_to_predictions> \
   --max_workers 1 \

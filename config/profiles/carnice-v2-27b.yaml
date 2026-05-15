@@ -4,4 +4,5 @@ alias: Carnice-V2-27B
 model_path: ~/models/carnice-v2-27b-Q5_K_M.gguf
 hf_repo: kai-os/Carnice-V2-27b-GGUF
 hf_file: carnice-v2-27b-Q5_K_M.gguf
+jinja: true
 context_length: 131072
