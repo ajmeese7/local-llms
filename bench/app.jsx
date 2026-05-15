@@ -275,7 +275,7 @@ function App() {
                 bench={active}
                 leaderboards={leaderboards}
                 onOpenPrompts={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })}
-                onOpenPartial={(adapter, runId) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter, runId })} />
+                onOpenRun={(adapter, runId) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter, runId })} />
             )}
             {route.tab === "prompts" && route.adapter && (
               <PromptsSection
