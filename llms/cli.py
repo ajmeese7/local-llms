@@ -13,6 +13,7 @@ from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -665,7 +666,7 @@ def eval_run(
 ) -> None:
     """Drive an adapter against an endpoint and write the run to disk."""
     from llms.eval.endpoint_url import base_url_from_runtime
-    from llms.eval.runner import EndpointUnreachableError, run_eval
+    from llms.eval.runner import EndpointUnreachableError, RunOutcome, run_eval
 
     hw = _resolve_hardware_name(config_root, hardware, gpu_override)
     bundle = load_bundle(config_root)
@@ -710,12 +711,18 @@ def eval_run(
         console=console,
         transient=False,
     )
-    task_id = progress.add_task("eval", total=None, item_id="-", stats="")
+    task_id: TaskID | None = None
+
+    def _ensure_task(total: int) -> TaskID:
+        nonlocal task_id
+        if task_id is None:
+            task_id = progress.add_task("eval", total=total, item_id="-", stats="")
+        return task_id
 
     def _on_start(idx: int, total: int, item: object) -> None:
         del idx
         progress.update(
-            task_id,
+            _ensure_task(total),
             total=total,
             item_id=getattr(item, "id", "?"),
             stats="[dim]generating…[/]",
@@ -738,13 +745,15 @@ def eval_run(
             bits.append(f"{tok:,} tok")
         if isinstance(tps, float):
             bits.append(f"{tps:.0f} tok/s")
-        progress.update(task_id, advance=1, total=total, stats=" · ".join(bits))
+        progress.update(_ensure_task(total), advance=1, total=total, stats=" · ".join(bits))
 
     def _on_abort(reason: str) -> None:
         from rich.markup import escape
 
         err_console.print(f"[red]✗[/] {escape(reason)}")
 
+    outcome: RunOutcome | None = None
+    preflight_error: EndpointUnreachableError | None = None
     with progress:
         try:
             outcome = run_eval(
@@ -765,16 +774,21 @@ def eval_run(
                 on_abort=_on_abort,
             )
         except EndpointUnreachableError as exc:
-            from rich.markup import escape
+            preflight_error = exc
 
-            err_console.print(
-                f"[red]✗[/] preflight: endpoint [cyan]{escape(exc.base_url)}[/] not reachable"
-            )
-            err_console.print(f"    [dim]reason:[/] {escape(exc.inner)}")
-            err_console.print("    [dim]hint:[/]   is the server up?")
-            err_console.print("           [dim]systemctl status llama-server[/]")
-            err_console.print("           [dim]journalctl -u llama-server -n 30[/]")
-            raise typer.Exit(code=2) from exc
+    if preflight_error is not None:
+        from rich.markup import escape
+
+        err_console.print(
+            f"[red]✗[/] preflight: [cyan]{escape(preflight_error.base_url)}[/] "
+            f"not reachable ([yellow]{escape(preflight_error.inner)}[/])"
+        )
+        err_console.print()
+        err_console.print("  [dim]Is the server up?[/]")
+        err_console.print("    [dim]systemctl status llama-server[/]")
+        err_console.print("    [dim]journalctl -u llama-server -n 30[/]")
+        raise typer.Exit(code=2) from preflight_error
+    assert outcome is not None  # narrowing: only None when preflight_error is set
     summary = outcome.summary
     accuracy = f"{summary.accuracy.point:.3f}" if summary.accuracy is not None else "—"
     if outcome.aborted_reason is not None:
