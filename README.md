@@ -80,7 +80,6 @@ Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k
 | [docs/SWE-BENCH.md](docs/SWE-BENCH.md) | Notes for SWE-bench integration |
 | [docs/WSL2.md](docs/WSL2.md) | Networking, auto-start, keep-alive |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | CUDA, OOM, service startup, build failures |
-| [docs/DRIVER-RECOVERY.md](docs/DRIVER-RECOVERY.md) | NVIDIA driver recovery |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What is left |
 
 Reading order by goal:

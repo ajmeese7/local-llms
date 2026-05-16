@@ -23,10 +23,6 @@ sudo ln -sfn /usr/local/cuda-13.1 /usr/local/cuda
 
 Do not try to fix this with an `apt` driver upgrade. The DKMS build can hit the same freeze path.
 
-## Recovering from a broken NVIDIA driver install
-
-See [DRIVER-RECOVERY.md](DRIVER-RECOVERY.md) for the full recovery process.
-
 ## CUDA / GPU not found
 
 If you see:
