@@ -69,7 +69,7 @@ bench-full ENDPOINT:
     uv run llms eval run mmlu        --endpoint {{ENDPOINT}}
     uv run llms eval report
 
-# Front-end + agentic suite (17 prompts, ~20 min wall on the 35B A3B).
+# Front-end + agentic suite (17 prompts, ~25 min wall).
 # Slim variant for spot-checks: `just bench-frontend-agentic chat-qwopus36 agentic`.
 bench-frontend-agentic ENDPOINT SUBSET="":
     @echo "▶ frontend_agentic{{ if SUBSET == '' { '' } else { ' [' + SUBSET + ']' } }} →  {{ENDPOINT}}"

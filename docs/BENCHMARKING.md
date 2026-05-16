@@ -51,12 +51,14 @@ uv run llms eval run frontend_agentic --endpoint chat-carnice --provider ik_llam
 
 ### Full suite
 
-The `just bench-suite` recipe loops every adapter against one endpoint and refreshes the hub at the end:
+The `just bench-suite` recipe loops `local_smoke`, `niah`, `gsm8k`, and `mmlu` against one endpoint and refreshes the hub at the end. `frontend_agentic` is intentionally excluded (~25 min wall); run it on demand with `just bench-frontend-agentic`.
 
 ```sh
-just bench-suite chat-default          # caps mmlu/gsm8k at 50 items
-just bench-suite chat-default 200      # cap at 200
-just bench-full  chat-default          # full splits — slow, hours not minutes
+just bench-suite chat-default                # caps mmlu/gsm8k at 50 items
+just bench-suite chat-default 200            # cap at 200
+just bench-full  chat-default                # full splits — slow, hours not minutes
+just bench-frontend-agentic chat-default     # the 17-prompt FE + agentic suite
+just bench-frontend-agentic chat-default agentic  # one category only
 ```
 
 Each run writes:
