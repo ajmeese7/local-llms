@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 
 from llms.eval.adapter import BenchmarkAdapter
-from llms.eval.http_client import CompletionClient
+from llms.eval.http_client import CompletionClient, CompletionResult
 from llms.eval.manifest import (
     AdapterFingerprint,
     DatasetFingerprint,
@@ -193,19 +193,16 @@ def _new_run_id(adapter_name: str) -> str:
     return f"{adapter_name}-{stamp}-{suffix}"
 
 
-def _is_connectivity_error(completion_http_status: int, completion_error: str | None) -> bool:
-    """True when an item failed before/while reaching the server, not from
-    the server returning bad content. `http_status==0` means we never got a
-    response; specific httpx exception class names cover the network-class
-    surface (connect refused, DNS failure, read timeout against an unresponsive
-    socket). Used by the early-abort heuristic so a dead backend kills the
-    suite instead of burning a connect timeout per prompt.
+def _is_connectivity_error(completion: CompletionResult) -> bool:
+    """True when the item failed because the server is unreachable, not
+    because the server accepted the connection and then misbehaved.
+
+    The HTTP client sets `connectivity_error` only for ConnectError-class
+    failures (refused, DNS, unreachable, connect timeout). A ReadTimeout or
+    HTTP 5xx from a backend that's alive but slow stays out — the suite
+    keeps running on those, and the per-item record carries the error.
     """
-    if completion_http_status != 0:
-        return False
-    err = (completion_error or "").lower()
-    needles = ("connect", "timed out", "timeout", "refused", "reset", "resolve", "name or service")
-    return any(n in err for n in needles)
+    return completion.connectivity_error
 
 
 def _iter_results(
@@ -266,7 +263,7 @@ def _iter_results(
             on_item_finish(idx, total, result)
         yield result
 
-        if _is_connectivity_error(completion.http_status, completion.error):
+        if _is_connectivity_error(completion):
             consecutive_conn_errors += 1
             if consecutive_conn_errors >= max_consecutive_errors:
                 reason = (

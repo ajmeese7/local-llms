@@ -203,6 +203,37 @@ def test_consecutive_connectivity_errors_abort_the_run(tmp_path: Path) -> None:
     assert len(call_log) == 1
 
 
+def test_read_timeout_does_not_abort_the_run(tmp_path: Path) -> None:
+    """A ReadTimeout means the backend accepted the connection but stalled
+    (slow prefill on a long prompt, wedged generation). That's a per-item
+    failure, not a dead-backend signal, so the suite should keep going.
+    """
+    call_log: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/v1/models"):
+            return httpx.Response(200, json={"object": "list", "data": []})
+        call_log.append(request.url.path)
+        raise httpx.ReadTimeout("timed out")
+
+    outcome = run_eval(
+        adapter=LocalSmokeAdapter(),
+        runtime=_stub_runtime(),
+        endpoint_name="ep",
+        base_url="http://stub",
+        output_root=tmp_path / "runs",
+        transport=httpx.MockTransport(handler),
+        max_consecutive_errors=1,
+    )
+    # No connectivity-class abort — the run completed all items.
+    assert outcome.aborted_reason is None
+    assert len(call_log) == 5
+    # Each item recorded the timeout error.
+    rows = [json.loads(r) for r in outcome.results_path.read_text().strip().splitlines()]
+    assert len(rows) == 5
+    assert all(r["error"] for r in rows)
+
+
 def test_runner_records_timing(tmp_path: Path) -> None:
     """Wall-clock and compute-clock timing land in summary.json."""
     outcome = run_eval(

@@ -40,12 +40,13 @@ class CompletionResult:
     output_tokens: int | None
     raw: dict[str, object]
     error: str | None = None
+    # True only when the failure is "server unreachable" (connect refused,
+    # DNS resolution failed, connect timeout). A ReadTimeout on a backend
+    # that accepted the TCP connection means the model is slow or wedged,
+    # not that the server is dead — the runner treats that as a per-item
+    # failure, not a suite-killing connectivity error.
+    connectivity_error: bool = False
 
-
-# Idle gap allowed between SSE chunks before the request is considered dead.
-# A loaded local model that hasn't emitted a token in this long is wedged, not
-# slow — the runner should move on rather than wait the full wall budget.
-_DEFAULT_READ_TIMEOUT_S = 120.0
 
 # Conservative tok/s floor used to size each request's total wall budget. A
 # 30B-class model on a single 5090 sustains ~20 tok/s on these prompts; 5 tok/s
@@ -65,18 +66,20 @@ class CompletionClient:
         *,
         api_key: str | None = None,
         model: str | None = None,
-        read_timeout: float = _DEFAULT_READ_TIMEOUT_S,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+        # Per-request timeouts are set in complete() so the read deadline can
+        # track the prompt's wall budget; the client default here is only
+        # used by health_check (which passes its own timeout) and is harmless.
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
             headers=headers,
             timeout=httpx.Timeout(
                 connect=10.0,
-                read=read_timeout,
+                read=30.0,
                 write=30.0,
                 pool=10.0,
             ),
@@ -142,6 +145,17 @@ class CompletionClient:
             _MIN_WALL_BUDGET_S,
             prompt.max_tokens / _TOK_PER_SEC_FLOOR + _WALL_BUFFER_S,
         )
+        # Match the read timeout to the wall budget. Long prompts (e.g. a 23K-
+        # char needle-in-haystack against a 30B model) sit silent during prefill
+        # well past any fixed read deadline, then trip a ReadTimeout before the
+        # first token. We don't want to abort there — we want to abort when the
+        # wall budget runs out, same as everywhere else.
+        per_request_timeout = httpx.Timeout(
+            connect=10.0,
+            read=wall_budget_s,
+            write=30.0,
+            pool=10.0,
+        )
         started = time.perf_counter()
         deadline = started + wall_budget_s
 
@@ -152,9 +166,15 @@ class CompletionClient:
         output_tokens: int | None = None
         http_status = 0
         error: str | None = None
+        connectivity_error = False
 
         try:
-            with self._client.stream("POST", "/v1/chat/completions", json=body) as response:
+            with self._client.stream(
+                "POST",
+                "/v1/chat/completions",
+                json=body,
+                timeout=per_request_timeout,
+            ) as response:
                 http_status = response.status_code
                 if response.status_code != 200:
                     payload_bytes = response.read()
@@ -206,6 +226,14 @@ class CompletionClient:
                         break
         except httpx.HTTPError as exc:
             error = str(exc) or type(exc).__name__
+            # ConnectError / ConnectTimeout (and the broader ConnectError
+            # family for DNS / refused / unreachable) mean we never opened a
+            # socket to the backend — that's a real connectivity failure and
+            # the runner should abort the suite. Everything else (ReadTimeout,
+            # ReadError, RemoteProtocolError, …) means the server accepted the
+            # connection and then misbehaved or stalled, which is a per-item
+            # failure, not a dead-backend signal.
+            connectivity_error = isinstance(exc, httpx.ConnectError)
 
         latency_ms = (time.perf_counter() - started) * 1000.0
         # Prefer visible content; fall back to reasoning when the model emitted
@@ -221,6 +249,7 @@ class CompletionClient:
             output_tokens=output_tokens,
             raw={},
             error=error,
+            connectivity_error=connectivity_error,
         )
 
 
