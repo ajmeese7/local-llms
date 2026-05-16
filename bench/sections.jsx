@@ -733,10 +733,33 @@ function ExpandedPanel({ row, cell, hideThinking, previewHtml, onRatingChange })
     <div className="excerpt-panel">
       {diag && <DiagnosticBanner diag={diag} row={r} cell={cell} />}
       {showMisses && <MissedChecksPanel hits={hits} misses={misses} />}
+      {r.prompt && <PromptPanel prompt={r.prompt} />}
       <OutputArea row={r} previewHtml={previewHtml} hideThinking={hideThinking} />
       <RatingEditor cell={cell} row={r} onChange={onRatingChange} />
       <ExpandedFoot row={r} isHtml={isHtml} />
     </div>
+  );
+}
+
+function PromptPanel({ prompt }) {
+  // Long-context prompts can be tens of thousands of chars; mmlu prompts are
+  // a few hundred. Keep collapsed by default and show a single-line preview
+  // so short prompts are one click away and long ones don't dominate the row.
+  const previewLen = 140;
+  const firstLine = prompt.split("\n", 1)[0];
+  const preview = firstLine.length > previewLen
+    ? firstLine.slice(0, previewLen) + "…"
+    : firstLine;
+  const charCount = prompt.length.toLocaleString();
+  return (
+    <details className="prompt-panel">
+      <summary>
+        <span className="prompt-head">Prompt</span>
+        <span className="prompt-preview">{preview}</span>
+        <span className="prompt-meta">{charCount} chars</span>
+      </summary>
+      <pre className="prompt-body">{prompt}</pre>
+    </details>
   );
 }
 
