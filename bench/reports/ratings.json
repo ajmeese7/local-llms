@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "exported_at": "2026-05-16T15:39:03.351Z",
+  "ratings": {
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_particle_attractor": {
+      "stars": 5,
+      "note": "Slow animation, but works great",
+      "tags": [
+        "good-animation"
+      ],
+      "rated_at": "2026-05-16T15:37:55.301Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_saas_landing": {
+      "stars": 4,
+      "note": "Really cool streaming in of the log data., although the fading isn't at the bottom. Neat subtle highlight effect on the \"Why teams switch\" cards. The \"trusted by\" section is too dark. Smooth chart animation for the pipeline, but the concept being demonstrated is not communicated clearly. Really sleek footer.",
+      "tags": [],
+      "rated_at": "2026-05-16T15:35:44.938Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_designer_portfolio": {
+      "stars": 4,
+      "note": "The animation for the text does not line up with where it's expected. The SVGs do look pretty cool.",
+      "tags": [
+        "bad-animation"
+      ],
+      "rated_at": "2026-05-16T15:32:18.954Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_webgl_shader": {
+      "stars": 1,
+      "note": "",
+      "tags": [
+        "webgl-failure"
+      ],
+      "rated_at": "2026-05-16T15:36:34.120Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_analytics_dashboard": {
+      "stars": 4,
+      "note": "Very nice initial graphs, contained within the bounds of their containers. No data shows on the P99 latency window. Nice functionality of the service help table. The sidebar animation is very smooth.",
+      "tags": [
+        "empty-graph",
+        "smooth-animation"
+      ],
+      "rated_at": "2026-05-16T15:33:46.515Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_three_scene": {
+      "stars": 1,
+      "note": "Nothing shows",
+      "tags": [
+        "empty",
+        "failure"
+      ],
+      "rated_at": "2026-05-16T15:36:53.870Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_mobile_app_marketing": {
+      "stars": 3,
+      "note": "I don't like how the \"Your Week\" emojis are selectable text. The year says 2024 for some reason.",
+      "tags": [],
+      "rated_at": "2026-05-16T15:38:48.092Z"
+    }
+  }
+}
