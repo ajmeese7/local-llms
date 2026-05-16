@@ -77,7 +77,6 @@ Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k
 | [docs/USAGE.md](docs/USAGE.md) | API examples, useful commands |
 | [docs/MODELS.md](docs/MODELS.md) | Model recommendations and notes |
 | [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | Eval adapters, run manifests, the report hub |
-| [docs/SWE-BENCH.md](docs/SWE-BENCH.md) | Notes for SWE-bench integration |
 | [docs/WSL2.md](docs/WSL2.md) | Networking, auto-start, keep-alive |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | CUDA, OOM, service startup, build failures |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What is left |
@@ -85,7 +84,7 @@ Adapters shipping today: `local_smoke` (5-prompt keyword rubric), `mmlu`, `gsm8k
 Reading order by goal:
 
 - **Bring up a new machine**: [SETUP](docs/SETUP.md) → [CONFIGURATION](docs/CONFIGURATION.md) → [USAGE](docs/USAGE.md)
-- **Experiment with local models**: [MODELS](docs/MODELS.md) → [BENCHMARKING](docs/BENCHMARKING.md) → [SWE-BENCH](docs/SWE-BENCH.md)
+- **Experiment with local models**: [MODELS](docs/MODELS.md) → [BENCHMARKING](docs/BENCHMARKING.md)
 - **WSL-specific setup**: [SETUP](docs/SETUP.md) → [WSL2](docs/WSL2.md) → [TROUBLESHOOTING](docs/TROUBLESHOOTING.md)
 
 ## Hub
