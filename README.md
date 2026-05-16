@@ -4,12 +4,10 @@ Run a local LLM as a persistent systemd service using [llama.cpp](https://github
 
 > **Hardware scope.** Targets NVIDIA CUDA on Linux or WSL2 with `systemd`. Shipped configs assume an RTX 5090 (32 GB VRAM) or a 5060 Ti fallback; smaller cards work but you will need to lower `context_length` and pick smaller quants. AMD / Apple / CPU-only setups are out of scope. Published benchmark numbers reflect the operator's own hardware — the hub is a showcase, not a public leaderboard.
 
-License: [MIT](LICENSE).
-
 ## Quick start
 
 ```sh
-git clone https://github.com/meese-family/local-llms.git
+git clone https://github.com/ajmeese7/local-llms.git
 cd local-llms
 ./setup.sh
 ```

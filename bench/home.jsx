@@ -136,6 +136,10 @@ function HomeHero({ benches }) {
       <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 max-w-[80ch]">
         // one card per (hardware, model). each card carries every capability you've thrown at it.
       </p>
+      <div className="mt-4 max-w-[80ch] p-3 border border-me-warning/40 bg-me-warning/5 font-mono text-[12px] text-me-fg-2">
+        <span className="text-me-warning font-bold">FAST-ANSWER TRACK · </span>
+        scores are recorded with <code className="text-me-cyan">enable_thinking=false</code> so adapters with tight token budgets (mmlu, niah) do not get starved by hidden reasoning. A separate reasoning-on track is planned; expect Qwen3-family numbers to shift materially when it lands. See <code className="text-me-cyan">docs/ROADMAP.md</code>.
+      </div>
     </div>
   );
 }

@@ -128,9 +128,18 @@ def _render_html(manifest: Manifest, summary: RunSummary) -> str:
   table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
   th, td {{ border: 1px solid #d0d7de; padding: 0.4rem 0.6rem; text-align: left; }}
   details {{ margin: 1rem 0; }}
+  .notice {{ background: #fff8c5; border: 1px solid #d4a72c; padding: 0.6rem 0.9rem;
+             border-radius: 6px; margin-bottom: 1rem; font-size: 13px; }}
+  .notice strong {{ color: #7d4e00; }}
 </style>
 </head>
 <body>
+<div class="notice">
+  <strong>Fast-answer track.</strong> Scores reflect non-thinking mode
+  (<code>chat_template_kwargs.enable_thinking=false</code>). A separate
+  reasoning-on track is on the roadmap; numbers will differ materially for
+  Qwen3-family models. See <code>docs/ROADMAP.md</code>.
+</div>
 <pre>{safe_md}</pre>
 <details><summary>Manifest</summary><pre>{html.escape(manifest_blob)}</pre></details>
 </body>
