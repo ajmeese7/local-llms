@@ -553,6 +553,7 @@ function PromptsTable({ cell }) {
   const [hideThinking, setHideThinking] = _useState(false);
   const [previewHtml, setPreviewHtml] = _useState(true);
   const [open, setOpen] = _useState({});
+  const showPreviewToggle = cell.adapter?.name === "frontend_agentic";
   const [page, setPage] = _useState(0);
   // Bumped when a rating is written so child rows re-read localStorage
   // and the per-cell rating summary refreshes.
@@ -592,9 +593,11 @@ function PromptsTable({ cell }) {
           <Chip key={c} on={filter === c} onClick={() => setFilter(c)}>{c}</Chip>
         ))}
         <span className="flex-1"></span>
-        <Chip on={previewHtml} onClick={() => setPreviewHtml(v => !v)}>
-          {previewHtml ? "Preview HTML on" : "Preview HTML off"}
-        </Chip>
+        {showPreviewToggle && (
+          <Chip on={previewHtml} onClick={() => setPreviewHtml(v => !v)}>
+            {previewHtml ? "Preview HTML on" : "Preview HTML off"}
+          </Chip>
+        )}
         <Chip on={hideThinking} onClick={() => setHideThinking(v => !v)}>
           {hideThinking ? "Show thinking text" : "Hide thinking text"}
         </Chip>
