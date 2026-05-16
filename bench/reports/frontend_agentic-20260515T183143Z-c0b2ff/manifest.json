@@ -1,0 +1,66 @@
+{
+  "adapter": {
+    "name": "frontend_agentic",
+    "prompt_template_version": "v1",
+    "scorer_version": "v1",
+    "track": "general_capability",
+    "version": "v1"
+  },
+  "comparability_key": "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c",
+  "dataset": {
+    "item_count": 17,
+    "name": "frontend_agentic",
+    "subset": null,
+    "version": "v1"
+  },
+  "decode": {
+    "max_tokens": 32000,
+    "min_p": null,
+    "presence_penalty": null,
+    "repeat_penalty": null,
+    "temperature": null,
+    "top_k": null,
+    "top_p": null
+  },
+  "endpoint_name": "chat-carnice",
+  "extras": {},
+  "hardware": {
+    "app_clock_graphics_mhz": null,
+    "app_clock_memory_mhz": null,
+    "boost_clock_mhz": 3090,
+    "gpu_name": "NVIDIA GeForce RTX 5090",
+    "mem_clock_max_mhz": 14001,
+    "persistence_mode": "Enabled",
+    "power_limit_w": 600.0,
+    "profile": "rtx-5090",
+    "vram_mb": 32607
+  },
+  "hostname": "6ee47e0c",
+  "model": {
+    "alias": "Carnice-V2-27B",
+    "hf_file": "carnice-v2-27b-Q5_K_M.gguf",
+    "hf_repo": "kai-os/Carnice-V2-27b-GGUF",
+    "model_path": "~/models/carnice-v2-27b-Q5_K_M.gguf",
+    "model_sha256": null,
+    "profile": "carnice-v2-27b"
+  },
+  "notes": "",
+  "provider": {
+    "cmake_args": [
+      "-DGGML_NATIVE=ON",
+      "-DGGML_CUDA=ON"
+    ],
+    "git_commit": "eb570eb96689c235933b813693ca28ab9d3d26de",
+    "name": "ik_llama.cpp",
+    "server_binary": "~/.local/share/ik_llama.cpp/build/bin/llama-server"
+  },
+  "repo_sha": "d57fbef86e23cede397e09b61682ad8297559b9b",
+  "run_id": "frontend_agentic-20260515T183143Z-c0b2ff",
+  "seed": 0,
+  "server": {
+    "engine": "ik_llama.cpp",
+    "git_commit": "eb570eb96689c235933b813693ca28ab9d3d26de",
+    "version": null
+  },
+  "timestamp": "2026-05-15T18:31:43Z"
+}

@@ -1,0 +1,47 @@
+{
+  "accuracy": {
+    "hi": 1.0,
+    "lo": 0.7058823529411765,
+    "method": "bootstrap-percentile",
+    "point": 0.8823529411764706
+  },
+  "by_category": {
+    "agentic": {
+      "accuracy": 0.6666666666666666,
+      "correct_count": 4,
+      "item_count": 6,
+      "partial_mean": 0.8571428571428571
+    },
+    "canvas": {
+      "accuracy": 1.0,
+      "correct_count": 6,
+      "item_count": 6,
+      "partial_mean": 1.0
+    },
+    "design": {
+      "accuracy": 1.0,
+      "correct_count": 5,
+      "item_count": 5,
+      "partial_mean": 1.0
+    }
+  },
+  "correct_count": 15,
+  "error_count": 0,
+  "item_count": 17,
+  "median_latency_ms": 62635.21867200325,
+  "median_tokens_per_sec": 56.302916816390216,
+  "median_ttft_ms": 1327.5228819984477,
+  "parse_failure_count": 0,
+  "partial": {
+    "hi": 1.0,
+    "lo": 0.8739495798319328,
+    "method": "bootstrap-percentile",
+    "point": 0.9495798319327731
+  },
+  "timing": {
+    "compute_seconds": 1690.4690376289511,
+    "finished_at": "2026-05-15T18:58:05Z",
+    "started_at": "2026-05-15T18:31:43Z",
+    "wall_seconds": 1690.5491385880014
+  }
+}

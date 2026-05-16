@@ -1,0 +1,358 @@
+{
+  "generated_at": "2026-05-15T20:34:59Z",
+  "hardware": [
+    {
+      "default_endpoint": "chat-9b",
+      "default_provider": "llama.cpp",
+      "defaults": {
+        "cache_type_k": "q4_0",
+        "cache_type_v": "q4_0",
+        "context_length": 32768,
+        "flash_attention": true,
+        "gpu_layers": 99,
+        "host": "0.0.0.0",
+        "parallel_slots": 1,
+        "port": 9999
+      },
+      "description": "NVIDIA RTX 5060 Ti (16GB VRAM)",
+      "name": "rtx-5060",
+      "supported_endpoints": [
+        "chat-9b"
+      ]
+    },
+    {
+      "default_endpoint": "chat-default",
+      "default_provider": "llama.cpp",
+      "defaults": {
+        "cache_type_k": "q8_0",
+        "cache_type_v": "q4_0",
+        "context_length": 131072,
+        "flash_attention": true,
+        "gpu_layers": 99,
+        "host": "0.0.0.0",
+        "parallel_slots": 1,
+        "port": 9999
+      },
+      "description": "NVIDIA RTX 5090 (32GB VRAM)",
+      "name": "rtx-5090",
+      "supported_endpoints": [
+        "chat-default",
+        "chat-aeon",
+        "chat-mythos",
+        "chat-a3b",
+        "chat-a3b-ngram",
+        "chat-carnice",
+        "chat-qwopus36",
+        "chat-granite"
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "alias": "Carnice-V2-27B",
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "context_length": 131072,
+      "decode": {
+        "min_p": null,
+        "presence_penalty": null,
+        "repeat_penalty": null,
+        "temperature": null,
+        "top_k": null,
+        "top_p": null
+      },
+      "has_mmproj": false,
+      "hf_file": "carnice-v2-27b-Q5_K_M.gguf",
+      "hf_repo": "kai-os/Carnice-V2-27b-GGUF",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "carnice-v2-27b-Q5_K_M.gguf",
+      "model_path": "/home/ajmeese7/models/carnice-v2-27b-Q5_K_M.gguf",
+      "name": "carnice-v2-27b",
+      "parallel_slots": null,
+      "provider_compat": {
+        "blocked": [],
+        "notes": null,
+        "proven": []
+      }
+    },
+    {
+      "alias": "Granite-4.1-30B",
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "context_length": null,
+      "decode": {
+        "min_p": null,
+        "presence_penalty": null,
+        "repeat_penalty": null,
+        "temperature": null,
+        "top_k": null,
+        "top_p": null
+      },
+      "has_mmproj": false,
+      "hf_file": "granite-4.1-30b-Q6_K.gguf",
+      "hf_repo": "unsloth/granite-4.1-30b-GGUF",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "granite-4.1-30b-Q6_K.gguf",
+      "model_path": "/home/ajmeese7/models/granite-4.1-30b-Q6_K.gguf",
+      "name": "granite-4.1-30b",
+      "parallel_slots": null,
+      "provider_compat": {
+        "blocked": [],
+        "notes": null,
+        "proven": []
+      }
+    },
+    {
+      "alias": "MYTHOS-26B-A4B",
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "context_length": null,
+      "decode": {
+        "min_p": null,
+        "presence_penalty": null,
+        "repeat_penalty": null,
+        "temperature": null,
+        "top_k": null,
+        "top_p": null
+      },
+      "has_mmproj": false,
+      "hf_file": "mythos-26b-a4b-prism-pro-dq.gguf",
+      "hf_repo": "Ex0bit/MYTHOS-26B-A4B-PRISM-PRO-DQ-GGUF",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "mythos-26b-a4b-prism-pro-dq.gguf",
+      "model_path": "/home/ajmeese7/models/mythos-26b-a4b-prism-pro-dq.gguf",
+      "name": "mythos",
+      "parallel_slots": null,
+      "provider_compat": {
+        "blocked": [
+          "ik_llama.cpp"
+        ],
+        "notes": "ik_llama.cpp returned HTTP 500 for every prompt in the 2026-04-29 RTX 5090 suite.",
+        "proven": [
+          "llama.cpp"
+        ]
+      }
+    },
+    {
+      "alias": "Qwen3.5-9B",
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "context_length": null,
+      "decode": {
+        "min_p": null,
+        "presence_penalty": null,
+        "repeat_penalty": null,
+        "temperature": null,
+        "top_k": null,
+        "top_p": null
+      },
+      "has_mmproj": false,
+      "hf_file": "huihui-qwen3.5-9b-abliterated-q4_k_m.gguf",
+      "hf_repo": "huihui-ai/Huihui-Qwen3.5-9B-abliterated-GGUF",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "Qwen3.5-9B.Q4_K_M.gguf",
+      "model_path": "/home/ajmeese7/models/Qwen3.5-9B.Q4_K_M.gguf",
+      "name": "qwen35-9b",
+      "parallel_slots": null,
+      "provider_compat": {
+        "blocked": [],
+        "notes": null,
+        "proven": [
+          "llama.cpp"
+        ]
+      }
+    },
+    {
+      "alias": "Qwen3.6-27B (Uncensored)",
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "context_length": 262144,
+      "decode": {
+        "min_p": null,
+        "presence_penalty": null,
+        "repeat_penalty": null,
+        "temperature": null,
+        "top_k": null,
+        "top_p": null
+      },
+      "has_mmproj": false,
+      "hf_file": "qwen3.6-27b-uncensored-q6_k.gguf",
+      "hf_repo": "Abiray/Qwen3.6-27B-AEON-Ultimate-Uncensored-GGUF",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "qwen3.6-27b-uncensored-q6_k.gguf",
+      "model_path": "/home/ajmeese7/models/qwen3.6-27b-uncensored-q6_k.gguf",
+      "name": "qwen36-27B-AEON",
+      "parallel_slots": null,
+      "provider_compat": {
+        "blocked": [],
+        "notes": null,
+        "proven": [
+          "llama.cpp",
+          "ik_llama.cpp"
+        ]
+      }
+    },
+    {
+      "alias": "Qwen3.6-27B",
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "context_length": 262144,
+      "decode": {
+        "min_p": null,
+        "presence_penalty": null,
+        "repeat_penalty": null,
+        "temperature": null,
+        "top_k": null,
+        "top_p": null
+      },
+      "has_mmproj": false,
+      "hf_file": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+      "hf_repo": "unsloth/Qwen3.6-27B-GGUF",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+      "model_path": "/home/ajmeese7/models/Qwen3.6-27B-UD-Q5_K_XL.gguf",
+      "name": "qwen36-27b",
+      "parallel_slots": null,
+      "provider_compat": {
+        "blocked": [],
+        "notes": null,
+        "proven": [
+          "llama.cpp",
+          "ik_llama.cpp"
+        ]
+      }
+    },
+    {
+      "alias": "Qwen3.6-35B-A3B",
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "context_length": 131072,
+      "decode": {
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": null,
+        "temperature": 1.0,
+        "top_k": 20,
+        "top_p": 0.95
+      },
+      "has_mmproj": true,
+      "hf_file": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q5_K_P.gguf",
+      "hf_repo": "HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q5_K_P.gguf",
+      "model_path": "/home/ajmeese7/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q5_K_P.gguf",
+      "name": "qwen36-35B-A3B",
+      "parallel_slots": null,
+      "provider_compat": {
+        "blocked": [
+          "ik_llama.cpp"
+        ],
+        "notes": "ik_llama.cpp timed out or ran near 1 tok/s in the 2026-04-29 RTX 5090 suite; treat as backend-incompatible until retested.",
+        "proven": [
+          "llama.cpp"
+        ]
+      }
+    },
+    {
+      "alias": "Qwen3.6-35B-A3B-Q4-ngram",
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "context_length": 262144,
+      "decode": {
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": null,
+        "temperature": 1.0,
+        "top_k": 20,
+        "top_p": 0.95
+      },
+      "has_mmproj": false,
+      "hf_file": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+      "hf_repo": "HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive",
+      "jinja": true,
+      "kv_unified": true,
+      "model_filename": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+      "model_path": "/home/ajmeese7/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+      "name": "qwen36-35B-A3B-q4-ngram",
+      "parallel_slots": 4,
+      "provider_compat": {
+        "blocked": [],
+        "notes": "ngram-mod profile is proven only on llama.cpp; ik_llama.cpp support is unproven and should be retested before benchmarking.",
+        "proven": [
+          "llama.cpp"
+        ]
+      }
+    },
+    {
+      "alias": "Qwopus3.6-35B-A3B",
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q8_0",
+      "context_length": 131072,
+      "decode": {
+        "min_p": null,
+        "presence_penalty": null,
+        "repeat_penalty": null,
+        "temperature": 0.3,
+        "top_k": null,
+        "top_p": 0.9
+      },
+      "has_mmproj": false,
+      "hf_file": "Qwopus3.6-35B-A3B-v1-Q5_K_M.gguf",
+      "hf_repo": "Jackrong/Qwopus3.6-35B-A3B-v1-GGUF",
+      "jinja": true,
+      "kv_unified": false,
+      "model_filename": "Qwopus3.6-35B-A3B-v1-Q5_K_M.gguf",
+      "model_path": "/home/ajmeese7/models/Qwopus3.6-35B-A3B-v1-Q5_K_M.gguf",
+      "name": "qwopus36-35B-A3B",
+      "parallel_slots": 1,
+      "provider_compat": {
+        "blocked": [],
+        "notes": null,
+        "proven": [
+          "llama.cpp"
+        ]
+      }
+    }
+  ],
+  "providers": [
+    {
+      "aliases": [
+        "ik",
+        "ik_llama",
+        "ikawrakow"
+      ],
+      "capabilities": {
+        "jinja": true,
+        "kv_unified": false,
+        "mmproj": true,
+        "ngram_mod": false,
+        "spec_default": false
+      },
+      "name": "ik_llama.cpp",
+      "repo_url": "https://github.com/ikawrakow/ik_llama.cpp.git"
+    },
+    {
+      "aliases": [
+        "llama",
+        "ggerganov"
+      ],
+      "capabilities": {
+        "jinja": true,
+        "kv_unified": true,
+        "mmproj": true,
+        "ngram_mod": true,
+        "spec_default": true
+      },
+      "name": "llama.cpp",
+      "repo_url": "https://github.com/ggerganov/llama.cpp.git"
+    }
+  ],
+  "version": 5
+}
