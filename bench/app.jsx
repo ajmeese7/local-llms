@@ -302,8 +302,12 @@ function App() {
           <span className="font-logo tracking-wider text-me-fg-2">MEESE · ENTERPRISES</span>
           &nbsp;//&nbsp; benchmark hub v2 &nbsp;//&nbsp;
           <a href="#/methodology" onClick={(e) => { e.preventDefault(); navigate({ view: "methodology" }); }}>methodology</a>
-          &nbsp;//&nbsp;
-          <a href="#" onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(location.href); }}>copy permalink</a>
+          {route.view === "bench" && (
+            <>
+              &nbsp;//&nbsp;
+              <a href="#" onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(location.href); }}>copy permalink</a>
+            </>
+          )}
         </footer>
       </div>
     </>
