@@ -1,0 +1,41 @@
+{
+  "accuracy": {
+    "hi": 0.7201249999999999,
+    "lo": 0.59,
+    "method": "bootstrap-percentile",
+    "point": 0.655
+  },
+  "by_category": {
+    "abstract_algebra": {
+      "accuracy": 0.65,
+      "correct_count": 65,
+      "item_count": 100,
+      "partial_mean": 0.65
+    },
+    "anatomy": {
+      "accuracy": 0.66,
+      "correct_count": 66,
+      "item_count": 100,
+      "partial_mean": 0.66
+    }
+  },
+  "correct_count": 131,
+  "error_count": 0,
+  "item_count": 200,
+  "median_latency_ms": 551.4217585005099,
+  "median_tokens_per_sec": 3.638759382996276,
+  "median_ttft_ms": 497.60136249824427,
+  "parse_failure_count": 0,
+  "partial": {
+    "hi": 0.7201249999999999,
+    "lo": 0.59,
+    "method": "bootstrap-percentile",
+    "point": 0.655
+  },
+  "timing": {
+    "compute_seconds": 114.91431135908351,
+    "finished_at": "2026-05-16T17:23:30Z",
+    "started_at": "2026-05-16T17:21:42Z",
+    "wall_seconds": 114.98201637898455
+  }
+}

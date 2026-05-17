@@ -1,0 +1,65 @@
+{
+  "adapter": {
+    "name": "mmlu",
+    "prompt_template_version": "v1",
+    "scorer_version": "v1",
+    "track": "general_capability",
+    "version": "v1"
+  },
+  "comparability_key": "25d42b16713dcb4d5e7ef6c0284040f435a45d081beb6f26d943298f4a7db59f",
+  "dataset": {
+    "item_count": 200,
+    "name": "mmlu",
+    "subset": null,
+    "version": "v1"
+  },
+  "decode": {
+    "max_tokens": 8,
+    "min_p": null,
+    "presence_penalty": null,
+    "repeat_penalty": null,
+    "temperature": null,
+    "top_k": null,
+    "top_p": null
+  },
+  "endpoint_name": "chat-granite",
+  "extras": {},
+  "hardware": {
+    "app_clock_graphics_mhz": null,
+    "app_clock_memory_mhz": null,
+    "boost_clock_mhz": 3090,
+    "gpu_name": "NVIDIA GeForce RTX 5090",
+    "mem_clock_max_mhz": 14001,
+    "persistence_mode": "Enabled",
+    "power_limit_w": 600.0,
+    "profile": "rtx-5090",
+    "vram_mb": 32607
+  },
+  "hostname": "6ee47e0c",
+  "model": {
+    "alias": "Granite-4.1-30B",
+    "hf_file": "granite-4.1-30b-Q6_K.gguf",
+    "hf_repo": "unsloth/granite-4.1-30b-GGUF",
+    "model_path": "~/models/granite-4.1-30b-Q6_K.gguf",
+    "model_sha256": null,
+    "profile": "granite-4.1-30b"
+  },
+  "notes": "",
+  "provider": {
+    "cmake_args": [
+      "-DGGML_CUDA=ON"
+    ],
+    "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+    "name": "llama.cpp",
+    "server_binary": "~/.local/share/llama.cpp/build/bin/llama-server"
+  },
+  "repo_sha": "4d92310e596e65f6c1617043bdac1aaa33ebf3af",
+  "run_id": "mmlu-20260516T172142Z-9878a9",
+  "seed": 0,
+  "server": {
+    "engine": "llama.cpp",
+    "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+    "version": null
+  },
+  "timestamp": "2026-05-16T17:21:42Z"
+}

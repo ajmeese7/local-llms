@@ -1,0 +1,47 @@
+{
+  "accuracy": {
+    "hi": 1.0,
+    "lo": 1.0,
+    "method": "bootstrap-percentile",
+    "point": 1.0
+  },
+  "by_category": {
+    "len1000": {
+      "accuracy": 1.0,
+      "correct_count": 3,
+      "item_count": 3,
+      "partial_mean": 1.0
+    },
+    "len200": {
+      "accuracy": 1.0,
+      "correct_count": 3,
+      "item_count": 3,
+      "partial_mean": 1.0
+    },
+    "len4000": {
+      "accuracy": 1.0,
+      "correct_count": 3,
+      "item_count": 3,
+      "partial_mean": 1.0
+    }
+  },
+  "correct_count": 9,
+  "error_count": 0,
+  "item_count": 9,
+  "median_latency_ms": 20251.00275501609,
+  "median_tokens_per_sec": 0.246901353996484,
+  "median_ttft_ms": 19883.97221500054,
+  "parse_failure_count": 0,
+  "partial": {
+    "hi": 1.0,
+    "lo": 1.0,
+    "method": "bootstrap-percentile",
+    "point": 1.0
+  },
+  "timing": {
+    "compute_seconds": 829.8149413639912,
+    "finished_at": "2026-05-16T16:43:22Z",
+    "started_at": "2026-05-16T16:30:26Z",
+    "wall_seconds": 829.8514678879874
+  }
+}

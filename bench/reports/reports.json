@@ -1,6 +1,451 @@
 {
   "benches": [
     {
+      "cell_count": 5,
+      "cells": [
+        {
+          "adapter": {
+            "name": "frontend_agentic",
+            "prompt_template_version": "v1",
+            "track": "general_capability",
+            "version": "v1"
+          },
+          "comparability_key": "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0",
+          "comparability_prefix": "f7394698",
+          "compute_seconds": 3144.7549708180595,
+          "history_ids": [
+            "frontend_agentic-20260516T211025Z-a882d7"
+          ],
+          "latest": {
+            "accuracy": {
+              "hi": 0.9411764705882353,
+              "lo": 0.5882352941176471,
+              "method": "bootstrap-percentile",
+              "point": 0.7647058823529411
+            },
+            "adapter": {
+              "name": "frontend_agentic",
+              "prompt_template_version": "v1",
+              "track": "general_capability",
+              "version": "v1"
+            },
+            "alias": "Granite-4.1-30B",
+            "comparability_key": "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0",
+            "comparability_prefix": "f7394698",
+            "correct_count": 13,
+            "dataset_item_count": 17,
+            "dataset_subset": null,
+            "endpoint": "chat-granite",
+            "error_count": 0,
+            "hardware": {
+              "app_clock_graphics_mhz": null,
+              "app_clock_memory_mhz": null,
+              "boost_clock_mhz": 3090,
+              "gpu_name": "NVIDIA GeForce RTX 5090",
+              "mem_clock_max_mhz": 14001,
+              "persistence_mode": "Enabled",
+              "power_limit_w": 600.0,
+              "profile": "rtx-5090",
+              "vram_mb": 32607
+            },
+            "id": "frontend_agentic-20260516T211025Z-a882d7",
+            "item_count": 17,
+            "median_latency_ms": 117586.00681502139,
+            "median_tokens_per_sec": 14.789174724979656,
+            "median_ttft_ms": 1840.002289012773,
+            "notes": "",
+            "parent_key": "af2687c0be0b435e083b2af801feb6581aaf7b32a91a7f2b32346ab46b1a372c",
+            "parent_prefix": "af2687c0",
+            "parse_failure_count": 0,
+            "partial": {
+              "hi": 0.9901960784313725,
+              "lo": 0.8988095238095238,
+              "method": "bootstrap-percentile",
+              "point": 0.9492296918767508
+            },
+            "profile": "granite-4.1-30b",
+            "provider": "llama.cpp",
+            "server": {
+              "engine": "llama.cpp",
+              "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+              "version": null
+            },
+            "timestamp": "2026-05-16T21:10:25Z",
+            "timing": {
+              "compute_seconds": 3144.7549708180595,
+              "finished_at": "2026-05-16T22:02:50Z",
+              "started_at": "2026-05-16T21:10:25Z",
+              "wall_seconds": 3144.81906472001
+            }
+          },
+          "parent_key": "af2687c0be0b435e083b2af801feb6581aaf7b32a91a7f2b32346ab46b1a372c",
+          "parent_prefix": "af2687c0",
+          "partial_only": false,
+          "partial_run_count": 0,
+          "partial_runs": [],
+          "run_count": 1,
+          "wall_seconds": 3144.81906472001
+        },
+        {
+          "adapter": {
+            "name": "mmlu",
+            "prompt_template_version": "v1",
+            "track": "general_capability",
+            "version": "v1"
+          },
+          "comparability_key": "25d42b16713dcb4d5e7ef6c0284040f435a45d081beb6f26d943298f4a7db59f",
+          "comparability_prefix": "25d42b16",
+          "compute_seconds": 114.91431135908351,
+          "history_ids": [
+            "mmlu-20260516T172142Z-9878a9"
+          ],
+          "latest": {
+            "accuracy": {
+              "hi": 0.7201249999999999,
+              "lo": 0.59,
+              "method": "bootstrap-percentile",
+              "point": 0.655
+            },
+            "adapter": {
+              "name": "mmlu",
+              "prompt_template_version": "v1",
+              "track": "general_capability",
+              "version": "v1"
+            },
+            "alias": "Granite-4.1-30B",
+            "comparability_key": "25d42b16713dcb4d5e7ef6c0284040f435a45d081beb6f26d943298f4a7db59f",
+            "comparability_prefix": "25d42b16",
+            "correct_count": 131,
+            "dataset_item_count": 200,
+            "dataset_subset": null,
+            "endpoint": "chat-granite",
+            "error_count": 0,
+            "hardware": {
+              "app_clock_graphics_mhz": null,
+              "app_clock_memory_mhz": null,
+              "boost_clock_mhz": 3090,
+              "gpu_name": "NVIDIA GeForce RTX 5090",
+              "mem_clock_max_mhz": 14001,
+              "persistence_mode": "Enabled",
+              "power_limit_w": 600.0,
+              "profile": "rtx-5090",
+              "vram_mb": 32607
+            },
+            "id": "mmlu-20260516T172142Z-9878a9",
+            "item_count": 200,
+            "median_latency_ms": 551.4217585005099,
+            "median_tokens_per_sec": 3.638759382996276,
+            "median_ttft_ms": 497.60136249824427,
+            "notes": "",
+            "parent_key": "3bfdf7b99ec838f53f7729f8b529e2c0a2e85ad1c0352885b5f2246aed52b5d8",
+            "parent_prefix": "3bfdf7b9",
+            "parse_failure_count": 0,
+            "partial": {
+              "hi": 0.7201249999999999,
+              "lo": 0.59,
+              "method": "bootstrap-percentile",
+              "point": 0.655
+            },
+            "profile": "granite-4.1-30b",
+            "provider": "llama.cpp",
+            "server": {
+              "engine": "llama.cpp",
+              "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+              "version": null
+            },
+            "timestamp": "2026-05-16T17:21:42Z",
+            "timing": {
+              "compute_seconds": 114.91431135908351,
+              "finished_at": "2026-05-16T17:23:30Z",
+              "started_at": "2026-05-16T17:21:42Z",
+              "wall_seconds": 114.98201637898455
+            }
+          },
+          "parent_key": "3bfdf7b99ec838f53f7729f8b529e2c0a2e85ad1c0352885b5f2246aed52b5d8",
+          "parent_prefix": "3bfdf7b9",
+          "partial_only": false,
+          "partial_run_count": 0,
+          "partial_runs": [],
+          "run_count": 1,
+          "wall_seconds": 114.98201637898455
+        },
+        {
+          "adapter": {
+            "name": "gsm8k",
+            "prompt_template_version": "v1",
+            "track": "general_capability",
+            "version": "v1"
+          },
+          "comparability_key": "0495cdbb0260475b97a0909f3f36e163478ad43b72edecc2324582a8baced8ce",
+          "comparability_prefix": "0495cdbb",
+          "compute_seconds": 2458.3557358752005,
+          "history_ids": [
+            "gsm8k-20260516T164325Z-3483b8"
+          ],
+          "latest": {
+            "accuracy": {
+              "hi": 0.995,
+              "lo": 0.95,
+              "method": "bootstrap-percentile",
+              "point": 0.975
+            },
+            "adapter": {
+              "name": "gsm8k",
+              "prompt_template_version": "v1",
+              "track": "general_capability",
+              "version": "v1"
+            },
+            "alias": "Granite-4.1-30B",
+            "comparability_key": "0495cdbb0260475b97a0909f3f36e163478ad43b72edecc2324582a8baced8ce",
+            "comparability_prefix": "0495cdbb",
+            "correct_count": 195,
+            "dataset_item_count": 200,
+            "dataset_subset": null,
+            "endpoint": "chat-granite",
+            "error_count": 0,
+            "hardware": {
+              "app_clock_graphics_mhz": null,
+              "app_clock_memory_mhz": null,
+              "boost_clock_mhz": 3090,
+              "gpu_name": "NVIDIA GeForce RTX 5090",
+              "mem_clock_max_mhz": 14001,
+              "persistence_mode": "Enabled",
+              "power_limit_w": 600.0,
+              "profile": "rtx-5090",
+              "vram_mb": 32607
+            },
+            "id": "gsm8k-20260516T164325Z-3483b8",
+            "item_count": 200,
+            "median_latency_ms": 11713.44352250162,
+            "median_tokens_per_sec": 19.995479437924644,
+            "median_ttft_ms": 486.12951149698347,
+            "notes": "",
+            "parent_key": "32d795cbe2fb2fd19cd7536bde81c873a58ff8682ad298ea67c8830a354e2e02",
+            "parent_prefix": "32d795cb",
+            "parse_failure_count": 0,
+            "partial": {
+              "hi": 0.995,
+              "lo": 0.95,
+              "method": "bootstrap-percentile",
+              "point": 0.975
+            },
+            "profile": "granite-4.1-30b",
+            "provider": "llama.cpp",
+            "server": {
+              "engine": "llama.cpp",
+              "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+              "version": null
+            },
+            "timestamp": "2026-05-16T16:43:25Z",
+            "timing": {
+              "compute_seconds": 2458.3557358752005,
+              "finished_at": "2026-05-16T17:21:42Z",
+              "started_at": "2026-05-16T16:43:25Z",
+              "wall_seconds": 2458.432622155
+            }
+          },
+          "parent_key": "32d795cbe2fb2fd19cd7536bde81c873a58ff8682ad298ea67c8830a354e2e02",
+          "parent_prefix": "32d795cb",
+          "partial_only": false,
+          "partial_run_count": 0,
+          "partial_runs": [],
+          "run_count": 1,
+          "wall_seconds": 2458.432622155
+        },
+        {
+          "adapter": {
+            "name": "niah",
+            "prompt_template_version": "v1",
+            "track": "reliability_factuality",
+            "version": "v1"
+          },
+          "comparability_key": "c30f5f57c1da064f722f5123cf4fef183cf69d589249ed0e9302e1264b0e715e",
+          "comparability_prefix": "c30f5f57",
+          "compute_seconds": 829.8149413639912,
+          "history_ids": [
+            "niah-20260516T163026Z-219fe2"
+          ],
+          "latest": {
+            "accuracy": {
+              "hi": 1.0,
+              "lo": 1.0,
+              "method": "bootstrap-percentile",
+              "point": 1.0
+            },
+            "adapter": {
+              "name": "niah",
+              "prompt_template_version": "v1",
+              "track": "reliability_factuality",
+              "version": "v1"
+            },
+            "alias": "Granite-4.1-30B",
+            "comparability_key": "c30f5f57c1da064f722f5123cf4fef183cf69d589249ed0e9302e1264b0e715e",
+            "comparability_prefix": "c30f5f57",
+            "correct_count": 9,
+            "dataset_item_count": 9,
+            "dataset_subset": null,
+            "endpoint": "chat-granite",
+            "error_count": 0,
+            "hardware": {
+              "app_clock_graphics_mhz": null,
+              "app_clock_memory_mhz": null,
+              "boost_clock_mhz": 3090,
+              "gpu_name": "NVIDIA GeForce RTX 5090",
+              "mem_clock_max_mhz": 14001,
+              "persistence_mode": "Enabled",
+              "power_limit_w": 600.0,
+              "profile": "rtx-5090",
+              "vram_mb": 32607
+            },
+            "id": "niah-20260516T163026Z-219fe2",
+            "item_count": 9,
+            "median_latency_ms": 20251.00275501609,
+            "median_tokens_per_sec": 0.246901353996484,
+            "median_ttft_ms": 19883.97221500054,
+            "notes": "",
+            "parent_key": "adde1b9ea5b35dc2309a3a1d4aa9312ca7515f0dbefd2d964c3705ab5df01254",
+            "parent_prefix": "adde1b9e",
+            "parse_failure_count": 0,
+            "partial": {
+              "hi": 1.0,
+              "lo": 1.0,
+              "method": "bootstrap-percentile",
+              "point": 1.0
+            },
+            "profile": "granite-4.1-30b",
+            "provider": "llama.cpp",
+            "server": {
+              "engine": "llama.cpp",
+              "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+              "version": null
+            },
+            "timestamp": "2026-05-16T16:30:26Z",
+            "timing": {
+              "compute_seconds": 829.8149413639912,
+              "finished_at": "2026-05-16T16:43:22Z",
+              "started_at": "2026-05-16T16:30:26Z",
+              "wall_seconds": 829.8514678879874
+            }
+          },
+          "parent_key": "adde1b9ea5b35dc2309a3a1d4aa9312ca7515f0dbefd2d964c3705ab5df01254",
+          "parent_prefix": "adde1b9e",
+          "partial_only": false,
+          "partial_run_count": 0,
+          "partial_runs": [],
+          "run_count": 1,
+          "wall_seconds": 829.8514678879874
+        },
+        {
+          "adapter": {
+            "name": "local_smoke",
+            "prompt_template_version": "v1",
+            "track": "smoke",
+            "version": "v1"
+          },
+          "comparability_key": "c9098a1632cae50baf8e245e5f504fcd85c267b35a39edaa420ecee9fdfa8aab",
+          "comparability_prefix": "c9098a16",
+          "compute_seconds": 131.36295202199835,
+          "history_ids": [
+            "local_smoke-20260516T162823Z-4d8dfa"
+          ],
+          "latest": {
+            "accuracy": {
+              "hi": 1.0,
+              "lo": 0.2,
+              "method": "bootstrap-percentile",
+              "point": 0.6
+            },
+            "adapter": {
+              "name": "local_smoke",
+              "prompt_template_version": "v1",
+              "track": "smoke",
+              "version": "v1"
+            },
+            "alias": "Granite-4.1-30B",
+            "comparability_key": "c9098a1632cae50baf8e245e5f504fcd85c267b35a39edaa420ecee9fdfa8aab",
+            "comparability_prefix": "c9098a16",
+            "correct_count": 3,
+            "dataset_item_count": 5,
+            "dataset_subset": null,
+            "endpoint": "chat-granite",
+            "error_count": 0,
+            "hardware": {
+              "app_clock_graphics_mhz": null,
+              "app_clock_memory_mhz": null,
+              "boost_clock_mhz": 3090,
+              "gpu_name": "NVIDIA GeForce RTX 5090",
+              "mem_clock_max_mhz": 14001,
+              "persistence_mode": "Enabled",
+              "power_limit_w": 600.0,
+              "profile": "rtx-5090",
+              "vram_mb": 32607
+            },
+            "id": "local_smoke-20260516T162823Z-4d8dfa",
+            "item_count": 5,
+            "median_latency_ms": 22134.724445000757,
+            "median_tokens_per_sec": 17.2527777734379,
+            "median_ttft_ms": 382.81492301030084,
+            "notes": "",
+            "parent_key": "464aca34299ba1656d5720164194b683b47736a84c0f2bbdd4aec6ce5b67af12",
+            "parent_prefix": "464aca34",
+            "parse_failure_count": 0,
+            "partial": {
+              "hi": 1.0,
+              "lo": 0.8666666666666668,
+              "method": "bootstrap-percentile",
+              "point": 0.9333333333333333
+            },
+            "profile": "granite-4.1-30b",
+            "provider": "llama.cpp",
+            "server": {
+              "engine": "llama.cpp",
+              "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+              "version": null
+            },
+            "timestamp": "2026-05-16T16:28:23Z",
+            "timing": {
+              "compute_seconds": 131.36295202199835,
+              "finished_at": "2026-05-16T16:30:26Z",
+              "started_at": "2026-05-16T16:28:23Z",
+              "wall_seconds": 131.40015258899075
+            }
+          },
+          "parent_key": "464aca34299ba1656d5720164194b683b47736a84c0f2bbdd4aec6ce5b67af12",
+          "parent_prefix": "464aca34",
+          "partial_only": false,
+          "partial_run_count": 0,
+          "partial_runs": [],
+          "run_count": 1,
+          "wall_seconds": 131.40015258899075
+        }
+      ],
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "hardware_profile": "rtx-5090",
+      "id": "a157958e9af76c81",
+      "latest_timestamp": "2026-05-16T21:10:25Z",
+      "model_alias": "Granite-4.1-30B",
+      "model_profile": "granite-4.1-30b",
+      "partial_run_count": 0,
+      "run_count": 5,
+      "server": {
+        "engine": "llama.cpp",
+        "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+        "version": null
+      },
+      "suite_seconds": 6679.485323730973,
+      "title": "Granite-4.1-30B on RTX 5090"
+    },
+    {
       "cell_count": 1,
       "cells": [
         {
@@ -115,8 +560,318 @@
       "title": "Carnice-V2-27B on RTX 5090"
     }
   ],
-  "generated_at": "2026-05-15T20:34:59Z",
+  "generated_at": "2026-05-16T22:02:50Z",
   "reports": [
+    {
+      "accuracy": {
+        "hi": 0.9411764705882353,
+        "lo": 0.5882352941176471,
+        "method": "bootstrap-percentile",
+        "point": 0.7647058823529411
+      },
+      "adapter": {
+        "name": "frontend_agentic",
+        "prompt_template_version": "v1",
+        "track": "general_capability",
+        "version": "v1"
+      },
+      "alias": "Granite-4.1-30B",
+      "comparability_key": "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0",
+      "comparability_prefix": "f7394698",
+      "correct_count": 13,
+      "dataset_item_count": 17,
+      "dataset_subset": null,
+      "endpoint": "chat-granite",
+      "error_count": 0,
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "id": "frontend_agentic-20260516T211025Z-a882d7",
+      "item_count": 17,
+      "median_latency_ms": 117586.00681502139,
+      "median_tokens_per_sec": 14.789174724979656,
+      "median_ttft_ms": 1840.002289012773,
+      "notes": "",
+      "parent_key": "af2687c0be0b435e083b2af801feb6581aaf7b32a91a7f2b32346ab46b1a372c",
+      "parent_prefix": "af2687c0",
+      "parse_failure_count": 0,
+      "partial": {
+        "hi": 0.9901960784313725,
+        "lo": 0.8988095238095238,
+        "method": "bootstrap-percentile",
+        "point": 0.9492296918767508
+      },
+      "profile": "granite-4.1-30b",
+      "provider": "llama.cpp",
+      "server": {
+        "engine": "llama.cpp",
+        "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+        "version": null
+      },
+      "timestamp": "2026-05-16T21:10:25Z",
+      "timing": {
+        "compute_seconds": 3144.7549708180595,
+        "finished_at": "2026-05-16T22:02:50Z",
+        "started_at": "2026-05-16T21:10:25Z",
+        "wall_seconds": 3144.81906472001
+      }
+    },
+    {
+      "accuracy": {
+        "hi": 0.7201249999999999,
+        "lo": 0.59,
+        "method": "bootstrap-percentile",
+        "point": 0.655
+      },
+      "adapter": {
+        "name": "mmlu",
+        "prompt_template_version": "v1",
+        "track": "general_capability",
+        "version": "v1"
+      },
+      "alias": "Granite-4.1-30B",
+      "comparability_key": "25d42b16713dcb4d5e7ef6c0284040f435a45d081beb6f26d943298f4a7db59f",
+      "comparability_prefix": "25d42b16",
+      "correct_count": 131,
+      "dataset_item_count": 200,
+      "dataset_subset": null,
+      "endpoint": "chat-granite",
+      "error_count": 0,
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "id": "mmlu-20260516T172142Z-9878a9",
+      "item_count": 200,
+      "median_latency_ms": 551.4217585005099,
+      "median_tokens_per_sec": 3.638759382996276,
+      "median_ttft_ms": 497.60136249824427,
+      "notes": "",
+      "parent_key": "3bfdf7b99ec838f53f7729f8b529e2c0a2e85ad1c0352885b5f2246aed52b5d8",
+      "parent_prefix": "3bfdf7b9",
+      "parse_failure_count": 0,
+      "partial": {
+        "hi": 0.7201249999999999,
+        "lo": 0.59,
+        "method": "bootstrap-percentile",
+        "point": 0.655
+      },
+      "profile": "granite-4.1-30b",
+      "provider": "llama.cpp",
+      "server": {
+        "engine": "llama.cpp",
+        "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+        "version": null
+      },
+      "timestamp": "2026-05-16T17:21:42Z",
+      "timing": {
+        "compute_seconds": 114.91431135908351,
+        "finished_at": "2026-05-16T17:23:30Z",
+        "started_at": "2026-05-16T17:21:42Z",
+        "wall_seconds": 114.98201637898455
+      }
+    },
+    {
+      "accuracy": {
+        "hi": 0.995,
+        "lo": 0.95,
+        "method": "bootstrap-percentile",
+        "point": 0.975
+      },
+      "adapter": {
+        "name": "gsm8k",
+        "prompt_template_version": "v1",
+        "track": "general_capability",
+        "version": "v1"
+      },
+      "alias": "Granite-4.1-30B",
+      "comparability_key": "0495cdbb0260475b97a0909f3f36e163478ad43b72edecc2324582a8baced8ce",
+      "comparability_prefix": "0495cdbb",
+      "correct_count": 195,
+      "dataset_item_count": 200,
+      "dataset_subset": null,
+      "endpoint": "chat-granite",
+      "error_count": 0,
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "id": "gsm8k-20260516T164325Z-3483b8",
+      "item_count": 200,
+      "median_latency_ms": 11713.44352250162,
+      "median_tokens_per_sec": 19.995479437924644,
+      "median_ttft_ms": 486.12951149698347,
+      "notes": "",
+      "parent_key": "32d795cbe2fb2fd19cd7536bde81c873a58ff8682ad298ea67c8830a354e2e02",
+      "parent_prefix": "32d795cb",
+      "parse_failure_count": 0,
+      "partial": {
+        "hi": 0.995,
+        "lo": 0.95,
+        "method": "bootstrap-percentile",
+        "point": 0.975
+      },
+      "profile": "granite-4.1-30b",
+      "provider": "llama.cpp",
+      "server": {
+        "engine": "llama.cpp",
+        "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+        "version": null
+      },
+      "timestamp": "2026-05-16T16:43:25Z",
+      "timing": {
+        "compute_seconds": 2458.3557358752005,
+        "finished_at": "2026-05-16T17:21:42Z",
+        "started_at": "2026-05-16T16:43:25Z",
+        "wall_seconds": 2458.432622155
+      }
+    },
+    {
+      "accuracy": {
+        "hi": 1.0,
+        "lo": 1.0,
+        "method": "bootstrap-percentile",
+        "point": 1.0
+      },
+      "adapter": {
+        "name": "niah",
+        "prompt_template_version": "v1",
+        "track": "reliability_factuality",
+        "version": "v1"
+      },
+      "alias": "Granite-4.1-30B",
+      "comparability_key": "c30f5f57c1da064f722f5123cf4fef183cf69d589249ed0e9302e1264b0e715e",
+      "comparability_prefix": "c30f5f57",
+      "correct_count": 9,
+      "dataset_item_count": 9,
+      "dataset_subset": null,
+      "endpoint": "chat-granite",
+      "error_count": 0,
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "id": "niah-20260516T163026Z-219fe2",
+      "item_count": 9,
+      "median_latency_ms": 20251.00275501609,
+      "median_tokens_per_sec": 0.246901353996484,
+      "median_ttft_ms": 19883.97221500054,
+      "notes": "",
+      "parent_key": "adde1b9ea5b35dc2309a3a1d4aa9312ca7515f0dbefd2d964c3705ab5df01254",
+      "parent_prefix": "adde1b9e",
+      "parse_failure_count": 0,
+      "partial": {
+        "hi": 1.0,
+        "lo": 1.0,
+        "method": "bootstrap-percentile",
+        "point": 1.0
+      },
+      "profile": "granite-4.1-30b",
+      "provider": "llama.cpp",
+      "server": {
+        "engine": "llama.cpp",
+        "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+        "version": null
+      },
+      "timestamp": "2026-05-16T16:30:26Z",
+      "timing": {
+        "compute_seconds": 829.8149413639912,
+        "finished_at": "2026-05-16T16:43:22Z",
+        "started_at": "2026-05-16T16:30:26Z",
+        "wall_seconds": 829.8514678879874
+      }
+    },
+    {
+      "accuracy": {
+        "hi": 1.0,
+        "lo": 0.2,
+        "method": "bootstrap-percentile",
+        "point": 0.6
+      },
+      "adapter": {
+        "name": "local_smoke",
+        "prompt_template_version": "v1",
+        "track": "smoke",
+        "version": "v1"
+      },
+      "alias": "Granite-4.1-30B",
+      "comparability_key": "c9098a1632cae50baf8e245e5f504fcd85c267b35a39edaa420ecee9fdfa8aab",
+      "comparability_prefix": "c9098a16",
+      "correct_count": 3,
+      "dataset_item_count": 5,
+      "dataset_subset": null,
+      "endpoint": "chat-granite",
+      "error_count": 0,
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "id": "local_smoke-20260516T162823Z-4d8dfa",
+      "item_count": 5,
+      "median_latency_ms": 22134.724445000757,
+      "median_tokens_per_sec": 17.2527777734379,
+      "median_ttft_ms": 382.81492301030084,
+      "notes": "",
+      "parent_key": "464aca34299ba1656d5720164194b683b47736a84c0f2bbdd4aec6ce5b67af12",
+      "parent_prefix": "464aca34",
+      "parse_failure_count": 0,
+      "partial": {
+        "hi": 1.0,
+        "lo": 0.8666666666666668,
+        "method": "bootstrap-percentile",
+        "point": 0.9333333333333333
+      },
+      "profile": "granite-4.1-30b",
+      "provider": "llama.cpp",
+      "server": {
+        "engine": "llama.cpp",
+        "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+        "version": null
+      },
+      "timestamp": "2026-05-16T16:28:23Z",
+      "timing": {
+        "compute_seconds": 131.36295202199835,
+        "finished_at": "2026-05-16T16:30:26Z",
+        "started_at": "2026-05-16T16:28:23Z",
+        "wall_seconds": 131.40015258899075
+      }
+    },
     {
       "accuracy": {
         "hi": 1.0,

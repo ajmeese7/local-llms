@@ -1,0 +1,35 @@
+{
+  "accuracy": {
+    "hi": 0.995,
+    "lo": 0.95,
+    "method": "bootstrap-percentile",
+    "point": 0.975
+  },
+  "by_category": {
+    "math": {
+      "accuracy": 0.975,
+      "correct_count": 195,
+      "item_count": 200,
+      "partial_mean": 0.975
+    }
+  },
+  "correct_count": 195,
+  "error_count": 0,
+  "item_count": 200,
+  "median_latency_ms": 11713.44352250162,
+  "median_tokens_per_sec": 19.995479437924644,
+  "median_ttft_ms": 486.12951149698347,
+  "parse_failure_count": 0,
+  "partial": {
+    "hi": 0.995,
+    "lo": 0.95,
+    "method": "bootstrap-percentile",
+    "point": 0.975
+  },
+  "timing": {
+    "compute_seconds": 2458.3557358752005,
+    "finished_at": "2026-05-16T17:21:42Z",
+    "started_at": "2026-05-16T16:43:25Z",
+    "wall_seconds": 2458.432622155
+  }
+}

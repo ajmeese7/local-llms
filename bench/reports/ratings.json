@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-05-16T15:39:03.351Z",
+  "exported_at": "2026-05-17T18:01:25.953Z",
   "ratings": {
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_particle_attractor": {
       "stars": 5,
@@ -10,11 +10,78 @@
       ],
       "rated_at": "2026-05-16T15:37:55.301Z"
     },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:agentic_code_debug": {
+      "stars": null,
+      "note": "",
+      "tags": [
+        "unfinished"
+      ],
+      "rated_at": "2026-05-11T12:01:36.794Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_mobile_app_marketing": {
+      "stars": 2,
+      "note": "The graphics are terrible",
+      "tags": [
+        "bad-graphics"
+      ],
+      "rated_at": "2026-05-17T17:40:19.618Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_mobile_app_marketing": {
+      "stars": 3,
+      "note": "I don't like how the \"Your Week\" emojis are selectable text. The year says 2024 for some reason.",
+      "tags": [],
+      "rated_at": "2026-05-16T15:38:48.092Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_designer_portfolio": {
+      "stars": 1,
+      "note": "",
+      "tags": [
+        "bad-graphics"
+      ],
+      "rated_at": "2026-05-17T17:40:42.217Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_analytics_dashboard": {
+      "stars": 1,
+      "note": "Terrible UX",
+      "tags": [],
+      "rated_at": "2026-05-17T17:41:03.316Z"
+    },
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_saas_landing": {
       "stars": 4,
       "note": "Really cool streaming in of the log data., although the fading isn't at the bottom. Neat subtle highlight effect on the \"Why teams switch\" cards. The \"trusted by\" section is too dark. Smooth chart animation for the pipeline, but the concept being demonstrated is not communicated clearly. Really sleek footer.",
       "tags": [],
       "rated_at": "2026-05-16T15:35:44.938Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_generative_flowfield": {
+      "stars": 1,
+      "note": "`fieldAngle` function is undefined, the demo does not work",
+      "tags": [
+        "fail",
+        "undefined"
+      ],
+      "rated_at": "2026-05-11T11:53:15.561Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:design_pricing_page": {
+      "stars": 3,
+      "note": "The animation is insane",
+      "tags": [
+        "bad-animation"
+      ],
+      "rated_at": "2026-05-11T11:54:42.657Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:design_mobile_app_marketing": {
+      "stars": 4,
+      "note": "The Google Play logo is messed up, but the rest of it looks solid for a local model",
+      "tags": [
+        "svg-issue"
+      ],
+      "rated_at": "2026-05-11T11:53:58.241Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_particle_attractor": {
+      "stars": 1,
+      "note": "Warning about `Unrecognized feature: 'pointer-lock'.`, nothing renders",
+      "tags": [],
+      "rated_at": "2026-05-17T17:45:19.543Z"
     },
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_designer_portfolio": {
       "stars": 4,
@@ -24,6 +91,26 @@
       ],
       "rated_at": "2026-05-16T15:32:18.954Z"
     },
+    "5de58806437e06019790e41dcf6215566ffda660706f1a0df49e46988515f959:design_saas_landing": {
+      "stars": 5,
+      "note": "Scrolling feels a little janky and the pricing glow doesn't properly feather out at the rectangle border. The \"Book Demo\" text doesn't have good contrast. The scrolling logs are awesome.",
+      "tags": [],
+      "rated_at": "2026-05-11T14:12:51.525Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_saas_landing": {
+      "stars": 2,
+      "note": "Logs do not stream in, the initial animation just sends them away. The bullets in the footer are very \"009 W3\"",
+      "tags": [
+        "awful"
+      ],
+      "rated_at": "2026-05-17T17:41:59.392Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_three_scene": {
+      "stars": 5,
+      "note": "",
+      "tags": [],
+      "rated_at": "2026-05-11T12:00:10.966Z"
+    },
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_webgl_shader": {
       "stars": 1,
       "note": "",
@@ -31,6 +118,26 @@
         "webgl-failure"
       ],
       "rated_at": "2026-05-16T15:36:34.120Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_physics_sandbox": {
+      "stars": 4,
+      "note": "Solid grab logic, although it has black hole-like gravity that sucks in the bottom of the curtain as well",
+      "tags": [],
+      "rated_at": "2026-05-11T11:59:43.736Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_audio_reactive": {
+      "stars": 1,
+      "note": "All kinds of console failures, plus it doesn't work:\n```\nPMREMGenerator.js:1  Failed to load resource: the server responded with a status of 404 ()\nabout:srcdoc:151 Mic denied, using synthetic fallback SecurityError: Invalid security origin\nabout:srcdoc:1 Uncaught (in promise) InvalidStateError: Failed to set the 'buffer' property on 'AudioBufferSourceNode': Cannot set buffer to non-null after it has been already been set to a non-null buffer\n```",
+      "tags": [],
+      "rated_at": "2026-05-17T17:44:20.267Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:design_designer_portfolio": {
+      "stars": 3,
+      "note": "The g is cut off by line height, the animation sequence puts the words in an unexpected location.",
+      "tags": [
+        "bad-animation"
+      ],
+      "rated_at": "2026-05-11T11:57:58.346Z"
     },
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_analytics_dashboard": {
       "stars": 4,
@@ -50,11 +157,42 @@
       ],
       "rated_at": "2026-05-16T15:36:53.870Z"
     },
-    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_mobile_app_marketing": {
-      "stars": 3,
-      "note": "I don't like how the \"Your Week\" emojis are selectable text. The year says 2024 for some reason.",
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_three_scene": {
+      "stars": 1,
+      "note": "No render, failed network request to `PMREMGenerator.js` likely at fault; might rely on missing deps due to failing to verify",
       "tags": [],
-      "rated_at": "2026-05-16T15:38:48.092Z"
+      "rated_at": "2026-05-17T17:43:02.395Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_pricing_page": {
+      "stars": 2,
+      "note": "The graphic doesn't make any sense, this page looks like rendered markdown",
+      "tags": [
+        "bad-animation"
+      ],
+      "rated_at": "2026-05-17T17:45:55.657Z"
+    },
+    "5de58806437e06019790e41dcf6215566ffda660706f1a0df49e46988515f959:design_analytics_dashboard": {
+      "stars": 4,
+      "note": "The top of the graphs are cut off, could've used better sizing. The dashboard top row also doesn't resize well so it goes off the screen in the preview. The buttons are all interactive but don't attempt to perform any kind of action on the page.",
+      "tags": [],
+      "rated_at": "2026-05-11T14:14:04.537Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:agentic_structured_extraction": {
+      "stars": 3,
+      "note": "Solid attempt, chose the upcoming Tuesday in the current week vs. the upcoming week's Tuesday",
+      "tags": [
+        "interpretation"
+      ],
+      "rated_at": "2026-05-11T13:26:15.074Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_webgl_shader": {
+      "stars": 1,
+      "note": "",
+      "tags": [
+        "broken",
+        "failure"
+      ],
+      "rated_at": "2026-05-11T11:59:59.913Z"
     }
   }
 }
