@@ -1,0 +1,47 @@
+{
+  "accuracy": {
+    "hi": 0.9411764705882353,
+    "lo": 0.5294117647058824,
+    "method": "bootstrap-percentile",
+    "point": 0.7647058823529411
+  },
+  "by_category": {
+    "agentic": {
+      "accuracy": 0.6666666666666666,
+      "correct_count": 4,
+      "item_count": 6,
+      "partial_mean": 0.873015873015873
+    },
+    "canvas": {
+      "accuracy": 0.8333333333333334,
+      "correct_count": 5,
+      "item_count": 6,
+      "partial_mean": 0.9761904761904762
+    },
+    "design": {
+      "accuracy": 0.8,
+      "correct_count": 4,
+      "item_count": 5,
+      "partial_mean": 0.9714285714285713
+    }
+  },
+  "correct_count": 13,
+  "error_count": 0,
+  "item_count": 17,
+  "median_latency_ms": 125589.20500200475,
+  "median_tokens_per_sec": 28.9037580892566,
+  "median_ttft_ms": 1498.4497589757666,
+  "parse_failure_count": 0,
+  "partial": {
+    "hi": 0.9915966386554622,
+    "lo": 0.8710784313725489,
+    "method": "bootstrap-percentile",
+    "point": 0.938375350140056
+  },
+  "timing": {
+    "compute_seconds": 5186.203639935004,
+    "finished_at": "2026-05-18T17:09:45Z",
+    "started_at": "2026-05-18T15:48:57Z",
+    "wall_seconds": 5186.252395290998
+  }
+}

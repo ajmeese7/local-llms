@@ -336,6 +336,7 @@ function rankCellsByUser(loadedBenches, adapterName) {
   const rows = [];
   for (const lb of loadedBenches) {
     for (const cell of lb.cells) {
+      if (cell.partial_only) continue;
       if (adapterName && cell.adapter?.name !== adapterName) continue;
       const itemIds = (cell.run?.results || []).map(r => r.item_id);
       const agg = window.BenchRatings.aggregate(cell.comparability_key, itemIds);
@@ -365,6 +366,9 @@ function rankCells(loadedBenches, metric, adapterName) {
   for (const lb of loadedBenches) {
     for (const cell of lb.cells) {
       if (!cell.rollup) continue;
+      // Skip cells whose displayed metric is from a subset re-run only —
+      // a 1-item rerun shouldn't peer-rank against a 17-item full run.
+      if (cell.partial_only) continue;
       if (adapterName && cell.adapter?.name !== adapterName) continue;
       const raw = cell.rollup[metric];
       // Explicitly skip null/undefined: Number(null) === 0 is finite, which
