@@ -323,7 +323,7 @@ function CapabilityCell({ cell, onOpenPrompts, onOpenRun }) {
         </div>
       )}
 
-      {userAgg.count > 0 && (
+      {window.BenchData.isRateableAdapter(cell.adapter) && userAgg.count > 0 && (
         <div className="mt-3 flex items-center gap-2 font-mono text-[11px]">
           <span className="me-label">Your rating</span>
           <span className="text-me-warning">
@@ -745,9 +745,11 @@ function PromptsTable({ cell }) {
     [cell.comparability_key, rows, ratingsVersion],
   );
 
+  const rateable = window.BenchData.isRateableAdapter(cell.adapter);
+
   return (
     <>
-      <RatingSummary aggregate={ratingAgg} totalItems={rows.length} />
+      {rateable && <RatingSummary aggregate={ratingAgg} totalItems={rows.length} />}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <Label>Category</Label>
@@ -900,7 +902,9 @@ function ExpandedPanel({ row, cell, hideThinking, previewHtml, onRatingChange })
       {showMisses && <MissedChecksPanel hits={hits} misses={misses} />}
       {r.prompt && <PromptPanel prompt={r.prompt} />}
       <OutputArea row={r} previewHtml={previewHtml} hideThinking={hideThinking} />
-      <RatingEditor cell={cell} row={r} onChange={onRatingChange} />
+      {window.BenchData.isRateableAdapter(cell.adapter) && (
+        <RatingEditor cell={cell} row={r} onChange={onRatingChange} />
+      )}
       <ExpandedFoot row={r} isHtml={isHtml} />
     </div>
   );

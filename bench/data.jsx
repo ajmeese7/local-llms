@@ -237,14 +237,24 @@ function buildBenchMeta(bench, cells) {
 }
 
 /* ---------- Per-cell rollup ---------- */
+// Adapters whose output is subjective enough to ask the user to rate it
+// (rubric-graded designs, code, animations). Objective adapters like mmlu,
+// gsm8k, niah are pure right/wrong; nobody is going to star-rate them, so
+// the rating UI is suppressed and they are excluded from per-bench rating
+// rollups.
+const RATEABLE_ADAPTERS = new Set(["local_smoke", "frontend_agentic"]);
+function isRateableAdapter(adapter) {
+  return RATEABLE_ADAPTERS.has(adapter?.name);
+}
+
 function buildCellRollup(cell, run) {
   const summary = run.summary || {};
   const results = run.results || [];
   const adapter = cell.adapter || run.manifest?.adapter || {};
-  // Adapters where partial mean is the right headline (rubric-graded);
-  // everything else uses accuracy.
-  const rubricAdapters = new Set(["local_smoke", "frontend_agentic"]);
-  const useRubric = rubricAdapters.has(adapter.name);
+  // The same rateable adapters use partial-mean as their headline; everything
+  // else uses accuracy. Keeping these aligned means "this thing makes sense to
+  // rate" and "this thing is graded by rubric" are one concept, not two.
+  const useRubric = isRateableAdapter(adapter);
   const ci = useRubric ? summary.partial : summary.accuracy;
   const qualityKind = useRubric ? "partial" : "accuracy";
   const quality = ci && Number.isFinite(Number(ci.point))
@@ -341,6 +351,7 @@ function rankCellsByUser(loadedBenches, adapterName) {
   for (const lb of loadedBenches) {
     for (const cell of lb.cells) {
       if (cell.partial_only) continue;
+      if (!isRateableAdapter(cell.adapter)) continue;
       if (adapterName && cell.adapter?.name !== adapterName) continue;
       const itemIds = (cell.run?.results || []).map(r => r.item_id);
       const agg = window.BenchRatings.aggregate(cell.comparability_key, itemIds);
@@ -506,6 +517,8 @@ window.BenchData = {
   loadLeaderboards, rankCellsByUser,
   // bench helpers
   deriveBenches, deriveCells, findBench, gpuShort,
+  // adapter taxonomy
+  isRateableAdapter,
   // dataset helpers
   classifyCleanliness, generateRecommendations,
   // configs

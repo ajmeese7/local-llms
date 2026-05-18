@@ -107,6 +107,19 @@ function App() {
     return () => { cancelled = true; };
   }, [index]);
 
+  // One-time migration: bench ids changed when the registry started keying
+  // by (hw, model, engine). Re-home any orphaned bench notes onto their
+  // new bench ids so notes written before the split survive.
+  useE(() => {
+    if (!index) return;
+    let cancelled = false;
+    (async () => {
+      const n = await window.BenchRatings.migrateBenchNotes(index);
+      if (!cancelled && n > 0) console.info(`bench: migrated ${n} bench note(s) to new bench ids`);
+    })();
+    return () => { cancelled = true; };
+  }, [index]);
+
   useE(() => {
     if (route.view !== "bench") {
       setActive(null);

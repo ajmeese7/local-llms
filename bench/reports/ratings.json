@@ -273,7 +273,7 @@
     }
   },
   "bench_notes": {
-    "a157958e9af76c81": {
+    "d4d11440b4e24137": {
       "text": "Very dissatisfied with the model's overall performance, lags significantly behind competitor models like Qwen3.6-27B for coding-related tasks.",
       "stars": 2,
       "updated_at": "2026-05-18T02:10:47.232Z"

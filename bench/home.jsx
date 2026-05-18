@@ -1,7 +1,7 @@
 /* ============================================================
    home.jsx — Hub home.
 
-   Flat bench grid by default (one card per (hardware, model)).
+   Flat bench grid by default (one card per (hardware, model, backend)).
    When >=2 distinct hardware profiles are present, a hardware
    filter chip row appears above the grid. Sidebar surfaces
    per-metric leaderboards across all benches.
@@ -18,6 +18,15 @@ function HomePage({ index, profilesSnap, leaderboards, onOpen }) {
     for (const b of benches) set.add(b.hardware_profile || "unknown");
     return [...set].sort();
   }, [benches]);
+
+  // Loaded benches (with cell.run.results) are eagerly fetched for the
+  // leaderboards block. Reuse them here so each BenchCard can roll up the
+  // per-prompt rating aggregate without firing its own fetch.
+  const loadedById = _hUseM(() => {
+    const m = new Map();
+    for (const lb of (leaderboards?._loadedBenches || [])) m.set(lb.bench.id, lb);
+    return m;
+  }, [leaderboards]);
 
   const [hwFilter, setHwFilter] = _hUseS("all");
   const visible = hwFilter === "all"
@@ -57,11 +66,12 @@ function HomePage({ index, profilesSnap, leaderboards, onOpen }) {
               ))}
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {visible.map(b => (
               <BenchCard
                 key={b.id}
                 bench={b}
+                loaded={loadedById.get(b.id) || null}
                 onOpen={() => onOpen(b.id)} />
             ))}
           </div>
@@ -133,22 +143,87 @@ function HomeHero({ benches }) {
       </div>
       <h1 className="hero-title my-2">Meese · Bench</h1>
       <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 max-w-[80ch]">
-        // one card per (hardware, model). each card carries every capability you've thrown at it.
+        // one card per (hardware, model, backend). each card carries every capability you've thrown at it.
       </p>
-      <div className="mt-4 max-w-[80ch] p-3 border border-me-warning/40 bg-me-warning/5 font-mono text-[12px] text-me-fg-2">
-        <span className="text-me-warning font-bold">FAST-ANSWER TRACK · </span>
-        scores are recorded with <code className="text-me-cyan">enable_thinking=false</code> so adapters with tight token budgets (mmlu, niah) do not get starved by hidden reasoning. A separate reasoning-on track is planned; expect Qwen3-family numbers to shift materially when it lands. See <code className="text-me-cyan">docs/ROADMAP.md</code>.
-      </div>
+      <FastAnswerTrackNote />
     </div>
   );
 }
 
-function BenchCard({ bench, onOpen }) {
+// Banner explaining the global enable_thinking=false setting. Dismissable
+// per-browser via localStorage so returning users aren't stuck reading it
+// every time. The state key is namespaced so it can be reset by clearing
+// `bench:dismissed:fast-answer-track`.
+const FAST_ANSWER_DISMISS_KEY = "bench:dismissed:fast-answer-track";
+
+function FastAnswerTrackNote() {
+  const [dismissed, setDismissed] = _hUseS(() => {
+    try { return localStorage.getItem(FAST_ANSWER_DISMISS_KEY) === "1"; }
+    catch { return false; }
+  });
+  if (dismissed) return null;
+  const onDismiss = (e) => {
+    e.stopPropagation();
+    try { localStorage.setItem(FAST_ANSWER_DISMISS_KEY, "1"); } catch { /* quota / privacy */ }
+    setDismissed(true);
+  };
+  return (
+    <div className="mt-4 max-w-[80ch] p-3 pr-9 border border-me-warning/40 bg-me-warning/5 font-mono text-[12px] text-me-fg-2 relative">
+      <span className="text-me-warning font-bold">FAST-ANSWER TRACK · </span>
+      scores are recorded with <code className="text-me-cyan">enable_thinking=false</code> so adapters with tight token budgets (mmlu, niah) do not get starved by hidden reasoning. A separate reasoning-on track is planned; expect Qwen3-family numbers to shift materially when it lands. See <code className="text-me-cyan">docs/ROADMAP.md</code>.
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss fast-answer track note"
+        title="Dismiss"
+        className="absolute top-1.5 right-1.5 w-6 h-6 inline-flex items-center justify-center text-me-fg-3 hover:text-me-fg hover:bg-white/[0.04] border border-transparent hover:border-me-border transition-colors">
+        <i className="fa-solid fa-xmark text-[12px]"></i>
+      </button>
+    </div>
+  );
+}
+
+function BenchCard({ bench, loaded, onOpen }) {
   const hw = bench.hardware;
   const gpu = hw?.gpu_name ? window.BenchData.gpuShort(hw.gpu_name) : (bench.hardware_profile || null);
   const engine = bench.server_engine || bench.server?.engine || null;
   const cellPreview = (bench.cells || []).slice(0, 6);
   const overflow = (bench.cells || []).length - cellPreview.length;
+
+  // Subscribe to rating writes so this card refreshes when the user edits
+  // a bench note or prompt rating elsewhere in the SPA.
+  const [ratingsVersion, setRatingsVersion] = _hUseS(0);
+  React.useEffect(
+    () => window.BenchRatings.subscribe(() => setRatingsVersion(v => v + 1)),
+    [],
+  );
+  const note = _hUseM(
+    () => window.BenchRatings.readBenchNote(bench.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bench.id, ratingsVersion],
+  );
+  // Per-prompt aggregate over every rated item in every *rateable* cell of
+  // this bench. Objective adapters (mmlu, gsm8k, niah) are excluded: their
+  // outputs are right/wrong, not subjective, so a star rating is nonsense
+  // and including them dilutes the count. Requires `loaded` because results
+  // are not in the registry index; until leaderboards finish loading the
+  // row stays in its initial state rather than flashing in.
+  const promptAgg = _hUseM(() => {
+    if (!loaded) return { mean: null, count: 0, total: 0 };
+    let sum = 0, count = 0, total = 0;
+    for (const c of loaded.cells || []) {
+      if (!window.BenchData.isRateableAdapter(c.adapter)) continue;
+      const ids = (c.run?.results || []).map(r => r.item_id);
+      total += ids.length;
+      const agg = window.BenchRatings.aggregate(c.comparability_key, ids);
+      if (agg.count > 0) {
+        sum += agg.mean * agg.count;
+        count += agg.count;
+      }
+    }
+    return { mean: count > 0 ? sum / count : null, count, total };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, ratingsVersion]);
 
   return (
     <div
@@ -176,9 +251,11 @@ function BenchCard({ bench, onOpen }) {
         </div>
       </div>
 
-      <h3 className="font-display text-[18px] md:text-[20px] tracking-[0.08em] uppercase m-0 mb-3 text-me-fg break-words">
+      <h3 className="font-display text-[18px] md:text-[20px] tracking-[0.08em] uppercase m-0 mb-2 text-me-fg break-words">
         {bench.model_alias}
       </h3>
+
+      <BenchCardRating note={note} promptAgg={promptAgg} />
 
       <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[11px]">
         <div className="p-2 bg-white/[0.02] border border-me-border min-w-0">
@@ -221,110 +298,197 @@ function BenchCard({ bench, onOpen }) {
   );
 }
 
-/* ---------- Leaderboards ---------- */
-function LeaderboardsBlock({ leaderboards, onOpen }) {
-  const [mode, setMode] = _hUseS("auto"); // "auto" | "user"
-  // Subscribe to ratings changes so toggling to "user" reflects the latest
-  // localStorage state without a manual refresh.
-  const [, bump] = _hUseS(0);
-  React.useEffect(() => window.BenchRatings.subscribe(() => bump(v => v + 1)), []);
+// Compact rating row under the bench title on the home grid. Prefers the
+// bench note (deliberate verdict); falls back to the per-prompt aggregate
+// (empirical roll-up); shows "unrated" otherwise so cards stay vertically
+// aligned in the grid instead of jumping.
+function BenchCardRating({ note, promptAgg }) {
+  const hasNote = note?.stars != null;
+  const hasPromptAgg = promptAgg.count > 0 && Number.isFinite(promptAgg.mean);
 
+  // Same pink `data-tip` on the stars in every branch (note, prompt
+  // aggregate, unrated) so the hover UX is constant across cards.
+  const ratedSummary = promptAgg.total > 0
+    ? `${promptAgg.count}/${promptAgg.total} prompt${promptAgg.total === 1 ? "" : "s"} rated`
+    : "no rateable prompts in this bench";
+
+  if (!hasNote && !hasPromptAgg) {
+    return (
+      <div className="mb-3 flex items-center gap-2 font-mono text-[11px] text-me-fg-3"
+           title="No bench note or prompt ratings yet. Open the bench to add one.">
+        <span className="text-me-fg-3 cursor-help" data-tip={ratedSummary} aria-hidden="true">
+          ☆☆☆☆☆
+        </span>
+        <span className="italic">unrated</span>
+      </div>
+    );
+  }
+
+  // Card root is `role="button"` with an onClick. Note text overflows into
+  // a native `title` tooltip on the row so long notes don't push card height.
+  const rowTooltip = hasNote ? (note.text || "Your overall rating for this bench") : undefined;
+  return (
+    <div className="mb-3 flex items-center gap-2 font-mono text-[11px] min-w-0" title={rowTooltip}>
+      {hasNote ? (
+        <>
+          <span className="text-me-warning shrink-0 cursor-help"
+                data-tip={ratedSummary}
+                aria-label={`${note.stars} of 5 stars`}>
+            {"★".repeat(note.stars)}
+            <span className="text-me-fg-3">{"★".repeat(5 - note.stars)}</span>
+          </span>
+          <span className="text-me-fg shrink-0">{note.stars}/5</span>
+          {note.text && (
+            <span className="text-me-fg-3 italic truncate min-w-0">· {note.text}</span>
+          )}
+        </>
+      ) : (
+        <>
+          <span className="text-me-warning shrink-0 cursor-help"
+                data-tip={ratedSummary}
+                aria-label={`${promptAgg.mean.toFixed(1)} of 5 stars`}>
+            {"★".repeat(Math.round(promptAgg.mean))}
+            <span className="text-me-fg-3">{"★".repeat(5 - Math.round(promptAgg.mean))}</span>
+          </span>
+          <span className="text-me-fg shrink-0">{promptAgg.mean.toFixed(1)}/5</span>
+          <span className="text-me-fg-3 shrink-0">· {promptAgg.count}/{promptAgg.total} rated</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Leaderboards ---------- */
+// Each per-adapter card owns its own Auto/You toggle (when the adapter is
+// rateable). Keeps the toggle adjacent to the rows it controls instead of
+// dangling at the top of the column like a global setting it isn't.
+function LeaderboardsBlock({ leaderboards, onOpen }) {
   const adapterNames = leaderboards._adapterNames || Object.keys(leaderboards.perAdapter || {});
   const loaded = leaderboards._loadedBenches || [];
 
-  // Whether *either* mode has enough data for a quality leaderboard. Used to
-  // decide if the auto/you toggle is meaningful at all — independent of which
-  // mode is currently active, so a user who flips to "You" without ratings
-  // can still see the toggle and flip back.
-  const autoHasQualityBlocks = adapterNames.some(
-    a => ((leaderboards.perAdapter || {})[a] || []).length >= 2,
-  );
-  const userHasQualityBlocks = adapterNames.some(
-    a => (window.BenchData.rankCellsByUser(loaded, a) || []).length >= 2,
-  );
-  const showToggle = autoHasQualityBlocks || userHasQualityBlocks;
+  const tpsRows = (leaderboards.tps && leaderboards.tps.length > 1)
+    ? leaderboards.tps.slice(0, 5) : null;
 
-  const blocks = [];
-  // Top tok/s — always auto, no user-rating equivalent.
-  if (leaderboards.tps && leaderboards.tps.length > 1) {
-    blocks.push({
-      id: "tps",
-      icon: "fa-bolt",
-      title: "Top tok/s",
-      sub: "any capability",
-      rows: leaderboards.tps.slice(0, 5),
-      fmt: r => window.BenchData.fmtTps(r.value),
-    });
-  }
-  // Per-adapter quality leaderboards — switch between auto and user mode.
-  for (const adapter of adapterNames) {
-    const rows = mode === "user"
-      ? window.BenchData.rankCellsByUser(loaded, adapter)
-      : (leaderboards.perAdapter || {})[adapter] || [];
-    if (!rows || rows.length < 2) continue;
-    blocks.push({
-      id: `q-${adapter}-${mode}`,
-      icon: "fa-list-check",
-      title: `Top ${adapter}`,
-      sub: mode === "user" ? "your rating" : "quality",
-      rows: rows.slice(0, 5),
-      fmt: mode === "user"
-        ? r => `${r.userMean.toFixed(1)}/5`
-        : r => `${Number(r.value).toFixed(1)}%`,
-      sublineFor: mode === "user"
-        ? r => `${r.adapter?.name || "—"} · ${r.userCount}/${r.userTotal} rated`
-        : r => `${r.adapter?.name || "—"} · ${r.hardwareProfile}`,
-    });
-  }
-  // Render nothing only when there's truly nothing to show in either mode.
-  if (!blocks.length && !showToggle) return null;
+  // Probe each adapter to see if either mode has anything renderable; used
+  // only to decide whether to bail out of the whole block.
+  const anyAdapterRenders = adapterNames.some(a => {
+    const auto = (leaderboards.perAdapter || {})[a] || [];
+    if (auto.length >= 2) return true;
+    if (!window.BenchData.isRateableAdapter({ name: a })) return false;
+    return (window.BenchData.rankCellsByUser(loaded, a) || []).length >= 2;
+  });
+
+  if (!tpsRows && !anyAdapterRenders) return null;
   return (
     <div className="flex flex-col gap-3">
-      {showToggle && (
-        <div className="flex items-center gap-2">
-          <Label>Quality source</Label>
-          <Chip on={mode === "auto"} cyan={mode === "auto"} onClick={() => setMode("auto")}>Auto</Chip>
-          <Chip on={mode === "user"} cyan={mode === "user"} onClick={() => setMode("user")}>You</Chip>
-        </div>
+      {tpsRows && (
+        <LeaderboardCard
+          icon="fa-bolt"
+          title="Top tok/s"
+          sub="any capability"
+          rows={tpsRows}
+          fmt={r => window.BenchData.fmtTps(r.value)}
+          onOpen={onOpen} />
       )}
-      {mode === "user" && !userHasQualityBlocks && (
-        <div className="me-card p-4 md:p-5 font-mono text-[11px] text-me-fg-3">
-          No user ratings yet. Open a bench, drill into Prompts, and rate at least
-          two cells per adapter to populate this leaderboard. Or switch back to
-          <button
-            type="button"
-            onClick={() => setMode("auto")}
-            className="ml-1 underline decoration-dotted hover:text-me-fg bg-transparent border-0 p-0 cursor-pointer">
-            Auto
-          </button>.
+      {adapterNames.map(a => (
+        <PerAdapterLeaderboardCard
+          key={a}
+          adapter={a}
+          autoRows={(leaderboards.perAdapter || {})[a] || []}
+          loaded={loaded}
+          onOpen={onOpen} />
+      ))}
+    </div>
+  );
+}
+
+// One per-adapter leaderboard with a self-contained Auto/You toggle when the
+// adapter is rateable. Renders nothing when neither mode has enough rows so
+// stale adapters don't crowd the column.
+function PerAdapterLeaderboardCard({ adapter, autoRows, loaded, onOpen }) {
+  const rateable = window.BenchData.isRateableAdapter({ name: adapter });
+  const [mode, setMode] = _hUseS("auto");
+  // Re-read user ratings when localStorage changes elsewhere in the SPA.
+  const [, bump] = _hUseS(0);
+  React.useEffect(() => window.BenchRatings.subscribe(() => bump(v => v + 1)), []);
+
+  const userRows = rateable ? window.BenchData.rankCellsByUser(loaded, adapter) : [];
+  const autoOk = (autoRows || []).length >= 2;
+  const userOk = userRows.length >= 2;
+  if (!autoOk && !userOk) return null;
+
+  const showToggle = rateable && (autoOk || userOk);
+  // When the inactive mode has no data we still let the user flip back, so
+  // both chips stay clickable. The empty state explains what to do.
+  const activeRows = mode === "user" ? userRows : autoRows;
+  const fmt = mode === "user"
+    ? r => `${r.userMean.toFixed(1)}/5`
+    : r => `${Number(r.value).toFixed(1)}%`;
+  const sublineFor = mode === "user"
+    ? r => `${r.adapter?.name || "-"} · ${r.userCount}/${r.userTotal} rated`
+    : r => `${r.adapter?.name || "-"} · ${r.hardwareProfile}`;
+
+  return (
+    <div className="me-card p-4 md:p-5">
+      <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+        <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 text-me-fg">
+          <i className="fa-solid fa-list-check text-me-warning mr-2"></i> Top {adapter}
+        </h3>
+        {showToggle ? (
+          <div className="inline-flex items-center gap-1">
+            <Chip on={mode === "auto"} cyan={mode === "auto"} onClick={() => setMode("auto")}>Auto</Chip>
+            <Chip on={mode === "user"} cyan={mode === "user"} onClick={() => setMode("user")}>You</Chip>
+          </div>
+        ) : (
+          <span className="font-mono text-[10px] text-me-fg-3">quality</span>
+        )}
+      </div>
+      {activeRows.length < 2 ? (
+        <div className="font-mono text-[11px] text-me-fg-3">
+          {mode === "user"
+            ? "Rate at least two cells in different benches to populate this list."
+            : "Not enough auto-scored runs yet."}
         </div>
+      ) : (
+        <LeaderboardRows rows={activeRows.slice(0, 5)} fmt={fmt} sublineFor={sublineFor} onOpen={onOpen} />
       )}
-      {blocks.map(b => (
-        <div key={b.id} className="me-card p-4 md:p-5">
-          <div className="flex items-baseline justify-between mb-2">
-            <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 text-me-fg">
-              <i className={`fa-solid ${b.icon} text-me-warning mr-2`}></i> {b.title}
-            </h3>
-            <span className="font-mono text-[10px] text-me-fg-3">{b.sub}</span>
+    </div>
+  );
+}
+
+// Plain (non-toggle) leaderboard card. Used for tok/s and anything else
+// that has no per-user equivalent.
+function LeaderboardCard({ icon, title, sub, rows, fmt, sublineFor, onOpen }) {
+  return (
+    <div className="me-card p-4 md:p-5">
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="font-display text-[12px] tracking-[0.18em] uppercase m-0 text-me-fg">
+          <i className={`fa-solid ${icon} text-me-warning mr-2`}></i> {title}
+        </h3>
+        <span className="font-mono text-[10px] text-me-fg-3">{sub}</span>
+      </div>
+      <LeaderboardRows rows={rows} fmt={fmt} sublineFor={sublineFor} onOpen={onOpen} />
+    </div>
+  );
+}
+
+function LeaderboardRows({ rows, fmt, sublineFor, onOpen }) {
+  return (
+    <div className="flex flex-col gap-1">
+      {rows.map((r, i) => (
+        <button
+          key={`${r.benchId}-${r.adapter?.name || ""}-${r.comparabilityPrefix || i}`}
+          onClick={() => onOpen(r.benchId)}
+          className="grid grid-cols-[18px_1fr_70px] gap-2 items-center text-[11px] font-mono text-left bg-transparent border-0 px-1 py-0.5 cursor-pointer hover:text-me-fg">
+          <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}</span>
+          <div className="min-w-0">
+            <div className="text-me-fg truncate" title={r.benchTitle}>{r.modelAlias}</div>
+            <div className="text-me-fg-3 text-[10px] truncate">
+              {sublineFor ? sublineFor(r) : `${r.adapter?.name || "-"} · ${r.hardwareProfile}`}
+            </div>
           </div>
-          <div className="flex flex-col gap-1">
-            {b.rows.map((r, i) => (
-              <button
-                key={`${r.benchId}-${r.adapter?.name || ""}-${r.comparabilityPrefix || i}`}
-                onClick={() => onOpen(r.benchId)}
-                className="grid grid-cols-[18px_1fr_70px] gap-2 items-center text-[11px] font-mono text-left bg-transparent border-0 px-1 py-0.5 cursor-pointer hover:text-me-fg">
-                <span className={`text-[10px] ${i < 3 ? "text-me-warning" : "text-me-fg-3"}`}>{i + 1}</span>
-                <div className="min-w-0">
-                  <div className="text-me-fg truncate" title={r.benchTitle}>{r.modelAlias}</div>
-                  <div className="text-me-fg-3 text-[10px] truncate">
-                    {b.sublineFor ? b.sublineFor(r) : `${r.adapter?.name || "—"} · ${r.hardwareProfile}`}
-                  </div>
-                </div>
-                <div className="text-right text-me-cyan">{b.fmt(r)}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+          <div className="text-right text-me-cyan">{fmt(r)}</div>
+        </button>
       ))}
     </div>
   );

@@ -212,6 +212,73 @@ async function loadFromRepo(strategy = "merge") {
   }
 }
 
+// Bench ids changed when the registry started keying by
+// (hardware_profile, model_profile, server.engine) instead of (hardware,
+// model). Any bench note written before that split is now orphaned in
+// localStorage under the old id. This walks the orphans, computes the
+// legacy `sha256("hw::model")[:16]` for every current bench, and re-keys
+// matches onto the most-recently-timestamped new bench. Idempotent: the
+// second call is a no-op because the source keys are gone.
+async function _legacyBenchId(hw, model) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${hw}::${model}`));
+  let hex = "";
+  for (const byte of new Uint8Array(buf)) hex += byte.toString(16).padStart(2, "0");
+  return hex.slice(0, 16);
+}
+
+async function migrateBenchNotes(index) {
+  if (!index || !Array.isArray(index.benches)) return 0;
+
+  // Build legacyId => list of candidate current benches.
+  const byLegacy = new Map();
+  for (const b of index.benches) {
+    const hw = b.hardware_profile || "unknown";
+    const model = b.model_profile || "unknown";
+    const legacyId = await _legacyBenchId(hw, model);
+    if (legacyId === b.id) continue;  // not split, no migration possible
+    const arr = byLegacy.get(legacyId) || [];
+    arr.push(b);
+    byLegacy.set(legacyId, arr);
+  }
+  if (byLegacy.size === 0) return 0;
+
+  // Sweep localStorage for orphan note keys (bench id not in the registry).
+  const currentIds = new Set(index.benches.map(b => b.id));
+  const orphanKeys = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(BENCH_NOTE_PREFIX)) continue;
+      const id = k.slice(BENCH_NOTE_PREFIX.length);
+      if (!currentIds.has(id)) orphanKeys.push(k);
+    }
+  } catch {
+    return 0;
+  }
+
+  let migrated = 0;
+  for (const k of orphanKeys) {
+    const oldId = k.slice(BENCH_NOTE_PREFIX.length);
+    const candidates = byLegacy.get(oldId);
+    if (!candidates || !candidates.length) continue;
+    candidates.sort((a, b) => (b.latest_timestamp || "").localeCompare(a.latest_timestamp || ""));
+    const winner = candidates[0];
+    const newKey = BENCH_NOTE_PREFIX + winner.id;
+    try {
+      const value = localStorage.getItem(k);
+      if (value && localStorage.getItem(newKey) == null) {
+        localStorage.setItem(newKey, value);
+        migrated += 1;
+      }
+      localStorage.removeItem(k);
+    } catch {
+      // Quota or storage disabled. Skip silently; next page load retries.
+    }
+  }
+  if (migrated > 0) _notify();
+  return migrated;
+}
+
 window.BenchRatings = {
   read: readRating,
   write: writeRating,
@@ -223,4 +290,5 @@ window.BenchRatings = {
   exportAll,
   importAll,
   loadFromRepo,
+  migrateBenchNotes,
 };
