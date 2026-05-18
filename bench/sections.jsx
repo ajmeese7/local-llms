@@ -85,6 +85,113 @@ function BenchHero({ meta }) {
       <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 mb-1 max-w-[80ch]">
         {`// ${meta.model_alias}${meta.hardware_profile && meta.hardware_profile !== "unknown" ? ` · ${meta.hardware_profile}` : ""} · ${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} attached`}
       </p>
+      <BenchNote benchId={meta.id} />
+    </div>
+  );
+}
+
+// Overall, model-level commentary. Stored alongside per-prompt ratings
+// (localStorage, exported via the same Export button) but keyed by
+// bench id rather than comparability_key — so it stays attached to
+// "this model on this hardware" regardless of which capabilities have
+// been run.
+function BenchNote({ benchId }) {
+  const initial = _useMemo(() => window.BenchRatings.readBenchNote(benchId), [benchId]);
+  const [editing, setEditing] = _useState(false);
+  const [draft, setDraft] = _useState(initial?.text || "");
+  const [savedText, setSavedText] = _useState(initial?.text || "");
+  const [updatedAt, setUpdatedAt] = _useState(initial?.updated_at || null);
+
+  // Reset when navigating between benches.
+  React.useEffect(() => {
+    const fresh = window.BenchRatings.readBenchNote(benchId);
+    setDraft(fresh?.text || "");
+    setSavedText(fresh?.text || "");
+    setUpdatedAt(fresh?.updated_at || null);
+    setEditing(false);
+  }, [benchId]);
+
+  const save = () => {
+    const trimmed = (draft || "").trim();
+    window.BenchRatings.writeBenchNote(benchId, trimmed);
+    setSavedText(trimmed);
+    setUpdatedAt(trimmed ? new Date().toISOString() : null);
+    setEditing(false);
+  };
+  const cancel = () => {
+    setDraft(savedText);
+    setEditing(false);
+  };
+
+  const hasNote = savedText.length > 0;
+
+  if (!editing) {
+    return (
+      <div className="mt-4 max-w-[80ch]">
+        <div className="flex items-baseline justify-between gap-3 mb-1">
+          <div className="me-label">
+            <i className="fa-solid fa-note-sticky text-me-warning mr-1.5"></i>
+            Overall notes
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="font-mono text-[10px] tracking-[0.06em] text-me-fg-3 hover:text-me-fg bg-transparent border-0 p-0 cursor-pointer underline decoration-dotted">
+            {hasNote ? "edit" : "add note"}
+          </button>
+        </div>
+        {hasNote ? (
+          <p className="font-mono text-[12px] md:text-[13px] text-me-fg-2 whitespace-pre-wrap leading-relaxed m-0">
+            {savedText}
+          </p>
+        ) : (
+          <p className="font-mono text-[11px] text-me-fg-3 italic m-0">
+            // no notes yet — leave a thought for visitors
+          </p>
+        )}
+        {hasNote && updatedAt && (
+          <div className="font-mono text-[10px] text-me-fg-3 mt-1">
+            updated {window.BenchData.fmtDateOnly(updatedAt)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 max-w-[80ch]">
+      <div className="me-label mb-1">
+        <i className="fa-solid fa-note-sticky text-me-warning mr-1.5"></i>
+        Overall notes
+      </div>
+      <textarea
+        className="rating-note w-full"
+        placeholder="// thoughts on this model overall — strengths, quirks, what stood out"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+          if (e.key === "Escape") { e.preventDefault(); cancel(); }
+        }}
+        rows={4}
+        autoFocus />
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          type="button"
+          onClick={save}
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-2 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={cancel}
+          className="px-3 py-1.5 border border-me-border font-mono text-[11px] tracking-[0.06em] text-me-fg-3 hover:text-me-fg hover:border-me-border-strong bg-transparent cursor-pointer">
+          Cancel
+        </button>
+        <span className="font-mono text-[10px] text-me-fg-3 ml-1">
+          ⌘/Ctrl+Enter to save · Esc to cancel
+        </span>
+      </div>
     </div>
   );
 }

@@ -356,7 +356,7 @@ function RatingsImportExportCard() {
     const n = await window.BenchRatings.loadFromRepo("overwrite");
     flash(
       n > 0
-        ? `pulled ${n} ratings from bench/reports/ratings.json`
+        ? `pulled ${n} entries from bench/reports/ratings.json`
         : "no ratings.json in bench/reports/",
       4000,
     );
