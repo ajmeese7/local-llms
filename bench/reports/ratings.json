@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "exported_at": "2026-05-18T02:11:47.510Z",
+  "exported_at": "2026-05-18T15:35:07.282Z",
   "ratings": {
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_particle_attractor": {
       "stars": 5,
@@ -18,6 +18,110 @@
       ],
       "rated_at": "2026-05-11T12:01:36.794Z"
     },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_designer_portfolio": {
+      "stars": 1,
+      "note": "",
+      "tags": [
+        "bad-graphics"
+      ],
+      "rated_at": "2026-05-17T17:40:42.217Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_generative_flowfield": {
+      "stars": 1,
+      "note": "`fieldAngle` function is undefined, the demo does not work",
+      "tags": [
+        "fail",
+        "undefined"
+      ],
+      "rated_at": "2026-05-11T11:53:15.561Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:canvas_generative_flowfield": {
+      "stars": 1,
+      "note": "Doesn't do anything",
+      "tags": [],
+      "rated_at": "2026-05-18T14:35:32.646Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:design_saas_landing": {
+      "stars": 4,
+      "note": "I don't like how the log stream window initially starts at a smaller size then grows to the max. The pipeline topology is really slick and has a clean animation.",
+      "tags": [
+        "good-animation"
+      ],
+      "rated_at": "2026-05-18T14:32:50.247Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:canvas_particle_attractor": {
+      "stars": 1,
+      "note": "Doesn't do anything",
+      "tags": [],
+      "rated_at": "2026-05-18T14:35:19.199Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_particle_attractor": {
+      "stars": 1,
+      "note": "Warning about `Unrecognized feature: 'pointer-lock'.`, nothing renders",
+      "tags": [],
+      "rated_at": "2026-05-17T17:45:19.543Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_three_scene": {
+      "stars": 5,
+      "note": "",
+      "tags": [],
+      "rated_at": "2026-05-11T12:00:10.966Z"
+    },
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_webgl_shader": {
+      "stars": 1,
+      "note": "",
+      "tags": [
+        "webgl-failure"
+      ],
+      "rated_at": "2026-05-16T15:36:34.120Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:design_designer_portfolio": {
+      "stars": 3,
+      "note": "The \"scroll\" text is positioned poorly, there are no images for the previous work cards. I do like the subtle hover effect for the sidebar \"trusted by\" portion, and the bold orange italic text is a nice touch.",
+      "tags": [],
+      "rated_at": "2026-05-18T14:34:20.924Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_audio_reactive": {
+      "stars": 1,
+      "note": "All kinds of console failures, plus it doesn't work:\n```\nPMREMGenerator.js:1  Failed to load resource: the server responded with a status of 404 ()\nabout:srcdoc:151 Mic denied, using synthetic fallback SecurityError: Invalid security origin\nabout:srcdoc:1 Uncaught (in promise) InvalidStateError: Failed to set the 'buffer' property on 'AudioBufferSourceNode': Cannot set buffer to non-null after it has been already been set to a non-null buffer\n```",
+      "tags": [],
+      "rated_at": "2026-05-17T17:44:20.267Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:design_mobile_app_marketing": {
+      "stars": 5,
+      "note": "",
+      "tags": [],
+      "rated_at": "2026-05-18T14:34:58.595Z"
+    },
+    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_three_scene": {
+      "stars": 1,
+      "note": "No render, failed network request to `PMREMGenerator.js` likely at fault; might rely on missing deps due to failing to verify",
+      "tags": [],
+      "rated_at": "2026-05-17T17:43:02.395Z"
+    },
+    "5de58806437e06019790e41dcf6215566ffda660706f1a0df49e46988515f959:design_analytics_dashboard": {
+      "stars": 4,
+      "note": "The top of the graphs are cut off, could've used better sizing. The dashboard top row also doesn't resize well so it goes off the screen in the preview. The buttons are all interactive but don't attempt to perform any kind of action on the page.",
+      "tags": [],
+      "rated_at": "2026-05-11T14:14:04.537Z"
+    },
+    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:agentic_structured_extraction": {
+      "stars": 3,
+      "note": "Solid attempt, chose the upcoming Tuesday in the current week vs. the upcoming week's Tuesday",
+      "tags": [
+        "interpretation"
+      ],
+      "rated_at": "2026-05-11T13:26:15.074Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:canvas_webgl_shader": {
+      "stars": 1,
+      "note": "Failure",
+      "tags": [
+        "shader-error",
+        "webgl"
+      ],
+      "rated_at": "2026-05-18T14:36:02.837Z"
+    },
     "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_mobile_app_marketing": {
       "stars": 2,
       "note": "The graphics are terrible",
@@ -26,19 +130,11 @@
       ],
       "rated_at": "2026-05-17T17:40:19.618Z"
     },
-    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_mobile_app_marketing": {
-      "stars": 3,
-      "note": "I don't like how the \"Your Week\" emojis are selectable text. The year says 2024 for some reason.",
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:design_analytics_dashboard": {
+      "stars": 4,
+      "note": "The black above/beneath the chart curves is very ugly. The interactive nature of the 24h window is pretty sick.",
       "tags": [],
-      "rated_at": "2026-05-16T15:38:48.092Z"
-    },
-    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_designer_portfolio": {
-      "stars": 1,
-      "note": "",
-      "tags": [
-        "bad-graphics"
-      ],
-      "rated_at": "2026-05-17T17:40:42.217Z"
+      "rated_at": "2026-05-18T14:33:22.218Z"
     },
     "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_analytics_dashboard": {
       "stars": 1,
@@ -52,15 +148,6 @@
       "tags": [],
       "rated_at": "2026-05-16T15:35:44.938Z"
     },
-    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_generative_flowfield": {
-      "stars": 1,
-      "note": "`fieldAngle` function is undefined, the demo does not work",
-      "tags": [
-        "fail",
-        "undefined"
-      ],
-      "rated_at": "2026-05-11T11:53:15.561Z"
-    },
     "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:design_pricing_page": {
       "stars": 3,
       "note": "The animation is insane",
@@ -68,6 +155,30 @@
         "bad-animation"
       ],
       "rated_at": "2026-05-11T11:54:42.657Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:agentic_structured_extraction_nothink": {
+      "stars": 5,
+      "note": "",
+      "tags": [],
+      "rated_at": "2026-05-18T14:38:23.752Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:design_pricing_page": {
+      "stars": 3,
+      "note": "The category dropdown rows lacking a background for each column is a bad look",
+      "tags": [],
+      "rated_at": "2026-05-18T14:34:46.067Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:canvas_physics_sandbox": {
+      "stars": 5,
+      "note": "The first model I've seen that gets the snip effect right!",
+      "tags": [],
+      "rated_at": "2026-05-18T14:36:19.806Z"
+    },
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:canvas_three_scene": {
+      "stars": 5,
+      "note": "Beautiful, I love how the gems catch the light as they rotate",
+      "tags": [],
+      "rated_at": "2026-05-18T14:35:46.365Z"
     },
     "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:design_mobile_app_marketing": {
       "stars": 4,
@@ -77,11 +188,11 @@
       ],
       "rated_at": "2026-05-11T11:53:58.241Z"
     },
-    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_particle_attractor": {
-      "stars": 1,
-      "note": "Warning about `Unrecognized feature: 'pointer-lock'.`, nothing renders",
+    "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca:agentic_tool_use_json": {
+      "stars": 5,
+      "note": "",
       "tags": [],
-      "rated_at": "2026-05-17T17:45:19.543Z"
+      "rated_at": "2026-05-18T14:38:29.611Z"
     },
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_designer_portfolio": {
       "stars": 4,
@@ -105,31 +216,11 @@
       ],
       "rated_at": "2026-05-17T17:41:59.392Z"
     },
-    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_three_scene": {
-      "stars": 5,
-      "note": "",
-      "tags": [],
-      "rated_at": "2026-05-11T12:00:10.966Z"
-    },
-    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_webgl_shader": {
-      "stars": 1,
-      "note": "",
-      "tags": [
-        "webgl-failure"
-      ],
-      "rated_at": "2026-05-16T15:36:34.120Z"
-    },
     "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_physics_sandbox": {
       "stars": 4,
       "note": "Solid grab logic, although it has black hole-like gravity that sucks in the bottom of the curtain as well",
       "tags": [],
       "rated_at": "2026-05-11T11:59:43.736Z"
-    },
-    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_audio_reactive": {
-      "stars": 1,
-      "note": "All kinds of console failures, plus it doesn't work:\n```\nPMREMGenerator.js:1  Failed to load resource: the server responded with a status of 404 ()\nabout:srcdoc:151 Mic denied, using synthetic fallback SecurityError: Invalid security origin\nabout:srcdoc:1 Uncaught (in promise) InvalidStateError: Failed to set the 'buffer' property on 'AudioBufferSourceNode': Cannot set buffer to non-null after it has been already been set to a non-null buffer\n```",
-      "tags": [],
-      "rated_at": "2026-05-17T17:44:20.267Z"
     },
     "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:design_designer_portfolio": {
       "stars": 3,
@@ -157,12 +248,6 @@
       ],
       "rated_at": "2026-05-16T15:36:53.870Z"
     },
-    "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:canvas_three_scene": {
-      "stars": 1,
-      "note": "No render, failed network request to `PMREMGenerator.js` likely at fault; might rely on missing deps due to failing to verify",
-      "tags": [],
-      "rated_at": "2026-05-17T17:43:02.395Z"
-    },
     "f7394698e30d7952d0cca66eca14407671c6f9b8d871f27720e4b8fdf56b9af0:design_pricing_page": {
       "stars": 2,
       "note": "The graphic doesn't make any sense, this page looks like rendered markdown",
@@ -171,19 +256,11 @@
       ],
       "rated_at": "2026-05-17T17:45:55.657Z"
     },
-    "5de58806437e06019790e41dcf6215566ffda660706f1a0df49e46988515f959:design_analytics_dashboard": {
-      "stars": 4,
-      "note": "The top of the graphs are cut off, could've used better sizing. The dashboard top row also doesn't resize well so it goes off the screen in the preview. The buttons are all interactive but don't attempt to perform any kind of action on the page.",
-      "tags": [],
-      "rated_at": "2026-05-11T14:14:04.537Z"
-    },
-    "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:agentic_structured_extraction": {
+    "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:design_mobile_app_marketing": {
       "stars": 3,
-      "note": "Solid attempt, chose the upcoming Tuesday in the current week vs. the upcoming week's Tuesday",
-      "tags": [
-        "interpretation"
-      ],
-      "rated_at": "2026-05-11T13:26:15.074Z"
+      "note": "I don't like how the \"Your Week\" emojis are selectable text. The year says 2024 for some reason.",
+      "tags": [],
+      "rated_at": "2026-05-16T15:38:48.092Z"
     },
     "60683e4d32a7e03dba8cc81a4cdb0a6a7f4ab892e61499ff2792bc0e7f69d8b0:canvas_webgl_shader": {
       "stars": 1,

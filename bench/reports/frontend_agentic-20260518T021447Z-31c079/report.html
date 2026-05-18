@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>frontend_agentic-20260518T021447Z-31c079</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+  pre { background: #f6f8fa; padding: 1rem; overflow: auto; border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #d0d7de; padding: 0.4rem 0.6rem; text-align: left; }
+  details { margin: 1rem 0; }
+  .notice { background: #fff8c5; border: 1px solid #d4a72c; padding: 0.6rem 0.9rem;
+             border-radius: 6px; margin-bottom: 1rem; font-size: 13px; }
+  .notice strong { color: #7d4e00; }
+</style>
+</head>
+<body>
+<div class="notice">
+  <strong>Fast-answer track.</strong> Scores reflect non-thinking mode
+  (<code>chat_template_kwargs.enable_thinking=false</code>). A separate
+  reasoning-on track is on the roadmap; numbers will differ materially for
+  Qwen3-family models. See <code>docs/ROADMAP.md</code>.
+</div>
+<pre># frontend_agentic run frontend_agentic-20260518T021447Z-31c079
+
+- track: `general_capability`  ·  adapter: `frontend_agentic@v1`
+- endpoint: `chat-default`  ·  profile: `qwen36-27b`
+- provider: `ik_llama.cpp`
+- hardware: `NVIDIA GeForce RTX 5090`, 32607 MiB VRAM
+- gpu state: boost 3090 MHz, power 600 W, persistence enabled
+- server: `ik_llama.cpp`
+- comparability: `ab355c3941e4…`
+- timestamp: 2026-05-18T02:14:47Z
+
+## Summary
+
+| Metric | Value |
+|---|---|
+| items | 17 |
+| correct | 14 |
+| parse failures | 0 |
+| errors | 0 |
+| accuracy | 0.824 (95% CI 0.647-1.000) |
+| partial mean | 0.936 (95% CI 0.866-1.000) |
+| median latency | 132219 ms |
+| median ttft | 664 ms |
+| median throughput | 29.5 tok/s |
+| wall-clock | 1h 39m |
+| compute (sum of latencies) | 1h 39m |
+
+## By category
+
+| Category | Items | Correct | Accuracy | Partial mean |
+|---|---|---|---|---|
+| agentic | 6 | 3 | 0.500 | 0.817 |
+| canvas | 6 | 6 | 1.000 | 1.000 |
+| design | 5 | 5 | 1.000 | 1.000 |
+</pre>
+<details><summary>Manifest</summary><pre>{
+  &quot;adapter&quot;: {
+    &quot;name&quot;: &quot;frontend_agentic&quot;,
+    &quot;prompt_template_version&quot;: &quot;v1&quot;,
+    &quot;scorer_version&quot;: &quot;v1&quot;,
+    &quot;track&quot;: &quot;general_capability&quot;,
+    &quot;version&quot;: &quot;v1&quot;
+  },
+  &quot;comparability_key&quot;: &quot;ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca&quot;,
+  &quot;dataset&quot;: {
+    &quot;item_count&quot;: 17,
+    &quot;name&quot;: &quot;frontend_agentic&quot;,
+    &quot;subset&quot;: null,
+    &quot;version&quot;: &quot;v1&quot;
+  },
+  &quot;decode&quot;: {
+    &quot;max_tokens&quot;: 32000,
+    &quot;min_p&quot;: null,
+    &quot;presence_penalty&quot;: null,
+    &quot;repeat_penalty&quot;: null,
+    &quot;temperature&quot;: null,
+    &quot;top_k&quot;: null,
+    &quot;top_p&quot;: null
+  },
+  &quot;endpoint_name&quot;: &quot;chat-default&quot;,
+  &quot;extras&quot;: {},
+  &quot;hardware&quot;: {
+    &quot;app_clock_graphics_mhz&quot;: null,
+    &quot;app_clock_memory_mhz&quot;: null,
+    &quot;boost_clock_mhz&quot;: 3090,
+    &quot;gpu_name&quot;: &quot;NVIDIA GeForce RTX 5090&quot;,
+    &quot;mem_clock_max_mhz&quot;: 14001,
+    &quot;persistence_mode&quot;: &quot;Enabled&quot;,
+    &quot;power_limit_w&quot;: 600.0,
+    &quot;profile&quot;: &quot;rtx-5090&quot;,
+    &quot;vram_mb&quot;: 32607
+  },
+  &quot;hostname&quot;: &quot;6ee47e0c&quot;,
+  &quot;model&quot;: {
+    &quot;alias&quot;: &quot;Qwen3.6-27B&quot;,
+    &quot;hf_file&quot;: &quot;Qwen3.6-27B-UD-Q5_K_XL.gguf&quot;,
+    &quot;hf_repo&quot;: &quot;unsloth/Qwen3.6-27B-GGUF&quot;,
+    &quot;model_path&quot;: &quot;~/models/Qwen3.6-27B-UD-Q5_K_XL.gguf&quot;,
+    &quot;model_sha256&quot;: null,
+    &quot;profile&quot;: &quot;qwen36-27b&quot;
+  },
+  &quot;notes&quot;: &quot;&quot;,
+  &quot;provider&quot;: {
+    &quot;cmake_args&quot;: [
+      &quot;-DGGML_NATIVE=ON&quot;,
+      &quot;-DGGML_CUDA=ON&quot;
+    ],
+    &quot;git_commit&quot;: &quot;eb570eb96689c235933b813693ca28ab9d3d26de&quot;,
+    &quot;name&quot;: &quot;ik_llama.cpp&quot;,
+    &quot;server_binary&quot;: &quot;~/.local/share/ik_llama.cpp/build/bin/llama-server&quot;
+  },
+  &quot;repo_sha&quot;: &quot;4bda6138d6b17db646ff8cf5f1546acd1c638eb7&quot;,
+  &quot;run_id&quot;: &quot;frontend_agentic-20260518T021447Z-31c079&quot;,
+  &quot;seed&quot;: 0,
+  &quot;server&quot;: {
+    &quot;engine&quot;: &quot;ik_llama.cpp&quot;,
+    &quot;git_commit&quot;: &quot;eb570eb96689c235933b813693ca28ab9d3d26de&quot;,
+    &quot;version&quot;: null
+  },
+  &quot;timestamp&quot;: &quot;2026-05-18T02:14:47Z&quot;
+}</pre></details>
+</body>
+</html>

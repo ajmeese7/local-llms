@@ -1,6 +1,119 @@
 {
   "benches": [
     {
+      "cell_count": 1,
+      "cells": [
+        {
+          "adapter": {
+            "name": "frontend_agentic",
+            "prompt_template_version": "v1",
+            "track": "general_capability",
+            "version": "v1"
+          },
+          "comparability_key": "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca",
+          "comparability_prefix": "ab355c39",
+          "compute_seconds": 5981.280923070037,
+          "history_ids": [
+            "frontend_agentic-20260518T021447Z-31c079"
+          ],
+          "latest": {
+            "accuracy": {
+              "hi": 1.0,
+              "lo": 0.6470588235294118,
+              "method": "bootstrap-percentile",
+              "point": 0.8235294117647058
+            },
+            "adapter": {
+              "name": "frontend_agentic",
+              "prompt_template_version": "v1",
+              "track": "general_capability",
+              "version": "v1"
+            },
+            "alias": "Qwen3.6-27B",
+            "comparability_key": "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca",
+            "comparability_prefix": "ab355c39",
+            "correct_count": 14,
+            "dataset_item_count": 17,
+            "dataset_subset": null,
+            "endpoint": "chat-default",
+            "error_count": 0,
+            "hardware": {
+              "app_clock_graphics_mhz": null,
+              "app_clock_memory_mhz": null,
+              "boost_clock_mhz": 3090,
+              "gpu_name": "NVIDIA GeForce RTX 5090",
+              "mem_clock_max_mhz": 14001,
+              "persistence_mode": "Enabled",
+              "power_limit_w": 600.0,
+              "profile": "rtx-5090",
+              "vram_mb": 32607
+            },
+            "id": "frontend_agentic-20260518T021447Z-31c079",
+            "item_count": 17,
+            "median_latency_ms": 132219.22970400192,
+            "median_tokens_per_sec": 29.5071141055999,
+            "median_ttft_ms": 664.3224820145406,
+            "notes": "",
+            "parent_key": "2e69f340e883f0a5a926ba693338e7325f73400f6f31422aa4d14e65434f298b",
+            "parent_prefix": "2e69f340",
+            "parse_failure_count": 0,
+            "partial": {
+              "hi": 1.0,
+              "lo": 0.8655462184873949,
+              "method": "bootstrap-percentile",
+              "point": 0.9355742296918768
+            },
+            "profile": "qwen36-27b",
+            "provider": "ik_llama.cpp",
+            "server": {
+              "engine": "ik_llama.cpp",
+              "git_commit": "eb570eb96689c235933b813693ca28ab9d3d26de",
+              "version": null
+            },
+            "timestamp": "2026-05-18T02:14:47Z",
+            "timing": {
+              "compute_seconds": 5981.280923070037,
+              "finished_at": "2026-05-18T03:51:51Z",
+              "started_at": "2026-05-18T02:14:47Z",
+              "wall_seconds": 5981.338024764962
+            }
+          },
+          "parent_key": "2e69f340e883f0a5a926ba693338e7325f73400f6f31422aa4d14e65434f298b",
+          "parent_prefix": "2e69f340",
+          "partial_only": false,
+          "partial_run_count": 0,
+          "partial_runs": [],
+          "run_count": 1,
+          "wall_seconds": 5981.338024764962
+        }
+      ],
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "hardware_profile": "rtx-5090",
+      "id": "71f98a85a59b0ba8",
+      "latest_timestamp": "2026-05-18T02:14:47Z",
+      "model_alias": "Qwen3.6-27B",
+      "model_profile": "qwen36-27b",
+      "partial_run_count": 0,
+      "run_count": 1,
+      "server": {
+        "engine": "ik_llama.cpp",
+        "git_commit": "eb570eb96689c235933b813693ca28ab9d3d26de",
+        "version": null
+      },
+      "suite_seconds": 5981.338024764962,
+      "title": "Qwen3.6-27B on RTX 5090"
+    },
+    {
       "cell_count": 5,
       "cells": [
         {
@@ -560,8 +673,70 @@
       "title": "Carnice-V2-27B on RTX 5090"
     }
   ],
-  "generated_at": "2026-05-16T22:02:50Z",
+  "generated_at": "2026-05-18T13:25:59Z",
   "reports": [
+    {
+      "accuracy": {
+        "hi": 1.0,
+        "lo": 0.6470588235294118,
+        "method": "bootstrap-percentile",
+        "point": 0.8235294117647058
+      },
+      "adapter": {
+        "name": "frontend_agentic",
+        "prompt_template_version": "v1",
+        "track": "general_capability",
+        "version": "v1"
+      },
+      "alias": "Qwen3.6-27B",
+      "comparability_key": "ab355c3941e4d1f61c0ea3b9114b8724f209728b22a1773f7c926503b99217ca",
+      "comparability_prefix": "ab355c39",
+      "correct_count": 14,
+      "dataset_item_count": 17,
+      "dataset_subset": null,
+      "endpoint": "chat-default",
+      "error_count": 0,
+      "hardware": {
+        "app_clock_graphics_mhz": null,
+        "app_clock_memory_mhz": null,
+        "boost_clock_mhz": 3090,
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "mem_clock_max_mhz": 14001,
+        "persistence_mode": "Enabled",
+        "power_limit_w": 600.0,
+        "profile": "rtx-5090",
+        "vram_mb": 32607
+      },
+      "id": "frontend_agentic-20260518T021447Z-31c079",
+      "item_count": 17,
+      "median_latency_ms": 132219.22970400192,
+      "median_tokens_per_sec": 29.5071141055999,
+      "median_ttft_ms": 664.3224820145406,
+      "notes": "",
+      "parent_key": "2e69f340e883f0a5a926ba693338e7325f73400f6f31422aa4d14e65434f298b",
+      "parent_prefix": "2e69f340",
+      "parse_failure_count": 0,
+      "partial": {
+        "hi": 1.0,
+        "lo": 0.8655462184873949,
+        "method": "bootstrap-percentile",
+        "point": 0.9355742296918768
+      },
+      "profile": "qwen36-27b",
+      "provider": "ik_llama.cpp",
+      "server": {
+        "engine": "ik_llama.cpp",
+        "git_commit": "eb570eb96689c235933b813693ca28ab9d3d26de",
+        "version": null
+      },
+      "timestamp": "2026-05-18T02:14:47Z",
+      "timing": {
+        "compute_seconds": 5981.280923070037,
+        "finished_at": "2026-05-18T03:51:51Z",
+        "started_at": "2026-05-18T02:14:47Z",
+        "wall_seconds": 5981.338024764962
+      }
+    },
     {
       "accuracy": {
         "hi": 0.9411764705882353,
