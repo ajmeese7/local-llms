@@ -12,8 +12,8 @@
      BenchRatings.write(ck, itemId, data) → void
      BenchRatings.clear(ck, itemId)       → void
      BenchRatings.aggregate(ck, itemIds)  → {mean, count} (count of rated items)
-     BenchRatings.readBenchNote(benchId)  → {text, updated_at} | null
-     BenchRatings.writeBenchNote(benchId, text) → void
+     BenchRatings.readBenchNote(benchId)  → {text, stars, updated_at} | null
+     BenchRatings.writeBenchNote(benchId, {text, stars}) → void
      BenchRatings.exportAll()             → JSON string of all ratings on this host
      BenchRatings.importAll(json)         → number of entries imported
    ============================================================ */
@@ -102,22 +102,27 @@ function readBenchNote(benchId) {
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
     if (typeof parsed.text !== "string") return null;
+    // Older entries (pre-stars) have no `stars` field; normalize to null.
+    if (!Number.isFinite(Number(parsed.stars))) parsed.stars = null;
     return parsed;
   } catch {
     return null;
   }
 }
 
-function writeBenchNote(benchId, text) {
+function writeBenchNote(benchId, data) {
   if (!benchId) return;
   const k = BENCH_NOTE_PREFIX + benchId;
-  const trimmed = (text ?? "").trim();
-  if (!trimmed) {
+  const text = (data?.text ?? "").trim();
+  const starsRaw = Number(data?.stars);
+  const stars = Number.isFinite(starsRaw) && starsRaw >= 1 && starsRaw <= 5
+    ? Math.round(starsRaw) : null;
+  if (!text && stars == null) {
     try { localStorage.removeItem(k); } catch { /* */ }
     _notify();
     return;
   }
-  const payload = { text: trimmed, updated_at: new Date().toISOString() };
+  const payload = { text, stars, updated_at: new Date().toISOString() };
   try {
     localStorage.setItem(k, JSON.stringify(payload));
     _notify();
@@ -174,7 +179,11 @@ function importAll(jsonText, strategy = "overwrite") {
   if (typeof benchNotes === "object" && benchNotes !== null) {
     for (const [benchId, data] of Object.entries(benchNotes)) {
       if (typeof data !== "object" || data === null) continue;
-      if (typeof data.text !== "string" || !data.text.trim()) continue;
+      const text = typeof data.text === "string" ? data.text.trim() : "";
+      const starsRaw = Number(data.stars);
+      const stars = Number.isFinite(starsRaw) && starsRaw >= 1 && starsRaw <= 5
+        ? Math.round(starsRaw) : null;
+      if (!text && stars == null) continue;
       const k = BENCH_NOTE_PREFIX + benchId;
       if (strategy === "merge") {
         try { if (localStorage.getItem(k) !== null) continue; } catch { /* */ }

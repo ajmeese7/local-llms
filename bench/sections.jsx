@@ -98,60 +98,79 @@ function BenchHero({ meta }) {
 function BenchNote({ benchId }) {
   const initial = _useMemo(() => window.BenchRatings.readBenchNote(benchId), [benchId]);
   const [editing, setEditing] = _useState(false);
-  const [draft, setDraft] = _useState(initial?.text || "");
-  const [savedText, setSavedText] = _useState(initial?.text || "");
-  const [updatedAt, setUpdatedAt] = _useState(initial?.updated_at || null);
+  const [draftText, setDraftText] = _useState(initial?.text || "");
+  const [draftStars, setDraftStars] = _useState(initial?.stars ?? null);
+  const [saved, setSaved] = _useState({
+    text: initial?.text || "",
+    stars: initial?.stars ?? null,
+    updatedAt: initial?.updated_at || null,
+  });
 
   // Reset when navigating between benches.
   React.useEffect(() => {
     const fresh = window.BenchRatings.readBenchNote(benchId);
-    setDraft(fresh?.text || "");
-    setSavedText(fresh?.text || "");
-    setUpdatedAt(fresh?.updated_at || null);
+    setDraftText(fresh?.text || "");
+    setDraftStars(fresh?.stars ?? null);
+    setSaved({
+      text: fresh?.text || "",
+      stars: fresh?.stars ?? null,
+      updatedAt: fresh?.updated_at || null,
+    });
     setEditing(false);
   }, [benchId]);
 
   const save = () => {
-    const trimmed = (draft || "").trim();
-    window.BenchRatings.writeBenchNote(benchId, trimmed);
-    setSavedText(trimmed);
-    setUpdatedAt(trimmed ? new Date().toISOString() : null);
+    const text = (draftText || "").trim();
+    const stars = draftStars;
+    window.BenchRatings.writeBenchNote(benchId, { text, stars });
+    setSaved({
+      text,
+      stars,
+      updatedAt: text || stars != null ? new Date().toISOString() : null,
+    });
     setEditing(false);
   };
   const cancel = () => {
-    setDraft(savedText);
+    setDraftText(saved.text);
+    setDraftStars(saved.stars);
     setEditing(false);
   };
 
-  const hasNote = savedText.length > 0;
+  const hasNote = saved.text.length > 0;
+  const hasStars = saved.stars != null;
 
   if (!editing) {
     return (
       <div className="mt-4 max-w-[80ch]">
         <div className="flex items-baseline justify-between gap-3 mb-1">
-          <div className="me-label">
-            <i className="fa-solid fa-note-sticky text-me-warning mr-1.5"></i>
-            Overall notes
+          <div className="me-label inline-flex items-center gap-2">
+            <i className="fa-solid fa-note-sticky text-me-warning"></i>
+            <span>Overall notes</span>
+            {hasStars && (
+              <span className="font-mono normal-case tracking-normal text-[11px] text-me-warning">
+                {"★".repeat(saved.stars)}<span className="text-me-fg-3">{"★".repeat(5 - saved.stars)}</span> {saved.stars}/5
+              </span>
+            )}
           </div>
           <button
             type="button"
             onClick={() => setEditing(true)}
             className="font-mono text-[10px] tracking-[0.06em] text-me-fg-3 hover:text-me-fg bg-transparent border-0 p-0 cursor-pointer underline decoration-dotted">
-            {hasNote ? "edit" : "add note"}
+            {hasNote || hasStars ? "edit" : "add note"}
           </button>
         </div>
         {hasNote ? (
           <p className="font-mono text-[12px] md:text-[13px] text-me-fg-2 whitespace-pre-wrap leading-relaxed m-0">
-            {savedText}
+            {saved.text}
           </p>
-        ) : (
+        ) : !hasStars && (
           <p className="font-mono text-[11px] text-me-fg-3 italic m-0">
             // no notes yet — leave a thought for visitors
           </p>
         )}
-        {hasNote && updatedAt && (
+        {(hasNote || hasStars) && saved.updatedAt && (
           <div className="font-mono text-[10px] text-me-fg-3 mt-1">
-            updated {window.BenchData.fmtDateOnly(updatedAt)}
+            updated {window.BenchData.fmtDateOnly(saved.updatedAt)}
           </div>
         )}
       </div>
@@ -160,15 +179,18 @@ function BenchNote({ benchId }) {
 
   return (
     <div className="mt-4 max-w-[80ch]">
-      <div className="me-label mb-1">
-        <i className="fa-solid fa-note-sticky text-me-warning mr-1.5"></i>
-        Overall notes
+      <div className="me-label mb-1 inline-flex items-center gap-2">
+        <i className="fa-solid fa-note-sticky text-me-warning"></i>
+        <span>Overall notes</span>
+      </div>
+      <div className="flex items-center gap-3 mb-2">
+        {React.createElement(window.StarRating, { value: draftStars, onChange: setDraftStars })}
       </div>
       <textarea
         className="rating-note w-full"
         placeholder="// thoughts on this model overall — strengths, quirks, what stood out"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        value={draftText}
+        onChange={(e) => setDraftText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
           if (e.key === "Escape") { e.preventDefault(); cancel(); }
@@ -231,6 +253,20 @@ function CapabilityCell({ cell, onOpenPrompts, onOpenRun }) {
   const tpsClass = tpsColor(r?.tps);
   const qualityLabel = r?.qualityKind === "partial" ? "Partial" : "Accuracy";
   const ts = window.BenchData.fmtDateOnly(cell.latest?.timestamp);
+
+  // User rating summary: aggregate over the latest run's items. Bumps when
+  // ratings change elsewhere (e.g. user opens Prompts and rates an item)
+  // so this card refreshes live.
+  const [ratingsVersion, setRatingsVersion] = _useState(0);
+  React.useEffect(
+    () => window.BenchRatings.subscribe(() => setRatingsVersion(v => v + 1)),
+    [],
+  );
+  const itemIds = cell.run?.results?.map(row => row.item_id) || [];
+  const userAgg = _useMemo(
+    () => window.BenchRatings.aggregate(cell.comparability_key, itemIds),
+    [cell.comparability_key, itemIds.length, ratingsVersion],
+  );
   return (
     <div className="me-card p-4 md:p-5 transition-all hover:border-me-border-strong">
       <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
@@ -287,6 +323,18 @@ function CapabilityCell({ cell, onOpenPrompts, onOpenRun }) {
       {r && (
         <div className="mt-3">
           <CleanlinessBar clean={r.cleanCount} leak={r.leakCount} empty={r.emptyCount} />
+        </div>
+      )}
+
+      {userAgg.count > 0 && (
+        <div className="mt-3 flex items-center gap-2 font-mono text-[11px]">
+          <span className="me-label">Your rating</span>
+          <span className="text-me-warning">
+            {"★".repeat(Math.round(userAgg.mean))}
+            <span className="text-me-fg-3">{"★".repeat(5 - Math.round(userAgg.mean))}</span>
+          </span>
+          <span className="text-me-fg">{userAgg.mean.toFixed(1)}/5</span>
+          <span className="text-me-fg-3">· {userAgg.count}/{itemIds.length} rated</span>
         </div>
       )}
 
