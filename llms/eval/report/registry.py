@@ -7,7 +7,10 @@ Also emits `profiles.json`, a snapshot of the config tree the SPA
 guide reads to render real model cards.
 
 The registry's `benches` block groups runs by `(hardware_profile,
-model_profile)` — one bench per GPU+model pair on this host.
+model_profile, server.engine)` — one bench per GPU+model+backend
+triple on this host. Splitting by engine is what keeps an ik_llama.cpp
+run of a model from getting tangled up with the llama.cpp run of the
+same model: they're different backends, they get different bench cards.
 Inside a bench, runs are bucketed into `cells` keyed by
 `comparability_key` (one cell = one capability against this model);
 each cell keeps history (newest first) so re-runs are not lost.
@@ -24,7 +27,7 @@ from typing import Any
 from llms.eval.manifest import compute_parent_key_from_manifest
 from llms.serving.config.loader import load_bundle
 
-REGISTRY_VERSION = 5
+REGISTRY_VERSION = 6
 
 
 def build_registry(output_root: Path) -> dict[str, Any]:
@@ -46,21 +49,25 @@ def build_registry(output_root: Path) -> dict[str, Any]:
 
 
 def _build_benches(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Group reports into benches keyed by (hardware_profile, model_profile).
+    """Group reports into benches keyed by (hardware_profile, model_profile, engine).
 
-    A bench is one (GPU, model) pair on this host. Inside a bench, runs are
+    A bench is one (GPU, model, backend) triple on this host. Splitting by
+    engine means an `ik_llama.cpp` run and a `llama.cpp` run of the same
+    model land in separate benches — they're different runtimes and pretending
+    otherwise produces an apples-to-oranges card. Inside a bench, runs are
     bucketed into cells keyed by `comparability_key`; each cell keeps the
     full history (newest first), so re-running the same capability against
     the same model preserves the older results for trend-spotting.
     """
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for report in reports:
         hw_profile = _hw_profile_of(report) or "unknown"
         model_profile = report.get("profile") or report.get("alias") or "unknown"
-        grouped.setdefault((hw_profile, model_profile), []).append(report)
+        engine = _engine_of(report) or "unknown"
+        grouped.setdefault((hw_profile, model_profile, engine), []).append(report)
 
     benches: list[dict[str, Any]] = []
-    for (hw_profile, model_profile), members in grouped.items():
+    for (hw_profile, model_profile, engine), members in grouped.items():
         members.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
         head = members[0]
         cells = _build_cells(members)
@@ -72,11 +79,12 @@ def _build_benches(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
         partial_run_count = sum(c.get("partial_run_count", 0) for c in cells)
         benches.append(
             {
-                "id": _bench_id(hw_profile, model_profile),
+                "id": _bench_id(hw_profile, model_profile, engine),
                 "hardware_profile": hw_profile,
                 "model_profile": model_profile,
                 "model_alias": head.get("alias") or model_profile,
-                "title": _bench_title(head, hw_profile, model_profile),
+                "server_engine": engine if engine != "unknown" else None,
+                "title": _bench_title(head, hw_profile, model_profile, engine),
                 "latest_timestamp": head.get("timestamp"),
                 "hardware": head.get("hardware"),
                 "server": head.get("server"),
@@ -184,10 +192,11 @@ def _partial_run_view(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _bench_id(hw_profile: str, model_profile: str) -> str:
+def _bench_id(hw_profile: str, model_profile: str, engine: str) -> str:
     """Stable 16-char id for a bench. Uses sha256 so renames produce a
-    fresh id (acceptable: a renamed hardware profile is a different bench)."""
-    return hashlib.sha256(f"{hw_profile}::{model_profile}".encode()).hexdigest()[:16]
+    fresh id (acceptable: a renamed hardware profile or backend is a
+    different bench)."""
+    return hashlib.sha256(f"{hw_profile}::{model_profile}::{engine}".encode()).hexdigest()[:16]
 
 
 def _hw_profile_of(report: dict[str, Any]) -> str | None:
@@ -199,15 +208,21 @@ def _hw_profile_of(report: dict[str, Any]) -> str | None:
     return None
 
 
-def _bench_title(head: dict[str, Any], hw_profile: str, model_profile: str) -> str:
-    """'<model_alias> on <gpu_short>' when both are known; else fall back."""
-    alias = head.get("alias") or model_profile
-    hw = head.get("hardware") if isinstance(head.get("hardware"), dict) else None
-    gpu = (hw or {}).get("gpu_name") or hw_profile
-    if not gpu or gpu == "unknown":
-        return alias
-    short = gpu.replace("NVIDIA ", "").replace("GeForce ", "")
-    return f"{alias} on {short}"
+def _engine_of(report: dict[str, Any]) -> str | None:
+    server = report.get("server")
+    if isinstance(server, dict):
+        engine = server.get("engine")
+        if isinstance(engine, str) and engine:
+            return engine
+    return None
+
+
+def _bench_title(head: dict[str, Any], hw_profile: str, model_profile: str, engine: str) -> str:
+    """Bench title is just the model alias. The hub renders GPU + backend
+    alongside the title (eyebrow row on home cards, stat ribbon on the
+    detail page), so baking them into the title duplicates info."""
+    del hw_profile, engine  # rendered separately by the SPA
+    return head.get("alias") or model_profile
 
 
 def emit_registry(output_root: Path) -> Path:

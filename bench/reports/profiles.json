@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-18T20:47:56Z",
+  "generated_at": "2026-05-18T21:46:38Z",
   "hardware": [
     {
       "default_endpoint": "chat-9b",
@@ -354,5 +354,5 @@
       "repo_url": "https://github.com/ggerganov/llama.cpp.git"
     }
   ],
-  "version": 5
+  "version": 6
 }

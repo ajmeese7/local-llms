@@ -64,11 +64,11 @@ The repo ships a `.github/workflows/pages.yml` job that deploys `bench/` to GitH
 ## Schema (registry v5)
 
 - `loadIndex()` reads `reports/reports.json`, built by `llms eval report` from each run's `manifest.json` + `summary.json`.
-- `benches` group reports by `(hardware_profile, model_profile)` — one bench per GPU + model on the host. Each bench owns capability **cells**.
+- `benches` group reports by `(hardware_profile, model_profile, server.engine)` — one bench per GPU + model + backend on the host. Splitting by engine keeps a `llama.cpp` run of a model from getting mashed together with an `ik_llama.cpp` run of the same model. Each bench owns capability **cells**.
 - `cells` are bucketed by a `parent_key`: the same SHA-256 used for the run's full `comparability_key` but with `dataset.subset`, `dataset.item_count`, and `decode.max_tokens` cleared. Subset re-runs (e.g. `--subset design`) therefore land inside the cell of the full run they were carved from instead of inflating the "CAPABILITIES" count.
 - Within a cell:
   - `history_ids` — full runs (subset=None), newest first.
-  - `partial_runs` — subset re-runs, listed separately (click-through routes to `#/bench/<id>/prompts/<adapter>/<runId>`).
+  - `partial_runs` — subset re-runs, listed separately (click-through routes to `#/bench/<id>/prompts/<cellKey>/<runId>`, where `cellKey` is the cell's `comparability_prefix`).
   - `partial_only: true` when the only runs against this parent_key are subset runs.
 - `loadProfilesSnapshot()` reads `reports/profiles.json`, a flat snapshot of the active config tree.
 - `loadBench(id)` lazily fetches each cell's latest run; `loadRun(id)` is used by the partial-re-run drilldown to pull a specific run on demand.

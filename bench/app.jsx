@@ -3,11 +3,15 @@
    Hash routing:
      #/                                          → home
      #/bench/<id>                                → bench overview
-     #/bench/<id>/prompts/<adapter>              → prompts for the latest full run
-     #/bench/<id>/prompts/<adapter>/<runId>      → prompts for a specific run
+     #/bench/<id>/prompts/<cellKey>              → prompts for the latest full run
+     #/bench/<id>/prompts/<cellKey>/<runId>      → prompts for a specific run
                                                    (used by partial / subset re-runs)
      #/bench/<id>/config                         → model profile config
      #/methodology                               → top-level methodology page
+   `cellKey` is a cell's `comparability_prefix` (8 hex chars). Routing
+   by prefix instead of adapter name is what lets two cells sharing the
+   same adapter (e.g. frontend_agentic against llama.cpp + ik_llama.cpp)
+   each have their own URL.
    A `bench` is one (hardware_profile, model_profile) pair.
    data.jsx#findBench tolerates renames/legacy ids gracefully.
    ============================================================ */
@@ -22,7 +26,7 @@ function parseHash(h) {
     const id = decodeURIComponent(parts[1]);
     if (parts[2] === "prompts" && parts[3]) {
       const runId = parts[4] ? decodeURIComponent(parts[4]) : null;
-      return { view: "bench", id, tab: "prompts", adapter: decodeURIComponent(parts[3]), runId };
+      return { view: "bench", id, tab: "prompts", cellKey: decodeURIComponent(parts[3]), runId };
     }
     if (parts[2] === "config") {
       return { view: "bench", id, tab: "config" };
@@ -35,8 +39,8 @@ function parseHash(h) {
 
 function buildHash(route) {
   if (route.view === "bench") {
-    if (route.tab === "prompts" && route.adapter) {
-      const base = `#/bench/${encodeURIComponent(route.id)}/prompts/${encodeURIComponent(route.adapter)}`;
+    if (route.tab === "prompts" && route.cellKey) {
+      const base = `#/bench/${encodeURIComponent(route.id)}/prompts/${encodeURIComponent(route.cellKey)}`;
       return route.runId ? `${base}/${encodeURIComponent(route.runId)}` : base;
     }
     if (route.tab === "config") {
@@ -274,16 +278,16 @@ function App() {
               <OverviewSection
                 bench={active}
                 leaderboards={leaderboards}
-                onOpenPrompts={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })}
-                onOpenRun={(adapter, runId) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter, runId })} />
+                onOpenPrompts={(cellKey) => navigate({ view: "bench", id: route.id, tab: "prompts", cellKey })}
+                onOpenRun={(cellKey, runId) => navigate({ view: "bench", id: route.id, tab: "prompts", cellKey, runId })} />
             )}
-            {route.tab === "prompts" && route.adapter && (
+            {route.tab === "prompts" && route.cellKey && (
               <PromptsSection
                 bench={active}
-                adapterName={route.adapter}
+                cellKey={route.cellKey}
                 runId={route.runId || null}
-                onSwitch={(adapter) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter })}
-                onSwitchRun={(runId) => navigate({ view: "bench", id: route.id, tab: "prompts", adapter: route.adapter, runId })} />
+                onSwitch={(cellKey) => navigate({ view: "bench", id: route.id, tab: "prompts", cellKey })}
+                onSwitchRun={(runId) => navigate({ view: "bench", id: route.id, tab: "prompts", cellKey: route.cellKey, runId })} />
             )}
             {route.tab === "config" && (
               <ConfigSection bench={active} profilesSnap={profilesSnap} />

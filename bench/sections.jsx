@@ -34,8 +34,8 @@ function OverviewSection({ bench, leaderboards, onOpenPrompts, onOpenRun }) {
             <CapabilityCell
               key={cell.comparability_key}
               cell={cell}
-              onOpenPrompts={() => onOpenPrompts(cell.adapter.name)}
-              onOpenRun={(runId) => onOpenRun(cell.adapter.name, runId)} />
+              onOpenPrompts={() => onOpenPrompts(cell.comparability_prefix)}
+              onOpenRun={(runId) => onOpenRun(cell.comparability_prefix, runId)} />
           ))}
         </div>
       )}
@@ -82,9 +82,6 @@ function BenchHero({ meta }) {
         ))}
       </div>
       <h1 className="hero-title my-2">{meta.title}</h1>
-      <p className="font-mono text-[13px] md:text-[15px] text-me-fg-2 mb-1 max-w-[80ch]">
-        {`// ${meta.model_alias}${meta.hardware_profile && meta.hardware_profile !== "unknown" ? ` · ${meta.hardware_profile}` : ""} · ${meta.cell_count} capabilit${meta.cell_count === 1 ? "y" : "ies"} attached`}
-      </p>
       <BenchNote benchId={meta.id} />
     </div>
   );
@@ -536,9 +533,15 @@ function tpsColor(t) {
 }
 
 /* ====================== PROMPTS ====================== */
-function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
-  const cell = bench.cells.find(c => c.adapter.name === adapterName);
+function PromptsSection({ bench, cellKey, runId, onSwitch, onSwitchRun }) {
+  // Routed by comparability_prefix so cells sharing an adapter name
+  // (e.g. frontend_agentic against llama.cpp vs ik_llama.cpp) each get
+  // their own URL. Fall back to adapter-name match so URLs bookmarked
+  // before this change still land on something usable.
+  const cell = bench.cells.find(c => c.comparability_prefix === cellKey)
+    || bench.cells.find(c => c.adapter?.name === cellKey);
   const cells = bench.cells.filter(c => c.run && c.run.results.length);
+  const adapterName = cell?.adapter?.name || cellKey;
   // If a specific runId is requested and it's not the cell's preloaded latest,
   // fetch that run on demand. Covers both subset re-runs (their own
   // comparability_key) and earlier full-suite runs from the same cell's
@@ -569,9 +572,9 @@ function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
     return (
       <section data-screen-label="02 Prompts">
         <SectionHead num="03" title="Prompts" sub="// pick a capability above" />
-        <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
+        <CapabilityPicker cells={cells} active={cellKey} onSwitch={onSwitch} />
         <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
-          No data for capability "{adapterName}".
+          No data for capability "{cellKey}".
         </div>
       </section>
     );
@@ -590,7 +593,7 @@ function PromptsSection({ bench, adapterName, runId, onSwitch, onSwitchRun }) {
   return (
     <section data-screen-label="02 Prompts">
       <SectionHead num="03" title={`Prompts · ${adapterName}`} sub={subtitle} />
-      <CapabilityPicker cells={cells} active={adapterName} onSwitch={onSwitch} />
+      <CapabilityPicker cells={cells} active={cell.comparability_prefix} onSwitch={onSwitch} />
       <RunPicker cell={cell} activeRunId={activeRunId} onSwitchRun={onSwitchRun} />
       {wantsAlt && !viewCell && !altErr && (
         <div className="me-card p-6 font-mono text-[12px] text-me-fg-3">
@@ -693,8 +696,12 @@ function CapabilityPicker({ cells, active, onSwitch }) {
     <div className="flex flex-wrap items-center gap-2 mb-4">
       <Label>Capability</Label>
       {cells.map(c => (
-        <Chip key={c.adapter.name} on={c.adapter.name === active} cyan onClick={() => onSwitch(c.adapter.name)}>
-          {c.adapter.name}
+        <Chip
+          key={c.comparability_prefix}
+          on={c.comparability_prefix === active}
+          cyan
+          onClick={() => onSwitch(c.comparability_prefix)}>
+          {c.adapter?.name || "—"}
         </Chip>
       ))}
     </div>

@@ -306,3 +306,63 @@ def test_registry_sorted_newest_first(tmp_path: Path) -> None:
         )
     registry = build_registry(output)
     assert [r["id"] for r in registry["reports"]] == ["new", "old"]
+
+
+def _write_minimal_run(
+    output: Path,
+    *,
+    run_id: str,
+    timestamp: str,
+    engine: str,
+    comparability_key: str,
+) -> None:
+    """Drop a manifest+summary pair into `output/<run_id>/` so build_registry
+    sees it. Used by tests that need to control hardware/server fingerprints
+    without booting the runner."""
+    run_dir = output / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "summary.json").write_text(json.dumps({"item_count": 1}))
+    (run_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "endpoint_name": "ep",
+                "model": {"profile": "p", "alias": "P", "model_path": "/m/p.gguf"},
+                "provider": {"name": engine, "server_binary": "/opt/x/llama-server", "git_commit": None, "cmake_args": []},
+                "decode": {"max_tokens": 8},
+                "dataset": {"name": "mmlu", "version": "v1", "subset": None, "item_count": 1},
+                "adapter": {
+                    "name": "mmlu", "version": "v1", "track": "general_capability",
+                    "prompt_template_version": "v1", "scorer_version": "v1",
+                },
+                "hardware": {"profile": "hw", "gpu_name": "RTX 5090"},
+                "server": {"engine": engine, "git_commit": None, "version": None},
+                "seed": 0, "repo_sha": None, "hostname": "x",
+                "timestamp": timestamp,
+                "comparability_key": comparability_key,
+            }
+        )
+    )
+
+
+def test_same_model_different_engines_split_into_two_benches(tmp_path: Path) -> None:
+    """Two runs of the same adapter against the same model on the same GPU
+    but different inference backends produce two separate benches."""
+    output = tmp_path / "reports"
+    _write_minimal_run(output, run_id="a", timestamp="2026-05-18T02:00:00Z", engine="llama.cpp", comparability_key="a" * 64)
+    _write_minimal_run(output, run_id="b", timestamp="2026-05-18T03:00:00Z", engine="ik_llama.cpp", comparability_key="b" * 64)
+
+    benches = build_registry(output)["benches"]
+    assert len(benches) == 2
+    engines = sorted(b["server_engine"] for b in benches)
+    assert engines == ["ik_llama.cpp", "llama.cpp"]
+    # Each bench owns exactly the run it came from.
+    by_engine = {b["server_engine"]: b for b in benches}
+    assert by_engine["llama.cpp"]["cells"][0]["history_ids"] == ["a"]
+    assert by_engine["ik_llama.cpp"]["cells"][0]["history_ids"] == ["b"]
+    # Title is the model alias only; engine surfaces alongside (eyebrow on
+    # home cards, stat ribbon on the detail page), not baked into the title.
+    assert by_engine["llama.cpp"]["title"] == "P"
+    assert by_engine["ik_llama.cpp"]["title"] == "P"
+    # Bench ids are derived from (hw, model, engine), so they differ.
+    assert by_engine["llama.cpp"]["id"] != by_engine["ik_llama.cpp"]["id"]

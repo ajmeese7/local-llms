@@ -62,7 +62,6 @@ function HomePage({ index, profilesSnap, leaderboards, onOpen }) {
               <BenchCard
                 key={b.id}
                 bench={b}
-                showHwPill={hwProfiles.length > 1}
                 onOpen={() => onOpen(b.id)} />
             ))}
           </div>
@@ -144,8 +143,10 @@ function HomeHero({ benches }) {
   );
 }
 
-function BenchCard({ bench, showHwPill, onOpen }) {
+function BenchCard({ bench, onOpen }) {
   const hw = bench.hardware;
+  const gpu = hw?.gpu_name ? window.BenchData.gpuShort(hw.gpu_name) : (bench.hardware_profile || null);
+  const engine = bench.server_engine || bench.server?.engine || null;
   const cellPreview = (bench.cells || []).slice(0, 6);
   const overflow = (bench.cells || []).length - cellPreview.length;
 
@@ -156,25 +157,28 @@ function BenchCard({ bench, showHwPill, onOpen }) {
       role="button">
       <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
         <div className="me-eyebrow flex items-center gap-2">
-          <i className="fa-solid fa-cube text-me-cyan"></i>
-          <span>{bench.model_alias}</span>
+          {gpu && gpu !== "unknown" && (
+            <>
+              <i className="fa-solid fa-microchip text-me-cyan text-[10px]"></i>
+              <span>{gpu}</span>
+            </>
+          )}
+          {gpu && gpu !== "unknown" && engine && <span className="text-me-fg-3">·</span>}
+          {engine && (
+            <>
+              <i className="fa-solid fa-server text-me-magenta text-[10px]"></i>
+              <span className="text-me-magenta">{engine}</span>
+            </>
+          )}
         </div>
         <div className="font-mono text-[10px] text-me-fg-3">
           {window.BenchData.fmtDateOnly(bench.latest_timestamp)}
         </div>
       </div>
 
-      <h3 className="font-display text-[14px] md:text-[16px] tracking-[0.08em] uppercase m-0 mb-3 text-me-fg break-words">
-        {bench.title}
+      <h3 className="font-display text-[18px] md:text-[20px] tracking-[0.08em] uppercase m-0 mb-3 text-me-fg break-words">
+        {bench.model_alias}
       </h3>
-
-      {showHwPill && (
-        <div className="mb-3">
-          <span className="font-mono text-[10px] tracking-[0.1em] uppercase px-2 py-0.5 border border-me-cyan/40 text-me-cyan">
-            {hw?.gpu_name ? window.BenchData.gpuShort(hw.gpu_name) : (bench.hardware_profile || "unknown")}
-          </span>
-        </div>
-      )}
 
       <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[11px]">
         <div className="p-2 bg-white/[0.02] border border-me-border min-w-0">

@@ -85,25 +85,29 @@ async function loadRun(id) {
 
 /* ---------- Bench resolution ---------- */
 function deriveBenches(reports) {
-  // Client-side fallback when the registry is older than v4.
+  // Client-side fallback when the registry is older than the current version.
+  // Mirrors registry.py#_build_benches: keyed by (hw, model, engine) so each
+  // backend gets its own bench card.
   const grouped = new Map();
   for (const r of reports) {
     const hw = r.hardware?.profile || "unknown";
     const model = r.profile || r.alias || "unknown";
-    const key = `${hw}::${model}`;
-    if (!grouped.has(key)) grouped.set(key, { hw, model, members: [] });
+    const engine = r.server?.engine || "unknown";
+    const key = `${hw}::${model}::${engine}`;
+    if (!grouped.has(key)) grouped.set(key, { hw, model, engine, members: [] });
     grouped.get(key).members.push(r);
   }
   const benches = [];
-  for (const { hw, model, members } of grouped.values()) {
+  for (const { hw, model, engine, members } of grouped.values()) {
     members.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
     const head = members[0];
     benches.push({
-      id: hashId(`${hw}::${model}`),
+      id: hashId(`${hw}::${model}::${engine}`),
       hardware_profile: hw,
       model_profile: model,
       model_alias: head.alias || model,
-      title: benchTitleFromHead(head, hw, model),
+      server_engine: engine !== "unknown" ? engine : null,
+      title: benchTitleFromHead(head, hw, model, engine),
       latest_timestamp: head.timestamp,
       hardware: head.hardware || null,
       server: head.server || null,
@@ -154,11 +158,11 @@ function hashId(s) {
   return `${hex}${hex}`.slice(0, 16);
 }
 
-function benchTitleFromHead(head, hwProfile, modelProfile) {
-  const alias = head.alias || modelProfile;
-  const gpu = head.hardware?.gpu_name || hwProfile;
-  if (!gpu || gpu === "unknown") return alias;
-  return `${alias} on ${gpuShort(gpu)}`;
+function benchTitleFromHead(head, _hwProfile, modelProfile, _engine) {
+  // Title is just the model alias. GPU + backend render alongside it (eyebrow
+  // on home cards, stat ribbon on the detail page), so duplicating them in
+  // the title is noise.
+  return head.alias || modelProfile;
 }
 
 function gpuShort(name) {
