@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "exported_at": "2026-05-17T18:01:25.953Z",
+  "version": 2,
+  "exported_at": "2026-05-18T02:11:47.510Z",
   "ratings": {
     "862eba626606f7e63f1c7fef1a2e9250b61644ce5af66626ec0deecdb01f6f4c:canvas_particle_attractor": {
       "stars": 5,
@@ -193,6 +193,13 @@
         "failure"
       ],
       "rated_at": "2026-05-11T11:59:59.913Z"
+    }
+  },
+  "bench_notes": {
+    "a157958e9af76c81": {
+      "text": "Very dissatisfied with the model's overall performance, lags significantly behind competitor models like Qwen3.6-27B for coding-related tasks.",
+      "stars": 2,
+      "updated_at": "2026-05-18T02:10:47.232Z"
     }
   }
 }
