@@ -1,0 +1,35 @@
+{
+  "accuracy": {
+    "hi": 1.0,
+    "lo": 1.0,
+    "method": "single-sample",
+    "point": 1.0
+  },
+  "by_category": {
+    "agentic": {
+      "accuracy": 1.0,
+      "correct_count": 1,
+      "item_count": 1,
+      "partial_mean": 1.0
+    }
+  },
+  "correct_count": 1,
+  "error_count": 0,
+  "item_count": 1,
+  "median_latency_ms": 307530.4677039967,
+  "median_tokens_per_sec": 20.05654934306153,
+  "median_ttft_ms": 2699.72501299344,
+  "parse_failure_count": 0,
+  "partial": {
+    "hi": 1.0,
+    "lo": 1.0,
+    "method": "single-sample",
+    "point": 1.0
+  },
+  "timing": {
+    "compute_seconds": 307.5304677039967,
+    "finished_at": "2026-05-18T15:41:11Z",
+    "started_at": "2026-05-18T15:36:22Z",
+    "wall_seconds": 307.59783145796973
+  }
+}

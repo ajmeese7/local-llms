@@ -1,0 +1,65 @@
+{
+  "adapter": {
+    "name": "frontend_agentic",
+    "prompt_template_version": "v1",
+    "scorer_version": "v1",
+    "track": "general_capability",
+    "version": "v1"
+  },
+  "comparability_key": "9f416de28de46e8ec68df83d36866d92ca0590a1722ca19d7b9629e7863ae481",
+  "dataset": {
+    "item_count": 1,
+    "name": "frontend_agentic",
+    "subset": "agentic_multi_step_planning",
+    "version": "v1"
+  },
+  "decode": {
+    "max_tokens": 12000,
+    "min_p": null,
+    "presence_penalty": null,
+    "repeat_penalty": null,
+    "temperature": null,
+    "top_k": null,
+    "top_p": null
+  },
+  "endpoint_name": "chat-default",
+  "extras": {},
+  "hardware": {
+    "app_clock_graphics_mhz": null,
+    "app_clock_memory_mhz": null,
+    "boost_clock_mhz": 3090,
+    "gpu_name": "NVIDIA GeForce RTX 5090",
+    "mem_clock_max_mhz": 14001,
+    "persistence_mode": "Enabled",
+    "power_limit_w": 600.0,
+    "profile": "rtx-5090",
+    "vram_mb": 32607
+  },
+  "hostname": "6ee47e0c",
+  "model": {
+    "alias": "Qwen3.6-27B",
+    "hf_file": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+    "hf_repo": "unsloth/Qwen3.6-27B-GGUF",
+    "model_path": "~/models/Qwen3.6-27B-UD-Q5_K_XL.gguf",
+    "model_sha256": null,
+    "profile": "qwen36-27b"
+  },
+  "notes": "",
+  "provider": {
+    "cmake_args": [
+      "-DGGML_CUDA=ON"
+    ],
+    "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+    "name": "llama.cpp",
+    "server_binary": "~/.local/share/llama.cpp/build/bin/llama-server"
+  },
+  "repo_sha": "3b062bb8ec7dfa49704f06c4eaf6c19e040d2461",
+  "run_id": "frontend_agentic-20260518T153622Z-9ab9bb",
+  "seed": 0,
+  "server": {
+    "engine": "llama.cpp",
+    "git_commit": "0754b7b6fe6109909786bdaa763111167b7410c8",
+    "version": null
+  },
+  "timestamp": "2026-05-18T15:36:22Z"
+}
