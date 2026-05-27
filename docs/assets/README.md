@@ -6,7 +6,7 @@ Source of truth for the visual identity used by the top-level README and the Git
 
 | File | Role | Where it appears |
 |---|---|---|
-| `hero.svg` | Top-of-README banner. Chromatic-split wordmark + tagline + feature pill strip, all inside one scanline frame. Single image so the pills don't drift from the hero with paragraph margins. | `README.md` (top) |
+| `hero.svg` | Top-of-README banner. Chromatic-split wordmark, three-line tagline, scanline backdrop, stylized GPU silhouette. | `README.md` (top) |
 | `architecture.svg` | Five-layer stack diagram: clients → API → systemd → backend → hardware. | `README.md` ("How it fits together") |
 | `social-card.svg` | 1280x640 GitHub social preview. Stat-card layout. | Uploaded via repo Settings → Social preview |
 | `social-card.png` | Rasterized `social-card.svg` for the GitHub upload (PNG required). | Same as above |
@@ -48,7 +48,7 @@ The hero and architecture SVGs are embedded directly in the README and don't nee
 
 | Change | Update |
 |---|---|
-| New backend supported | `architecture.svg` (L4), `hero.svg` (pill strip), `social-card.svg` (backends count) |
+| New backend supported | `architecture.svg` (L4), `hero.svg` (tagline line 3), `social-card.svg` (backends count) |
 | New eval adapter shipped | `architecture.svg` (L1), `social-card.svg` (eval suites count) |
 | Palette change in the hub | `colors_and_type.css` first, then mirror tokens here |
 | Project rename | every SVG (wordmark + ARIA `aria-label`) |

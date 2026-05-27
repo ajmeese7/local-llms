@@ -1,7 +1,7 @@
 # local-llms
 
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="local-llms — systemd-managed llama.cpp on your own GPU. CUDA 12.x · systemd · OpenAI API · llama.cpp · ik_llama.cpp · RTX-class GPU." width="100%"/>
+  <img src="docs/assets/hero.svg" alt="local-llms — systemd-managed llama.cpp on your own GPU" width="100%"/>
 </p>
 
 Run a local LLM as a persistent systemd service using [llama.cpp](https://github.com/ggerganov/llama.cpp), compiled from source with CUDA. Native Linux and WSL2. OpenAI-compatible API on top of an NVIDIA GPU. Includes a benchmark harness, a static report hub, and CLI tooling for endpoint lifecycle.
