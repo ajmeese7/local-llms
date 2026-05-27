@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="local-llms: systemd-managed llama.cpp on your own GPU">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0A0A0A"/>
+      <stop offset="55%" stop-color="#050505"/>
+      <stop offset="100%" stop-color="#080010"/>
+    </linearGradient>
+    <linearGradient id="accentSweep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#D600FF" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#D600FF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#00B8FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="cyanGlow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00B8FF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#00B8FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="magentaGlow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D600FF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#D600FF" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="scanlines" width="3" height="3" patternUnits="userSpaceOnUse">
+      <rect width="3" height="3" fill="transparent"/>
+      <rect width="3" height="1" fill="#ffffff" fill-opacity="0.025"/>
+    </pattern>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 H0 V40" fill="none" stroke="#ffffff" stroke-opacity="0.025" stroke-width="1"/>
+    </pattern>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <style>
+      .mono { font-family: 'JetBrains Mono','Fira Code','SF Mono','Consolas','Monaco',monospace; }
+      .title { font-weight: 800; letter-spacing: 0.06em; }
+      .meta  { font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
+      .tag   { font-weight: 500; letter-spacing: 0.04em; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="340" fill="url(#bgGrad)"/>
+  <rect width="1200" height="340" fill="url(#grid)"/>
+  <rect width="1200" height="340" fill="url(#scanlines)"/>
+  <rect x="0" y="0" width="1200" height="170" fill="url(#magentaGlow)"/>
+  <rect x="0" y="170" width="1200" height="170" fill="url(#cyanGlow)"/>
+
+  <!-- corner brackets -->
+  <g stroke-width="2" fill="none">
+    <path d="M28 28 L28 60 M28 28 L60 28" stroke="#D600FF" stroke-opacity="0.85"/>
+    <path d="M1172 28 L1172 60 M1172 28 L1140 28" stroke="#00B8FF" stroke-opacity="0.85"/>
+    <path d="M28 312 L28 280 M28 312 L60 312" stroke="#00B8FF" stroke-opacity="0.85"/>
+    <path d="M1172 312 L1172 280 M1172 312 L1140 312" stroke="#D600FF" stroke-opacity="0.85"/>
+  </g>
+
+  <!-- top meta strip -->
+  <g class="mono meta" font-size="11">
+    <text x="80" y="62" fill="#7A7A85">// LOCAL INFERENCE / NVIDIA CUDA / SYSTEMD</text>
+    <text x="1120" y="62" fill="#7A7A85" text-anchor="end">v0.1  ::  MIT</text>
+  </g>
+  <line x1="80" y1="74" x2="1120" y2="74" stroke="url(#accentSweep)" stroke-width="1"/>
+
+  <!-- title with chromatic split -->
+  <g class="mono title" font-size="84">
+    <text x="78" y="180" fill="#D600FF" fill-opacity="0.7" filter="url(#softGlow)">local-llms</text>
+    <text x="82" y="182" fill="#00B8FF" fill-opacity="0.7" filter="url(#softGlow)">local-llms</text>
+    <text x="78" y="180" fill="#D600FF" fill-opacity="0.55">local-llms</text>
+    <text x="82" y="182" fill="#00B8FF" fill-opacity="0.55">local-llms</text>
+    <text x="80" y="181" fill="#FFFFFF">local-llms</text>
+  </g>
+
+  <!-- accent dots -->
+  <g>
+    <circle cx="772" cy="155" r="5" fill="#D600FF"/>
+    <circle cx="788" cy="155" r="5" fill="#00B8FF"/>
+    <circle cx="804" cy="155" r="5" fill="#19F0A8"/>
+  </g>
+
+  <!-- terminal-style tagline lines -->
+  <g class="mono tag" font-size="18">
+    <text x="80" y="232" fill="#D600FF">&gt;</text>
+    <text x="104" y="232" fill="#FFFFFF">systemd-managed llama.cpp on your own GPU</text>
+
+    <text x="80" y="262" fill="#00B8FF">&gt;</text>
+    <text x="104" y="262" fill="#C9C9D1">OpenAI-compatible API  ·  benchmarked  ·  reproducible</text>
+
+    <text x="80" y="292" fill="#19F0A8">&gt;</text>
+    <text x="104" y="292" fill="#7A7A85">CUDA 12.x  ·  llama.cpp + ik_llama.cpp  ·  Linux / WSL2</text>
+  </g>
+
+  <!-- right-side ascii GPU silhouette (very stylized) -->
+  <g transform="translate(880,150)" stroke-width="1.5" fill="none">
+    <rect x="0" y="0" width="240" height="120" rx="6" stroke="#00B8FF" stroke-opacity="0.55"/>
+    <rect x="10" y="10" width="220" height="46" rx="3" stroke="#D600FF" stroke-opacity="0.45"/>
+    <g stroke="#00B8FF" stroke-opacity="0.45">
+      <circle cx="40"  cy="86" r="14"/>
+      <circle cx="80"  cy="86" r="14"/>
+      <circle cx="120" cy="86" r="14"/>
+      <circle cx="160" cy="86" r="14"/>
+      <circle cx="200" cy="86" r="14"/>
+    </g>
+    <g stroke="#D600FF" stroke-opacity="0.55">
+      <circle cx="40"  cy="86" r="4" fill="#D600FF" fill-opacity="0.55"/>
+      <circle cx="200" cy="86" r="4" fill="#00B8FF" fill-opacity="0.7"/>
+    </g>
+    <text x="120" y="40" class="mono meta" font-size="10" fill="#7A7A85" text-anchor="middle">NVIDIA  ::  RTX-CLASS</text>
+  </g>
+
+  <!-- bottom meta strip -->
+  <line x1="80" y1="304" x2="1120" y2="304" stroke="#ffffff" stroke-opacity="0.08"/>
+</svg>

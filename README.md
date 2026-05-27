@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="docs/assets/hero.svg" alt="local-llms — systemd-managed llama.cpp on your own GPU" width="100%"/>
+</p>
+
+<p align="center">
+  <img src="docs/assets/pills.svg" alt="CUDA 12.x · systemd · OpenAI API · llama.cpp · ik_llama.cpp · RTX-class GPU" width="100%"/>
+</p>
+
 # local-llms
 
 Run a local LLM as a persistent systemd service using [llama.cpp](https://github.com/ggerganov/llama.cpp), compiled from source with CUDA. Native Linux and WSL2. OpenAI-compatible API on top of an NVIDIA GPU. Includes a benchmark harness, a static report hub, and CLI tooling for endpoint lifecycle.
@@ -33,6 +41,14 @@ Want to bench the same model against a different backend? Pass `--provider` to `
 sudo systemctl restart llama-server
 .venv/bin/llms eval run frontend_agentic --endpoint chat-carnice --provider ik_llama.cpp
 ```
+
+## How it fits together
+
+<p align="center">
+  <img src="docs/assets/architecture.svg" alt="Architecture: clients (llms CLI, eval harness, static hub, any OpenAI client) call the OpenAI-compatible HTTP API exposed by llama-server, which systemd manages on top of llama.cpp or ik_llama.cpp running on a CUDA-enabled NVIDIA GPU." width="100%"/>
+</p>
+
+Everything talks to a single systemd-managed `llama-server` over the OpenAI-compatible HTTP API. The `llms` CLI, the eval harness, the static hub, and any third-party OpenAI client all share that surface, which keeps the swap between `llama.cpp` and `ik_llama.cpp` invisible to consumers.
 
 ## Configuration
 
