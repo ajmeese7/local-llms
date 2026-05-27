@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="local-llms: systemd-managed llama.cpp on your own GPU">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" role="img" aria-label="local-llms: systemd-managed llama.cpp on your own GPU. CUDA 12.x, systemd, OpenAI API, llama.cpp, ik_llama.cpp, RTX-class GPU.">
   <defs>
     <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#0A0A0A"/>
@@ -28,27 +28,31 @@
     <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="6"/>
     </filter>
+    <filter id="pillGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5"/>
+    </filter>
     <style>
       .mono { font-family: 'JetBrains Mono','Fira Code','SF Mono','Consolas','Monaco',monospace; }
       .title { font-weight: 800; letter-spacing: 0.06em; }
       .meta  { font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; }
       .tag   { font-weight: 500; letter-spacing: 0.04em; }
+      .pill  { font-weight: 600; letter-spacing: 0.10em; }
     </style>
   </defs>
 
   <!-- background -->
-  <rect width="1200" height="340" fill="url(#bgGrad)"/>
-  <rect width="1200" height="340" fill="url(#grid)"/>
-  <rect width="1200" height="340" fill="url(#scanlines)"/>
-  <rect x="0" y="0" width="1200" height="170" fill="url(#magentaGlow)"/>
-  <rect x="0" y="170" width="1200" height="170" fill="url(#cyanGlow)"/>
+  <rect width="1200" height="420" fill="url(#bgGrad)"/>
+  <rect width="1200" height="420" fill="url(#grid)"/>
+  <rect width="1200" height="420" fill="url(#scanlines)"/>
+  <rect x="0" y="0" width="1200" height="210" fill="url(#magentaGlow)"/>
+  <rect x="0" y="210" width="1200" height="210" fill="url(#cyanGlow)"/>
 
   <!-- corner brackets -->
   <g stroke-width="2" fill="none">
     <path d="M28 28 L28 60 M28 28 L60 28" stroke="#D600FF" stroke-opacity="0.85"/>
     <path d="M1172 28 L1172 60 M1172 28 L1140 28" stroke="#00B8FF" stroke-opacity="0.85"/>
-    <path d="M28 312 L28 280 M28 312 L60 312" stroke="#00B8FF" stroke-opacity="0.85"/>
-    <path d="M1172 312 L1172 280 M1172 312 L1140 312" stroke="#D600FF" stroke-opacity="0.85"/>
+    <path d="M28 392 L28 360 M28 392 L60 392" stroke="#00B8FF" stroke-opacity="0.85"/>
+    <path d="M1172 392 L1172 360 M1172 392 L1140 392" stroke="#D600FF" stroke-opacity="0.85"/>
   </g>
 
   <!-- top meta strip -->
@@ -86,7 +90,7 @@
     <text x="104" y="292" fill="#7A7A85">CUDA 12.x  ·  llama.cpp + ik_llama.cpp  ·  Linux / WSL2</text>
   </g>
 
-  <!-- right-side ascii GPU silhouette (very stylized) -->
+  <!-- right-side stylized GPU silhouette -->
   <g transform="translate(880,150)" stroke-width="1.5" fill="none">
     <rect x="0" y="0" width="240" height="120" rx="6" stroke="#00B8FF" stroke-opacity="0.55"/>
     <rect x="10" y="10" width="220" height="46" rx="3" stroke="#D600FF" stroke-opacity="0.45"/>
@@ -104,6 +108,60 @@
     <text x="120" y="40" class="mono meta" font-size="10" fill="#7A7A85" text-anchor="middle">NVIDIA  ::  RTX-CLASS</text>
   </g>
 
-  <!-- bottom meta strip -->
-  <line x1="80" y1="304" x2="1120" y2="304" stroke="#ffffff" stroke-opacity="0.08"/>
+  <!-- divider above pill strip -->
+  <line x1="80" y1="324" x2="1120" y2="324" stroke="url(#accentSweep)" stroke-width="1"/>
+
+  <!-- ==================== pill strip ==================== -->
+  <!-- 6 pills: width 168, height 34, gap 12. Total = 6*168 + 5*12 = 1068. Start x = (1200-1068)/2 = 66 -->
+  <g class="mono pill" font-size="12" transform="translate(66,344)">
+
+    <!-- CUDA  (magenta) -->
+    <g transform="translate(0,0)">
+      <rect width="168" height="34" rx="17" fill="#0A0A0A" stroke="#D600FF" stroke-opacity="0.85"/>
+      <circle cx="18" cy="17" r="4" fill="#D600FF" filter="url(#pillGlow)"/>
+      <circle cx="18" cy="17" r="3" fill="#D600FF"/>
+      <text x="34" y="21" fill="#FFFFFF">CUDA 12.x</text>
+    </g>
+
+    <!-- systemd  (cyan) -->
+    <g transform="translate(180,0)">
+      <rect width="168" height="34" rx="17" fill="#0A0A0A" stroke="#00B8FF" stroke-opacity="0.85"/>
+      <circle cx="18" cy="17" r="4" fill="#00B8FF" filter="url(#pillGlow)"/>
+      <circle cx="18" cy="17" r="3" fill="#00B8FF"/>
+      <text x="34" y="21" fill="#FFFFFF">systemd</text>
+    </g>
+
+    <!-- OpenAI API  (success) -->
+    <g transform="translate(360,0)">
+      <rect width="168" height="34" rx="17" fill="#0A0A0A" stroke="#19F0A8" stroke-opacity="0.75"/>
+      <circle cx="18" cy="17" r="4" fill="#19F0A8" filter="url(#pillGlow)"/>
+      <circle cx="18" cy="17" r="3" fill="#19F0A8"/>
+      <text x="34" y="21" fill="#FFFFFF">OpenAI API</text>
+    </g>
+
+    <!-- llama.cpp  (magenta) -->
+    <g transform="translate(540,0)">
+      <rect width="168" height="34" rx="17" fill="#0A0A0A" stroke="#D600FF" stroke-opacity="0.85"/>
+      <circle cx="18" cy="17" r="4" fill="#D600FF" filter="url(#pillGlow)"/>
+      <circle cx="18" cy="17" r="3" fill="#D600FF"/>
+      <text x="34" y="21" fill="#FFFFFF">llama.cpp</text>
+    </g>
+
+    <!-- ik_llama.cpp  (cyan) -->
+    <g transform="translate(720,0)">
+      <rect width="168" height="34" rx="17" fill="#0A0A0A" stroke="#00B8FF" stroke-opacity="0.85"/>
+      <circle cx="18" cy="17" r="4" fill="#00B8FF" filter="url(#pillGlow)"/>
+      <circle cx="18" cy="17" r="3" fill="#00B8FF"/>
+      <text x="34" y="21" fill="#FFFFFF">ik_llama.cpp</text>
+    </g>
+
+    <!-- RTX-class  (warning) -->
+    <g transform="translate(900,0)">
+      <rect width="168" height="34" rx="17" fill="#0A0A0A" stroke="#FFC857" stroke-opacity="0.75"/>
+      <circle cx="18" cy="17" r="4" fill="#FFC857" filter="url(#pillGlow)"/>
+      <circle cx="18" cy="17" r="3" fill="#FFC857"/>
+      <text x="34" y="21" fill="#FFFFFF">RTX-class GPU</text>
+    </g>
+
+  </g>
 </svg>

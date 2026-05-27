@@ -6,8 +6,7 @@ Source of truth for the visual identity used by the top-level README and the Git
 
 | File | Role | Where it appears |
 |---|---|---|
-| `hero.svg` | Top-of-README banner. Chromatic-split wordmark + tagline + scanline backdrop. | `README.md` (top) |
-| `pills.svg` | Feature badge row (CUDA, systemd, OpenAI API, llama.cpp, ik_llama.cpp, RTX-class). | `README.md` (under hero) |
+| `hero.svg` | Top-of-README banner. Chromatic-split wordmark + tagline + feature pill strip, all inside one scanline frame. Single image so the pills don't drift from the hero with paragraph margins. | `README.md` (top) |
 | `architecture.svg` | Five-layer stack diagram: clients → API → systemd → backend → hardware. | `README.md` ("How it fits together") |
 | `social-card.svg` | 1280x640 GitHub social preview. Stat-card layout. | Uploaded via repo Settings → Social preview |
 | `social-card.png` | Rasterized `social-card.svg` for the GitHub upload (PNG required). | Same as above |
@@ -37,7 +36,7 @@ cd docs/assets
 rsvg-convert -w 1280 -h 640 social-card.svg -o social-card.png
 ```
 
-The hero, pills, and architecture SVGs are embedded directly in the README and don't need rasterization. Only the social card needs a PNG (GitHub's social-preview upload accepts PNG/JPG, not SVG).
+The hero and architecture SVGs are embedded directly in the README and don't need rasterization. Only the social card needs a PNG (GitHub's social-preview upload accepts PNG/JPG, not SVG).
 
 ## Uploading the social preview
 
@@ -49,7 +48,7 @@ The hero, pills, and architecture SVGs are embedded directly in the README and d
 
 | Change | Update |
 |---|---|
-| New backend supported | `architecture.svg` (L4), `pills.svg`, `social-card.svg` (backends count) |
+| New backend supported | `architecture.svg` (L4), `hero.svg` (pill strip), `social-card.svg` (backends count) |
 | New eval adapter shipped | `architecture.svg` (L1), `social-card.svg` (eval suites count) |
 | Palette change in the hub | `colors_and_type.css` first, then mirror tokens here |
 | Project rename | every SVG (wordmark + ARIA `aria-label`) |
